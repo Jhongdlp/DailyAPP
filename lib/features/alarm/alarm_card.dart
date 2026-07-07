@@ -59,16 +59,12 @@ class AlarmCard extends ConsumerWidget {
           }
         }
       },
-      child: GestureDetector(
+      child: GlassCard(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(
-            color: BentoTheme.darkCardAlt,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BentoTheme.creamAlpha(0.08)),
-          ),
-          child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        borderRadius: 18,
+        backgroundColor: BentoTheme.darkCardAlt.withValues(alpha: 0.60),
+        child: Row(
             children: [
               Expanded(
                 child: Column(
@@ -155,8 +151,8 @@ class AlarmCard extends ConsumerWidget {
               const SizedBox(width: 8),
               Switch(
                 value: alarm.enabled,
-                activeThumbColor: BentoTheme.accentLime,
-                activeTrackColor: BentoTheme.accentLime.withValues(alpha: 0.3),
+                activeThumbColor: BentoTheme.accentAlarm,
+                activeTrackColor: BentoTheme.accentAlarm.withValues(alpha: 0.3),
                 inactiveThumbColor: BentoTheme.creamAlpha(0.6),
                 inactiveTrackColor: BentoTheme.creamAlpha(0.15),
                 trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
@@ -175,7 +171,6 @@ class AlarmCard extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }

@@ -2,15 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:alarm/alarm.dart';
 import '../../core/models/alarm_model.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/alarm_service.dart';
+import '../../core/services/cache_service.dart';
+import '../../core/services/lock_task_service.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/utils/error_snackbar.dart';
+import 'widgets/camera_capture_screen.dart';
 
 class AlarmDismissScreen extends ConsumerStatefulWidget {
   final String alarmId;
@@ -28,24 +30,38 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   bool? _result;
   File? _photo;
   int _attempts = 0;
-  final _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _loadAlarm();
+    // Fija la pantalla: desactiva Home y Recientes mientras la alarma suena.
+    LockTaskService.enable();
+  }
+
+  @override
+  void dispose() {
+    // Salvaguarda: libera la pantalla si el widget se destruye por cualquier vía.
+    LockTaskService.disable();
+    super.dispose();
   }
 
   Future<void> _loadAlarm() async {
     try {
-      final data = await Supabase.instance.client
-          .from('alarms')
-          .select()
-          .eq('id', widget.alarmId)
-          .single();
+      final raw = await CacheService.read('alarms');
+      AlarmModel? found;
+      if (raw is List) {
+        for (final e in raw) {
+          final map = Map<String, dynamic>.from(e as Map);
+          if (map['id'] == widget.alarmId) {
+            found = AlarmModel.fromJson(map);
+            break;
+          }
+        }
+      }
       if (mounted) {
         setState(() {
-          _alarm = AlarmModel.fromJson(data);
+          _alarm = found;
           _loading = false;
         });
       }
@@ -55,16 +71,16 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   }
 
   Future<void> _takePhoto() async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 50,
-      maxWidth: 1024,
-      maxHeight: 1024,
+    final picked = await Navigator.of(context).push<File>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => CameraCaptureScreen(targetObject: _alarm!.targetObject),
+      ),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
 
     setState(() {
-      _photo = File(picked.path);
+      _photo = picked;
       _verifying = true;
       _result = null;
       _attempts++;
@@ -89,6 +105,8 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
         await Alarm.stop(idInt);
         await AlarmService.scheduleAlarm(_alarm!, from: DateTime.now().add(const Duration(minutes: 1)));
         await Future.delayed(const Duration(seconds: 2));
+        // Solo aquí (foto validada) liberamos la pantalla y salimos.
+        await LockTaskService.disable();
         if (mounted) Navigator.pop(context);
       }
     } catch (e) {
@@ -139,7 +157,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
               ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: BentoTheme.accentLime,
+                    backgroundColor: BentoTheme.accentAlarm,
                     foregroundColor: const Color(0xFF0C0C0D),
                   ),
                   child: const Text('Cerrar')),
@@ -275,7 +293,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                 if (_verifying)
                   Column(
                     children: [
-                      const CircularProgressIndicator(color: BentoTheme.accentLime),
+                      const CircularProgressIndicator(color: BentoTheme.accentAlarm),
                       const SizedBox(height: 12),
                       Text('Verificando con IA...',
                           style:
@@ -286,7 +304,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                   ElevatedButton.icon(
                     onPressed: _takePhoto,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: BentoTheme.accentLime,
+                      backgroundColor: BentoTheme.accentAlarm,
                       foregroundColor: const Color(0xFF0C0C0D),
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),

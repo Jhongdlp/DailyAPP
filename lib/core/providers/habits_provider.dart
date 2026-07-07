@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/habit_model.dart';
 import '../services/habit_reminder_service.dart';
+import '../services/cache_service.dart';
 import 'settings_provider.dart';
 
 final _uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
@@ -14,9 +15,18 @@ String _fmt(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
 class HabitsNotifier extends Notifier<List<Habit>> {
   Future<void>? _loadFuture;
+  DateTime? _lastSyncedAt;
+  Timer? _saveDebounce;
+  String? _lastReminderFingerprint;
+
+  static const _cacheTtl = Duration(seconds: 90);
+  static const _saveDebounceDuration = Duration(milliseconds: 400);
 
   @override
   List<Habit> build() {
+    ref.onDispose(() {
+      _saveDebounce?.cancel();
+    });
     _loadFuture = _loadHabits();
     return [];
   }
@@ -31,18 +41,86 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     return [];
   }
 
-  Future<void> _loadHabits() async {
+  /// Fuerza una recarga completa desde Supabase, ignorando el TTL de caché.
+  /// Pensado para un futuro pull-to-refresh explícito del usuario.
+  Future<void> refresh({bool force = true}) => _loadHabits(force: force);
+
+  /// Huella de los campos que afectan a las notificaciones programadas de cada
+  /// hábito. Solo se incluyen hábitos que efectivamente tendrían un recordatorio
+  /// activo (mismo criterio que HabitReminderService.scheduleReminder), para que
+  /// quitar/archivar un recordatorio también cambie la huella y dispare la
+  /// limpieza de notificaciones huérfanas.
+  String _reminderFingerprint(List<Habit> habits) {
+    final parts = habits
+        .where((h) => h.hasReminder && !h.archived && h.daysOfWeek.isNotEmpty)
+        .map((h) => [
+              h.id,
+              h.icon,
+              h.name,
+              h.goalValue?.toString() ?? '',
+              h.goalUnit ?? '',
+              h.reminderHour?.toString() ?? '',
+              h.reminderMinute?.toString() ?? '',
+              h.reminderTimes.join(','),
+              h.daysOfWeek.join(','),
+            ].join(''))
+        .toList()
+      ..sort();
+    return parts.join('');
+  }
+
+  /// Agrupa escrituras de caché de mutaciones rápidas (ej. taps repetidos en un
+  /// stepper) en una sola escritura, en vez de re-encriptar y persistir la lista
+  /// completa en cada toque.
+  void _scheduleCacheSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(_saveDebounceDuration, () {
+      unawaited(CacheService.save('habits', {
+        'syncedAt': _lastSyncedAt?.toIso8601String(),
+        'habits': state.map((h) => h.toCacheJson()).toList(),
+      }));
+    });
+  }
+
+  Future<void> _loadHabits({bool force = false}) async {
     try {
+      // Intentar cargar desde caché local primero para velocidad instantánea
+      final cached = await CacheService.read('habits');
+      List? cachedHabitsJson;
+      if (cached is Map) {
+        final syncedAtStr = cached['syncedAt'] as String?;
+        _lastSyncedAt = syncedAtStr != null ? DateTime.tryParse(syncedAtStr) : null;
+        cachedHabitsJson = cached['habits'] as List?;
+      } else if (cached is List) {
+        // Formato antiguo (lista plana, sin timestamp): se trata como caché sin
+        // fecha conocida, así siempre se refresca contra Supabase debajo.
+        cachedHabitsJson = cached;
+        _lastSyncedAt = null;
+      }
+      if (cachedHabitsJson != null) {
+        state = cachedHabitsJson.map((e) => Habit.fromCacheJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {}
+
+    try {
+      if (!force &&
+          _lastSyncedAt != null &&
+          DateTime.now().difference(_lastSyncedAt!) < _cacheTtl) {
+        // Caché todavía fresco: evitamos volver a pegarle a Supabase en cada
+        // rebuild/cambio de tab dentro de la ventana de sincronía reciente.
+        return;
+      }
+
       final settings = ref.read(settingsProvider);
       if (!settings.isSupabaseConfigured) {
-        state = _getMockHabits();
+        if (state.isEmpty) state = _getMockHabits();
         return;
       }
 
       final client = Supabase.instance.client;
       final user = client.auth.currentUser;
       if (user == null) {
-        state = _getMockHabits();
+        if (state.isEmpty) state = _getMockHabits();
         return;
       }
 
@@ -75,7 +153,7 @@ class HabitsNotifier extends Notifier<List<Habit>> {
         final date = DateTime.parse(row['completed_on'] as String);
         final day = _dateOnly(date);
 
-        logsByHabit.putIfAbsent(habitId, () => <DateTime>{});
+        logsByHabit.putIfAbsent(habitId, () => <DateTime>{}).add(day);
         progressByHabit.putIfAbsent(habitId, () => <DateTime, double>{});
 
         if (hasProgressValue && row['progress_value'] != null) {
@@ -84,19 +162,18 @@ class HabitsNotifier extends Notifier<List<Habit>> {
         }
       }
 
-      state = (habitsResponse as List).map((json) {
+      final freshHabits = (habitsResponse as List).map((json) {
         final habitId = json['id'] as String;
         final goalValue = (json['goal_value'] as num?)?.toDouble();
-        final hCompletedDates = logsByHabit[habitId] ?? <DateTime>{};
+        final hCompletedDates = <DateTime>{};
         final hProgress = progressByHabit[habitId] ?? <DateTime, double>{};
 
-        for (final row in logsResponse) {
-          if (row['habit_id'] == habitId) {
-            final date = DateTime.parse(row['completed_on'] as String);
-            final day = _dateOnly(date);
-            if (!hProgress.containsKey(day)) {
-              hProgress[day] = goalValue ?? 1.0;
-            }
+        // Días con log registrado pero sin progress_value explícito: se
+        // completan con el valor por defecto (usando el set de días ya
+        // agrupado por hábito arriba, en vez de re-escanear todos los logs).
+        for (final day in logsByHabit[habitId] ?? const <DateTime>{}) {
+          if (!hProgress.containsKey(day)) {
+            hProgress[day] = goalValue ?? 1.0;
           }
         }
 
@@ -113,9 +190,21 @@ class HabitsNotifier extends Notifier<List<Habit>> {
           dailyProgress: hProgress,
         );
       }).toList();
-      unawaited(HabitReminderService.rescheduleAll(state));
+
+      state = freshHabits;
+      _lastSyncedAt = DateTime.now();
+      unawaited(CacheService.save('habits', {
+        'syncedAt': _lastSyncedAt!.toIso8601String(),
+        'habits': freshHabits.map((h) => h.toCacheJson()).toList(),
+      }));
+
+      final fingerprint = _reminderFingerprint(freshHabits);
+      if (fingerprint != _lastReminderFingerprint) {
+        _lastReminderFingerprint = fingerprint;
+        unawaited(HabitReminderService.rescheduleAll(state));
+      }
     } catch (e) {
-      state = _getMockHabits();
+      if (state.isEmpty) state = _getMockHabits();
     }
   }
 
@@ -128,7 +217,7 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     final day = _dateOnly(date);
     final completed = Set<DateTime>.from(habit.completedDates);
     final wasCompleted = completed.contains(day);
-    
+
     double newProgress = 0.0;
     if (wasCompleted) {
       completed.remove(day);
@@ -148,6 +237,7 @@ class HabitsNotifier extends Notifier<List<Habit>> {
           dailyProgress: newProgressMap,
         ) else state[i]
     ];
+    _scheduleCacheSave();
 
     try {
       final settings = ref.read(settingsProvider);
@@ -183,14 +273,14 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     final habit = state[index];
     final day = _dateOnly(date);
     final currentProgress = habit.dailyProgress[day] ?? 0.0;
-    
+
     var newProgress = currentProgress + increment;
     if (newProgress < 0.0) newProgress = 0.0;
-    
+
     final goal = habit.goalValue ?? 1.0;
     final completed = Set<DateTime>.from(habit.completedDates);
     final isCompletedNow = newProgress >= goal;
-    
+
     if (isCompletedNow) {
       completed.add(day);
     } else {
@@ -207,6 +297,7 @@ class HabitsNotifier extends Notifier<List<Habit>> {
           dailyProgress: newProgressMap,
         ) else state[i]
     ];
+    _scheduleCacheSave();
 
     try {
       final settings = ref.read(settingsProvider);
@@ -246,36 +337,9 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     int? reminderMinute,
     List<String>? reminderTimes,
   }) async {
-    Habit created;
-    try {
-      final settings = ref.read(settingsProvider);
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      if (settings.isSupabaseConfigured && user != null) {
-        final draft = Habit(
-          id: '',
-          name: name,
-          icon: icon,
-          color: color,
-          category: category,
-          daysOfWeek: daysOfWeek,
-          goalValue: goalValue,
-          goalUnit: goalUnit,
-          reminderHour: reminderHour,
-          reminderMinute: reminderMinute,
-          reminderTimes: reminderTimes,
-        );
-        final response = await client.from('habits').insert(draft.toInsertJson(user.id)).select().single();
-        created = Habit.fromJson(response);
-        state = [...state, created];
-        unawaited(HabitReminderService.scheduleReminder(created));
-        return;
-      }
-    } catch (e) {
-      // cae a modo local abajo
-    }
-    created = Habit(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localHabit = Habit(
+      id: tempId,
       name: name,
       icon: icon,
       color: color,
@@ -287,8 +351,47 @@ class HabitsNotifier extends Notifier<List<Habit>> {
       reminderMinute: reminderMinute,
       reminderTimes: reminderTimes,
     );
-    state = [...state, created];
-    unawaited(HabitReminderService.scheduleReminder(created));
+
+    // Actualizar estado en UI de inmediato (optimista)
+    state = [...state, localHabit];
+    _scheduleCacheSave();
+    unawaited(HabitReminderService.scheduleReminder(localHabit));
+    _lastReminderFingerprint = _reminderFingerprint(state);
+
+    try {
+      final settings = ref.read(settingsProvider);
+      if (settings.isSupabaseConfigured) {
+        final client = Supabase.instance.client;
+        final user = client.auth.currentUser;
+        if (user != null) {
+          final response = await client.from('habits').insert(localHabit.toInsertJson(user.id)).select().single();
+
+          // Obtener el hábito con su ID real de base de datos
+          final serverHabit = Habit.fromJson(response);
+
+          // Reemplazar el hábito temporal en el estado, preservando cualquier
+          // progreso local que el usuario haya hecho en la UI mientras tanto
+          state = [
+            for (final h in state)
+              if (h.id == tempId)
+                serverHabit.copyWith(
+                  completedDates: h.completedDates,
+                  dailyProgress: h.dailyProgress,
+                )
+              else
+                h
+          ];
+          _scheduleCacheSave();
+
+          // Actualizar notificaciones con el ID real
+          unawaited(HabitReminderService.cancelReminder(tempId));
+          unawaited(HabitReminderService.scheduleReminder(serverHabit));
+          _lastReminderFingerprint = _reminderFingerprint(state);
+        }
+      }
+    } catch (e) {
+      // Si falla, se queda como hábito local.
+    }
   }
 
   Future<void> updateHabit(Habit updated) async {
@@ -299,7 +402,9 @@ class HabitsNotifier extends Notifier<List<Habit>> {
       for (int i = 0; i < state.length; i++)
         if (i == index) updated else state[i]
     ];
+    _scheduleCacheSave();
     unawaited(HabitReminderService.scheduleReminder(updated));
+    _lastReminderFingerprint = _reminderFingerprint(state);
 
     try {
       final settings = ref.read(settingsProvider);
@@ -312,7 +417,9 @@ class HabitsNotifier extends Notifier<List<Habit>> {
 
   Future<void> archiveHabit(String habitId) async {
     state = state.where((h) => h.id != habitId).toList();
+    _scheduleCacheSave();
     unawaited(HabitReminderService.cancelReminder(habitId));
+    _lastReminderFingerprint = _reminderFingerprint(state);
     try {
       final settings = ref.read(settingsProvider);
       if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
@@ -324,7 +431,9 @@ class HabitsNotifier extends Notifier<List<Habit>> {
 
   Future<void> deleteHabit(String habitId) async {
     state = state.where((h) => h.id != habitId).toList();
+    _scheduleCacheSave();
     unawaited(HabitReminderService.cancelReminder(habitId));
+    _lastReminderFingerprint = _reminderFingerprint(state);
     try {
       final settings = ref.read(settingsProvider);
       if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/bento_theme.dart';
+import '../../core/models/note_model.dart';
 
 enum BlockType {
   text,
@@ -13,6 +14,7 @@ enum BlockType {
   quote,
   code,
   table,
+  divider,
 }
 
 class EditorBlock {
@@ -21,6 +23,9 @@ class EditorBlock {
   final TextEditingController controller;
   final FocusNode focusNode;
   bool isChecked;
+  // Ancla para posicionar overlays flotantes (comando '/', wikilinks) justo
+  // debajo de este bloque.
+  final LayerLink layerLink = LayerLink();
   // Para tablas:
   List<List<TextEditingController>> cellControllers;
 
@@ -37,16 +42,46 @@ class EditorBlock {
         this.cellControllers = cellControllers ?? [];
 }
 
+class _BlockMenuOption {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final BlockType type;
+  const _BlockMenuOption(this.label, this.subtitle, this.icon, this.type);
+}
+
+const List<_BlockMenuOption> _blockMenuOptions = [
+  _BlockMenuOption('Texto Normal', 'Texto plano estándar', Icons.notes, BlockType.text),
+  _BlockMenuOption('Título 1', 'Título grande principal', Icons.looks_one, BlockType.heading1),
+  _BlockMenuOption('Título 2', 'Título mediano de sección', Icons.looks_two, BlockType.heading2),
+  _BlockMenuOption('Título 3', 'Título pequeño de subsección', Icons.looks_3, BlockType.heading3),
+  _BlockMenuOption('Lista de tareas', 'Casillas para tachar tareas', Icons.check_box_outlined, BlockType.todoList),
+  _BlockMenuOption('Lista con viñetas', 'Viñetas circulares simples', Icons.format_list_bulleted, BlockType.bulletList),
+  _BlockMenuOption('Lista numerada', 'Lista con secuencia numérica', Icons.format_list_numbered, BlockType.numberedList),
+  _BlockMenuOption('Cita destacada', 'Bloque de cita estilizado', Icons.format_quote, BlockType.quote),
+  _BlockMenuOption('Código', 'Editor con tipografía monoespaciada', Icons.code, BlockType.code),
+  _BlockMenuOption('Tabla', 'Insertar tabla editable interactiva', Icons.grid_on, BlockType.table),
+  _BlockMenuOption('Divisor', 'Línea separadora entre secciones', Icons.horizontal_rule, BlockType.divider),
+];
+
 class NotionEditor extends StatefulWidget {
   final TextEditingController titleController;
   final TextEditingController contentController;
   final Color accentColor;
+  // Notas existentes (para el autocompletado de wikilinks [[ ]]) y el
+  // callback que vincula la nota actual con la seleccionada.
+  final List<Note> allNotes;
+  final String? currentNoteId;
+  final ValueChanged<String> onLinkNote;
 
   const NotionEditor({
     super.key,
     required this.titleController,
     required this.contentController,
     required this.accentColor,
+    this.allNotes = const [],
+    this.currentNoteId,
+    required this.onLinkNote,
   });
 
   @override
@@ -56,6 +91,13 @@ class NotionEditor extends StatefulWidget {
 class _NotionEditorState extends State<NotionEditor> {
   List<EditorBlock> _blocks = [];
   int _focusedBlockIndex = 0;
+
+  // Overlay flotante compartido por el comando '/' y el autocompletado de
+  // wikilinks '[[ ]]' — solo uno puede estar activo a la vez.
+  OverlayEntry? _overlayEntry;
+  EditorBlock? _overlayBlock;
+  String _overlayQuery = '';
+  bool _overlayIsWikilink = false;
 
   @override
   void initState() {
@@ -75,6 +117,7 @@ class _NotionEditorState extends State<NotionEditor> {
 
   @override
   void dispose() {
+    _overlayEntry?.remove();
     // Limpiar controladores y focus nodes creados por nosotros
     for (final block in _blocks) {
       block.controller.dispose();
@@ -171,7 +214,9 @@ class _NotionEditorState extends State<NotionEditor> {
       
       // Detección de otros tipos
       final trimmed = line.trim();
-      if (trimmed.startsWith('# ')) {
+      if (RegExp(r'^-{3,}$').hasMatch(trimmed)) {
+        blocks.add(EditorBlock(type: BlockType.divider));
+      } else if (trimmed.startsWith('# ')) {
         blocks.add(EditorBlock(
           type: BlockType.heading1,
           controller: TextEditingController(text: trimmed.substring(2)),
@@ -266,6 +311,9 @@ class _NotionEditorState extends State<NotionEditor> {
         case BlockType.code:
           lines.add('```\n$text\n```');
           break;
+        case BlockType.divider:
+          lines.add('---');
+          break;
         case BlockType.table:
           if (block.cellControllers.isEmpty) break;
           final List<String> tableLines = [];
@@ -296,19 +344,98 @@ class _NotionEditorState extends State<NotionEditor> {
     );
   }
 
+  void _onReorderBlocks(int oldIndex, int newIndex) {
+    setState(() {
+      final block = _blocks.removeAt(oldIndex);
+      _blocks.insert(newIndex, block);
+      if (_focusedBlockIndex == oldIndex) {
+        _focusedBlockIndex = newIndex;
+      } else if (_focusedBlockIndex > oldIndex && _focusedBlockIndex <= newIndex) {
+        _focusedBlockIndex -= 1;
+      } else if (_focusedBlockIndex < oldIndex && _focusedBlockIndex >= newIndex) {
+        _focusedBlockIndex += 1;
+      }
+    });
+    _serialize();
+  }
+
   // ─── LISTENERS & EVENTOS ───────────────────────────────
+
+  static const Set<BlockType> _listLikeTypes = {
+    BlockType.bulletList,
+    BlockType.numberedList,
+    BlockType.todoList,
+    BlockType.quote,
+  };
+
+  /// Detecta atajos de auto-markdown (estilo Notion/Obsidian) en un bloque de
+  /// texto plano recién editado. Retorna true si convirtió el bloque.
+  bool _tryAutoConvert(EditorBlock block, String text) {
+    BlockType? newType;
+    if (text == '# ') {
+      newType = BlockType.heading1;
+    } else if (text == '## ') {
+      newType = BlockType.heading2;
+    } else if (text == '### ') {
+      newType = BlockType.heading3;
+    } else if (text == '- ' || text == '* ') {
+      newType = BlockType.bulletList;
+    } else if (RegExp(r'^\d+\.\s$').hasMatch(text)) {
+      newType = BlockType.numberedList;
+    } else if (text == '> ') {
+      newType = BlockType.quote;
+    } else if (text == '[] ' || text == '[ ] ') {
+      newType = BlockType.todoList;
+    } else if (text == '```') {
+      newType = BlockType.code;
+    }
+
+    if (newType == null) return false;
+
+    block.controller.value = const TextEditingValue(text: '');
+    setState(() {
+      block.type = newType!;
+      if (newType == BlockType.todoList) block.isChecked = false;
+    });
+    _serialize();
+    return true;
+  }
 
   void _registerBlockListeners(EditorBlock block) {
     block.controller.addListener(() {
       if (!mounted) return;
       final text = block.controller.text;
+
+      if (block.type == BlockType.text &&
+          !text.contains('\n') &&
+          _tryAutoConvert(block, text)) {
+        return;
+      }
+
       if (text.contains('\n')) {
+        if (_overlayBlock == block) _closeOverlay();
         final index = _blocks.indexOf(block);
         if (index == -1) return;
-        
+
+        // El código conserva los saltos de línea como contenido literal.
+        if (block.type == BlockType.code) {
+          _serialize();
+          return;
+        }
+
         final newlineIndex = text.indexOf('\n');
         final before = text.substring(0, newlineIndex);
         final after = text.substring(newlineIndex + 1);
+        final continuesType = _listLikeTypes.contains(block.type);
+
+        // Enter sobre un ítem de lista/cita vacío: sale de la lista sin
+        // crear un bloque nuevo (estilo Notion).
+        if (continuesType && before.isEmpty && after.isEmpty) {
+          block.controller.value = const TextEditingValue(text: '');
+          setState(() => block.type = BlockType.text);
+          _serialize();
+          return;
+        }
 
         block.controller.value = TextEditingValue(
           text: before,
@@ -316,7 +443,7 @@ class _NotionEditorState extends State<NotionEditor> {
         );
 
         final newBlock = EditorBlock(
-          type: BlockType.text,
+          type: continuesType ? block.type : BlockType.text,
           controller: TextEditingController(text: after),
         );
         _registerBlockListeners(newBlock);
@@ -332,8 +459,202 @@ class _NotionEditorState extends State<NotionEditor> {
           newBlock.focusNode.requestFocus();
         });
       } else {
+        final isOverlayEligible =
+            block.type != BlockType.code && block.type != BlockType.table;
+        if (isOverlayEligible) {
+          _handleOverlayTriggers(block, text);
+        } else if (_overlayBlock == block) {
+          _closeOverlay();
+        }
         _serialize();
       }
+    });
+  }
+
+  // ─── OVERLAYS FLOTANTES: comando '/' y wikilinks '[[ ]]' ──────
+
+  /// Detecta el trigger de comando '/' (solo en bloques de texto plano) o de
+  /// wikilink '[[' (en cualquier bloque de texto libre) y abre/actualiza/
+  /// cierra el overlay flotante correspondiente.
+  void _handleOverlayTriggers(EditorBlock block, String text) {
+    if (block.type == BlockType.text) {
+      final slashMatch = RegExp(r'^/(\w*)$').firstMatch(text);
+      if (slashMatch != null) {
+        _overlayIsWikilink = false;
+        _showOverlay(block, slashMatch.group(1) ?? '');
+        return;
+      }
+    }
+
+    final selection = block.controller.selection;
+    final caret = selection.baseOffset;
+    final safeCaret = (caret < 0 ? text.length : caret).clamp(0, text.length);
+    final beforeCaret = text.substring(0, safeCaret);
+    final wikiMatch = RegExp(r'\[\[([^\[\]]*)$').firstMatch(beforeCaret);
+    if (wikiMatch != null) {
+      _overlayIsWikilink = true;
+      _showOverlay(block, wikiMatch.group(1) ?? '');
+      return;
+    }
+
+    if (_overlayBlock == block) _closeOverlay();
+  }
+
+  void _showOverlay(EditorBlock block, String query) {
+    _overlayQuery = query;
+    if (_overlayBlock == block && _overlayEntry != null) {
+      _overlayEntry!.markNeedsBuild();
+      return;
+    }
+    _closeOverlay();
+    _overlayBlock = block;
+    _overlayEntry = OverlayEntry(builder: (ctx) => _buildOverlay(block));
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _closeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _overlayBlock = null;
+    _overlayQuery = '';
+  }
+
+  Widget _buildOverlay(EditorBlock block) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _closeOverlay,
+          ),
+        ),
+        CompositedTransformFollower(
+          link: block.layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 38),
+          child: _overlayIsWikilink ? _buildWikilinkCard(block) : _buildSlashMenuCard(block),
+        ),
+      ],
+    );
+  }
+
+  Widget _overlayCardShell({required Widget child}) {
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: 240,
+          constraints: const BoxConstraints(maxHeight: 260),
+          decoration: BoxDecoration(
+            color: BentoTheme.darkCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: BentoTheme.creamAlpha(0.25)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6)),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _overlayEmptyState(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Text(text, style: TextStyle(color: BentoTheme.creamAlpha(0.5), fontSize: 12)),
+    );
+  }
+
+  Widget _buildSlashMenuCard(EditorBlock block) {
+    final query = _overlayQuery.toLowerCase();
+    final options = _blockMenuOptions
+        .where((o) => query.isEmpty || o.label.toLowerCase().contains(query))
+        .toList();
+    return _overlayCardShell(
+      child: options.isEmpty
+          ? _overlayEmptyState('Sin bloques')
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              shrinkWrap: true,
+              children: [
+                for (final o in options)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(o.icon, size: 18, color: widget.accentColor),
+                    title: Text(o.label,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: BentoTheme.cream)),
+                    onTap: () => _applySlashSelection(block, o.type),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildWikilinkCard(EditorBlock block) {
+    final query = _overlayQuery.toLowerCase();
+    final matches = widget.allNotes
+        .where((n) => n.id != widget.currentNoteId)
+        .where((n) => query.isEmpty || n.title.toLowerCase().contains(query))
+        .take(8)
+        .toList();
+    return _overlayCardShell(
+      child: matches.isEmpty
+          ? _overlayEmptyState('Sin notas coincidentes')
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              shrinkWrap: true,
+              children: [
+                for (final n in matches)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(Icons.description_outlined, size: 18, color: widget.accentColor),
+                    title: Text(n.title,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: BentoTheme.cream),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    onTap: () => _applyWikilinkSelection(block, n),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  void _applySlashSelection(EditorBlock block, BlockType type) {
+    block.controller.value = const TextEditingValue(text: '');
+    setState(() {
+      block.type = type;
+      if (type == BlockType.todoList) block.isChecked = false;
+    });
+    _closeOverlay();
+    _serialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      block.focusNode.requestFocus();
+    });
+  }
+
+  void _applyWikilinkSelection(EditorBlock block, Note note) {
+    final text = block.controller.text;
+    final caret = block.controller.selection.baseOffset;
+    final safeCaret = (caret < 0 ? text.length : caret).clamp(0, text.length);
+    final beforeCaret = text.substring(0, safeCaret);
+    final afterCaret = text.substring(safeCaret);
+    final match = RegExp(r'\[\[([^\[\]]*)$').firstMatch(beforeCaret);
+
+    _closeOverlay();
+    if (match == null) return;
+
+    final newBefore = '${beforeCaret.substring(0, match.start)}[[${note.title}]]';
+    final newText = newBefore + afterCaret;
+    block.controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newBefore.length),
+    );
+    _serialize();
+    widget.onLinkNote(note.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      block.focusNode.requestFocus();
     });
   }
 
@@ -456,54 +777,49 @@ class _NotionEditorState extends State<NotionEditor> {
   void _showAddBlockMenu() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // Habilitar scroll controlado
       backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: BentoTheme.creamAlpha(0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'Añadir elemento Notion',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: BentoTheme.cream,
+        return Container(
+          height: 480, // Limitar altura para evitar problemas de restricciones infinitas en Linux/escritorio
+          child: SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: BentoTheme.creamAlpha(0.2),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ),
-              Divider(color: BentoTheme.creamAlpha(0.18), height: 1),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _blockMenuTile(ctx, 'Texto Normal', 'Texto plano estándar', Icons.notes, BlockType.text),
-                    _blockMenuTile(ctx, 'Título 1', 'Título grande principal', Icons.looks_one, BlockType.heading1),
-                    _blockMenuTile(ctx, 'Título 2', 'Título mediano de sección', Icons.looks_two, BlockType.heading2),
-                    _blockMenuTile(ctx, 'Título 3', 'Título pequeño de subsección', Icons.looks_3, BlockType.heading3),
-                    _blockMenuTile(ctx, 'Lista de tareas', 'Casillas para tachar tareas', Icons.check_box_outlined, BlockType.todoList),
-                    _blockMenuTile(ctx, 'Lista con viñetas', 'Viñetas circulares simples', Icons.format_list_bulleted, BlockType.bulletList),
-                    _blockMenuTile(ctx, 'Lista numerada', 'Lista con secuencia numérica', Icons.format_list_numbered, BlockType.numberedList),
-                    _blockMenuTile(ctx, 'Cita destacada', 'Bloque de cita estilizado', Icons.format_quote, BlockType.quote),
-                    _blockMenuTile(ctx, 'Código', 'Editor con tipografía monoespaciada', Icons.code, BlockType.code),
-                    _blockMenuTile(ctx, 'Tabla', 'Insertar tabla editable interactiva', Icons.grid_on, BlockType.table),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Añadir elemento Notion',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: BentoTheme.cream,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                Divider(color: BentoTheme.creamAlpha(0.18), height: 1),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      for (final o in _blockMenuOptions)
+                        _blockMenuTile(ctx, o.label, o.subtitle, o.icon, o.type),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -536,53 +852,56 @@ class _NotionEditorState extends State<NotionEditor> {
     
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // Habilitar scroll controlado
       backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: BentoTheme.creamAlpha(0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'Convertir bloque actual a...',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: BentoTheme.cream,
+        return Container(
+          height: 420, // Altura fija segura para evitar restricciones infinitas en Linux/escritorio
+          child: SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: BentoTheme.creamAlpha(0.2),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ),
-              Divider(color: BentoTheme.creamAlpha(0.18), height: 1),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _convertMenuTile(ctx, 'Texto Normal', Icons.notes, BlockType.text, currentBlock),
-                    _convertMenuTile(ctx, 'Título 1', Icons.looks_one, BlockType.heading1, currentBlock),
-                    _convertMenuTile(ctx, 'Título 2', Icons.looks_two, BlockType.heading2, currentBlock),
-                    _convertMenuTile(ctx, 'Título 3', Icons.looks_3, BlockType.heading3, currentBlock),
-                    _convertMenuTile(ctx, 'Lista de tareas', Icons.check_box_outlined, BlockType.todoList, currentBlock),
-                    _convertMenuTile(ctx, 'Lista con viñetas', Icons.format_list_bulleted, BlockType.bulletList, currentBlock),
-                    _convertMenuTile(ctx, 'Lista numerada', Icons.format_list_numbered, BlockType.numberedList, currentBlock),
-                    _convertMenuTile(ctx, 'Cita destacada', Icons.format_quote, BlockType.quote, currentBlock),
-                    _convertMenuTile(ctx, 'Código', Icons.code, BlockType.code, currentBlock),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Convertir bloque actual a...',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: BentoTheme.cream,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                Divider(color: BentoTheme.creamAlpha(0.18), height: 1),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      _convertMenuTile(ctx, 'Texto Normal', Icons.notes, BlockType.text, currentBlock),
+                      _convertMenuTile(ctx, 'Título 1', Icons.looks_one, BlockType.heading1, currentBlock),
+                      _convertMenuTile(ctx, 'Título 2', Icons.looks_two, BlockType.heading2, currentBlock),
+                      _convertMenuTile(ctx, 'Título 3', Icons.looks_3, BlockType.heading3, currentBlock),
+                      _convertMenuTile(ctx, 'Lista de tareas', Icons.check_box_outlined, BlockType.todoList, currentBlock),
+                      _convertMenuTile(ctx, 'Lista con viñetas', Icons.format_list_bulleted, BlockType.bulletList, currentBlock),
+                      _convertMenuTile(ctx, 'Lista numerada', Icons.format_list_numbered, BlockType.numberedList, currentBlock),
+                      _convertMenuTile(ctx, 'Cita destacada', Icons.format_quote, BlockType.quote, currentBlock),
+                      _convertMenuTile(ctx, 'Código', Icons.code, BlockType.code, currentBlock),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -774,7 +1093,32 @@ class _NotionEditorState extends State<NotionEditor> {
         );
       case BlockType.table:
         return _buildTableWidget(block, index);
+      case BlockType.divider:
+        return _buildDividerBlock(block, index);
     }
+  }
+
+  Widget _buildDividerBlock(EditorBlock block, int index) {
+    final isFocused = _focusedBlockIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _focusedBlockIndex = index);
+        block.focusNode.requestFocus();
+      },
+      child: Focus(
+        focusNode: block.focusNode,
+        child: Container(
+          height: 28,
+          alignment: Alignment.center,
+          child: Divider(
+            color: isFocused
+                ? widget.accentColor.withOpacity(0.6)
+                : BentoTheme.creamAlpha(0.20),
+            thickness: isFocused ? 2 : 1.5,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildTextField(EditorBlock block, int index,
@@ -785,6 +1129,8 @@ class _NotionEditorState extends State<NotionEditor> {
           setState(() {
             _focusedBlockIndex = index;
           });
+        } else if (_overlayBlock == block) {
+          _closeOverlay();
         }
       },
       child: TextField(
@@ -808,8 +1154,68 @@ class _NotionEditorState extends State<NotionEditor> {
             _focusedBlockIndex = index;
           });
         },
+        contextMenuBuilder: (ctx, editableTextState) =>
+            _buildFormattingContextMenu(ctx, editableTextState, block.controller),
       ),
     );
+  }
+
+  /// Añade botones de formato markdown (negrita/cursiva/código/enlace) al
+  /// menú contextual nativo de selección de texto, en vez de construir un
+  /// tercer overlay flotante a mano — el menú nativo ya resuelve el
+  /// posicionamiento junto a la selección.
+  Widget _buildFormattingContextMenu(
+    BuildContext ctx,
+    EditableTextState editableTextState,
+    TextEditingController controller,
+  ) {
+    final selection = controller.selection;
+    final items = List<ContextMenuButtonItem>.from(editableTextState.contextMenuButtonItems);
+
+    if (selection.isValid && !selection.isCollapsed) {
+      items.insertAll(0, [
+        ContextMenuButtonItem(
+          label: 'Negrita',
+          onPressed: () => _wrapSelectionWithMarkdown(controller, editableTextState, '**', '**'),
+        ),
+        ContextMenuButtonItem(
+          label: 'Cursiva',
+          onPressed: () => _wrapSelectionWithMarkdown(controller, editableTextState, '_', '_'),
+        ),
+        ContextMenuButtonItem(
+          label: 'Código',
+          onPressed: () => _wrapSelectionWithMarkdown(controller, editableTextState, '`', '`'),
+        ),
+        ContextMenuButtonItem(
+          label: 'Enlace',
+          onPressed: () => _wrapSelectionWithMarkdown(controller, editableTextState, '[', '](url)'),
+        ),
+      ]);
+    }
+
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: items,
+    );
+  }
+
+  void _wrapSelectionWithMarkdown(
+    TextEditingController controller,
+    EditableTextState editableTextState,
+    String prefix,
+    String suffix,
+  ) {
+    final text = controller.text;
+    final selection = controller.selection;
+    final start = selection.start.clamp(0, text.length);
+    final end = selection.end.clamp(0, text.length);
+    final selected = text.substring(start, end);
+    final newText = text.replaceRange(start, end, '$prefix$selected$suffix');
+    controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + prefix.length + selected.length + suffix.length),
+    );
+    editableTextState.hideToolbar();
   }
 
   // ─── TABLA INTERACTIVA ───────────────────────────────────
@@ -1079,11 +1485,13 @@ class _NotionEditorState extends State<NotionEditor> {
                 color: BentoTheme.creamAlpha(0.18),
               ),
               const SizedBox(height: 16),
-              // Lista de bloques editables
-              ListView.builder(
+              // Lista de bloques editables (long-press en el handle reordena)
+              ReorderableListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
                 itemCount: _blocks.length,
+                onReorderItem: _onReorderBlocks,
                 itemBuilder: (context, index) {
                   final block = _blocks[index];
                   final isFocused = _focusedBlockIndex == index;
@@ -1095,26 +1503,31 @@ class _NotionEditorState extends State<NotionEditor> {
                       color: isFocused ? widget.accentColor.withOpacity(0.03) : null,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Row(
+                    child: CompositedTransformTarget(
+                      link: block.layerLink,
+                      child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _focusedBlockIndex = index;
-                            });
-                            block.focusNode.requestFocus();
-                          },
-                          child: Container(
-                            width: 24,
-                            height: 38,
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.drag_indicator,
-                              size: 16,
-                              color: isFocused
-                                  ? widget.accentColor
-                                  : BentoTheme.creamAlpha(0.25),
+                        ReorderableDelayedDragStartListener(
+                          index: index,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _focusedBlockIndex = index;
+                              });
+                              block.focusNode.requestFocus();
+                            },
+                            child: Container(
+                              width: 24,
+                              height: 38,
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.drag_indicator,
+                                size: 16,
+                                color: isFocused
+                                    ? widget.accentColor
+                                    : BentoTheme.creamAlpha(0.25),
+                              ),
                             ),
                           ),
                         ),
@@ -1123,6 +1536,7 @@ class _NotionEditorState extends State<NotionEditor> {
                           child: _buildBlockField(block, index),
                         ),
                       ],
+                      ),
                     ),
                   );
                 },

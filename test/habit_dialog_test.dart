@@ -26,7 +26,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Check if dialog is visible and has no errors
-    expect(find.text('Crear Nuevo Hábito'), findsOneWidget);
+    expect(find.text('Nuevo hábito'), findsOneWidget);
   });
 
   testWidgets('showHabitFormDialog renders without errors for "Tomar agua" template', (WidgetTester tester) async {
@@ -51,6 +51,6 @@ void main() {
     await tester.pumpAndSettle();
 
     // Check if dialog is visible and has no errors
-    expect(find.text('Crear Nuevo Hábito'), findsOneWidget);
+    expect(find.text('Nuevo hábito'), findsOneWidget);
   });
 }

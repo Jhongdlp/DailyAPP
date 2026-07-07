@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,11 +10,13 @@ import 'core/providers/settings_provider.dart';
 import 'core/providers/alarms_provider.dart';
 import 'core/providers/habits_provider.dart';
 import 'core/services/alarm_service.dart';
+import 'core/services/lock_task_service.dart';
 import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/auth/auth_screen.dart';
+import 'features/update/update_checker.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -98,6 +101,20 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
   Future<void> _initializeApp() async {
     final settings = ref.read(settingsProvider);
 
+    // Inicializar Supabase primero para que esté listo antes de cualquier
+    // lectura de providers que dependan de él (p.ej. alarmsProvider más abajo)
+    // y para que el DashboardScreen pueda empezar a cargar datos lo antes posible.
+    try {
+      await Supabase.initialize(
+        url: settings.supabaseUrl,
+        anonKey: settings.supabaseAnonKey,
+        debug: false,
+      );
+    } catch (e) {
+      // Ya inicializado o error de red; se reintenta implícitamente en cada
+      // llamada a Supabase.instance dentro de los providers.
+    }
+
     // Inicializar notificaciones y alarmas
     try {
       await AlarmService.initialize(onNotificationTap: _handleNotificationTap);
@@ -105,9 +122,12 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
       // Verificar si hay alguna alarma sonando actualmente al iniciar
       final activeAlarms = await Alarm.getAlarms();
       int? ringingAlarmId;
-      for (final s in activeAlarms) {
-        if (await Alarm.isRinging(s.id)) {
-          ringingAlarmId = s.id;
+      final ringingFlags = await Future.wait(
+        activeAlarms.map((s) => Alarm.isRinging(s.id)),
+      );
+      for (int i = 0; i < activeAlarms.length; i++) {
+        if (ringingFlags[i]) {
+          ringingAlarmId = activeAlarms[i].id;
           break;
         }
       }
@@ -154,24 +174,27 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
           _pendingAlarmId = alarmId;
         }
       }
-    } catch (_) {
-      // No bloquear inicio si falla la inicialización
-    }
-
-    try {
-      await Supabase.initialize(
-        url: settings.supabaseUrl,
-        anonKey: settings.supabaseAnonKey,
-        debug: false,
-      );
     } catch (e) {
-      // Ya inicializado o error de red; se reintenta implícitamente en cada
-      // llamada a Supabase.instance dentro de los providers.
+      // No bloquear inicio si falla la inicialización
+      debugPrint('main: inicialización de alarmas falló: $e');
     }
 
     setState(() {
       _initializing = false;
     });
+
+    // Si el permiso de notificaciones quedó denegado (Android deja de mostrar
+    // el diálogo tras denegarlo), avisar y ofrecer abrir los ajustes.
+    _warnIfNotificationsDisabled();
+
+    // Buscar actualizaciones en segundo plano (solo si hay sesión activa).
+    // Silencioso: solo muestra diálogo si hay una versión nueva.
+    if (Supabase.instance.client.auth.currentSession != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final context = navigatorKey.currentContext;
+        if (context != null) UpdateChecker.check(context, silent: true);
+      });
+    }
 
     // Navegar a AlarmDismissScreen si había una notificación pendiente
     if (_pendingAlarmId != null) {
@@ -185,6 +208,40 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
         });
       });
     }
+  }
+
+  Future<void> _warnIfNotificationsDisabled() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    final enabled = await AlarmService.areNotificationsEnabled();
+    if (enabled) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Notificaciones desactivadas'),
+          content: const Text(
+            'Sin este permiso las alarmas no pueden sonar ni abrir la pantalla '
+            'para tomar la foto. Actívalo en los ajustes del sistema.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Ahora no'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                LockTaskService.openNotificationSettings();
+              },
+              child: const Text('Abrir ajustes'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   @override

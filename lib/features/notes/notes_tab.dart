@@ -1,5 +1,5 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,10 +9,13 @@ import '../../core/models/note_vault_model.dart';
 import '../../core/providers/notes_provider.dart';
 import '../../core/providers/vaults_provider.dart';
 import '../../core/providers/settings_provider.dart';
+import '../../core/providers/vault_provider.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/utils/error_snackbar.dart';
 import 'notion_editor.dart';
+import 'knowledge_graph_view.dart';
 import '../vault/screens/vault_lock_screen.dart';
+import '../vault/screens/vault_home_screen.dart';
 import '../habits/widgets/habit_blob_header.dart';
 
 
@@ -35,11 +38,19 @@ class NotesTab extends ConsumerStatefulWidget {
 }
 
 class _NotesTabState extends ConsumerState<NotesTab>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   _NotesView _view = _NotesView.vaults;
   NoteVault? _currentVault;
   Note? _editingNote;
   bool _triggeringBiometrics = false;
+  double _pullDistance = 0.0;
+  bool _isLockedLoading = false;
+
+  // Controlador de animación para el gesto de tirar de la bóveda
+  late AnimationController _pullController;
+  double _dragStartY = 0.0;
+  bool _isDraggingVault = false;
+  final ScrollController _vaultsScrollController = ScrollController();
 
   // Editor
   final _titleController = TextEditingController();
@@ -66,6 +77,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
         vsync: this, duration: const Duration(milliseconds: 220));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
+
+    _pullController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 250));
+    _pullController.addListener(() {
+      setState(() {
+        _pullDistance = _pullController.value * 170.0;
+      });
+    });
   }
 
   @override
@@ -74,6 +93,8 @@ class _NotesTabState extends ConsumerState<NotesTab>
     _contentController.dispose();
     _searchController.dispose();
     _fadeCtrl.dispose();
+    _pullController.dispose();
+    _vaultsScrollController.dispose();
     super.dispose();
   }
 
@@ -85,8 +106,98 @@ class _NotesTabState extends ConsumerState<NotesTab>
     ).then((_) {
       setState(() {
         _triggeringBiometrics = false;
+        _pullController.value = 0.0;
+        _isLockedLoading = false;
       });
     });
+  }
+
+  Future<void> _triggerSecureVaultUnlock() async {
+    if (_triggeringBiometrics || _isLockedLoading) return;
+    
+    setState(() {
+      _isLockedLoading = true;
+      _triggeringBiometrics = true;
+    });
+
+    // Pequeño feedback háptico al activar el desbloqueo
+    try {
+      await HapticFeedback.mediumImpact();
+    } catch (_) {}
+
+    // Retraso para que el usuario aprecie la animación del candado "cargando"
+    await Future.delayed(const Duration(milliseconds: 900));
+
+    try {
+      final vaultState = ref.read(vaultProvider);
+      
+      // Si la bóveda no está configurada aún, vamos a la pantalla de configuración obligatoriamente
+      if (!vaultState.isSetup) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const VaultLockScreen()),
+          ).then((_) {
+            if (mounted) {
+              setState(() {
+                _triggeringBiometrics = false;
+                _isLockedLoading = false;
+                _pullController.value = 0.0;
+              });
+            }
+          });
+        }
+        return;
+      }
+
+      // Intentar desbloquear biométricamente
+      final success = await ref.read(vaultProvider.notifier).unlockWithBiometrics();
+      if (success) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const VaultHomeScreen()),
+          ).then((_) {
+            if (mounted) {
+              setState(() {
+                _triggeringBiometrics = false;
+                _isLockedLoading = false;
+                _pullController.value = 0.0;
+              });
+            }
+          });
+        }
+      } else {
+        // Si falla la biometría (o el usuario cancela/falla), mostramos la pantalla de bloqueo normal
+        // para que use la contraseña de respaldo
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const VaultLockScreen()),
+          ).then((_) {
+            if (mounted) {
+              setState(() {
+                _triggeringBiometrics = false;
+                _isLockedLoading = false;
+                _pullController.value = 0.0;
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // En caso de cualquier error no controlado, ir a la pantalla de bloqueo
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const VaultLockScreen()),
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _triggeringBiometrics = false;
+              _isLockedLoading = false;
+              _pullController.value = 0.0;
+            });
+          }
+        });
+      }
+    }
   }
 
   void _goToVaults() {
@@ -208,7 +319,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: BentoTheme.accentLime, width: 2),
+                        borderSide: const BorderSide(color: BentoTheme.accentBrain, width: 2),
                       ),
                     ),
                   ),
@@ -239,12 +350,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
                               color: selectedVault == null
-                                  ? BentoTheme.accentLime.withValues(alpha: 0.14)
+                                  ? BentoTheme.accentBrain.withValues(alpha: 0.14)
                                   : BentoTheme.darkCardAlt,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: selectedVault == null
-                                    ? BentoTheme.accentLime
+                                    ? BentoTheme.accentBrain
                                     : BentoTheme.creamAlpha(0.20),
                                 width: 1.5,
                               ),
@@ -366,7 +477,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   // Create Button
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: BentoTheme.accentLime,
+                      backgroundColor: BentoTheme.accentBrain,
                       foregroundColor: const Color(0xFF0C0C0D),
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide.none),
@@ -525,12 +636,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 ),
               ),
               preset('En 1 hora', Icons.hourglass_bottom,
-                  now.add(const Duration(hours: 1)), BentoTheme.accentBlue),
+                  now.add(const Duration(hours: 1)), BentoTheme.accentBrain),
               preset('En 3 horas', Icons.hourglass_top,
                   now.add(const Duration(hours: 3)), BentoTheme.accentPurple),
               if (tonight.isAfter(now))
                 preset('Esta noche (8pm)', Icons.nights_stay, tonight,
-                    BentoTheme.accentLime),
+                    BentoTheme.accentBrain),
               preset('Mañana (8am)', Icons.wb_sunny_outlined, tomorrow,
                   BentoTheme.accentOrange),
               ListTile(
@@ -653,14 +764,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
     final showFab = _view == _NotesView.vaults || _view == _NotesView.notesList;
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-          stops: [0.0, 0.6],
-        ),
-      ),
+      color: Colors.transparent,
       child: Stack(
         children: [
           Positioned.fill(
@@ -676,12 +780,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
           ),
           if (showFab)
             Positioned(
-              bottom: 16,
+              bottom: 100,
               right: 16,
               child: FloatingActionButton(
                 heroTag: 'notes_fab',
                 onPressed: _showCreateNoteSheet,
-                backgroundColor: BentoTheme.accentLime,
+                backgroundColor: BentoTheme.accentBrain,
                 foregroundColor: const Color(0xFF0C0C0D),
                 elevation: 4,
                 shape: RoundedRectangleBorder(
@@ -699,113 +803,262 @@ class _NotesTabState extends ConsumerState<NotesTab>
   //  PANTALLA 1: BÓVEDAS
   // ─────────────────────────────────────────────────────
 
+  Widget _buildBackgroundVaultPortal() {
+    final double startReveal = 70.0;
+    final double targetTrigger = 135.0;
+    
+    // El progreso empieza en 0% (se retrasa un poco para dar delay) y solo comienza a llenarse a partir de los 70px
+    // de arrastre, completándose al 100% al llegar a los 135px
+    final progress = ((_pullDistance - startReveal) / (targetTrigger - startReveal)).clamp(0.0, 1.0);
+    final isReady = progress >= 1.0;
+
+    return Container(
+      height: 150, // Más compacto para que quepa todo dentro del espacio de arrastre
+      width: double.infinity,
+      alignment: Alignment.topCenter, // Subir la animación pegada al superior
+      padding: const EdgeInsets.only(top: 24.0), // Padding superior para que no toque completamente el borde
+      decoration: BoxDecoration(
+        color: BentoTheme.darkCard, // Color contrastante para el efecto de "carta escondida"
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(
+          color: BentoTheme.creamAlpha(0.04), // Borde fino sutil
+          width: 1,
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Círculo de fondo minimalista
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: BentoTheme.creamAlpha(0.02),
+              border: Border.all(
+                color: BentoTheme.creamAlpha(0.04),
+                width: 1,
+              ),
+            ),
+          ),
+          // Indicador de progreso circular muy fino y elegante (estilo Apple)
+          SizedBox(
+            width: 54,
+            height: 54,
+            child: CircularProgressIndicator(
+              value: _isLockedLoading ? null : progress,
+              strokeWidth: 1.5,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _isLockedLoading
+                    ? BentoTheme.accentBrain
+                    : BentoTheme.creamAlpha(0.1 + (progress * 0.5)),
+              ),
+            ),
+          ),
+          // Icono de candado dinámico minimalista
+          AnimatedRotation(
+            turns: _isLockedLoading ? 0.5 : 0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: Icon(
+              _isLockedLoading
+                  ? Icons.hourglass_empty_rounded
+                  : (isReady ? Icons.lock_open_rounded : Icons.lock_outline_rounded),
+              size: 20,
+              color: _isLockedLoading
+                  ? BentoTheme.accentBrain
+                  : BentoTheme.creamAlpha(0.25 + (progress * 0.65)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVaultsScreen() {
     final vaults = ref.watch(vaultsProvider);
     final notes = ref.watch(notesProvider);
 
+    // Traslación directa 1:1 con tope en 160px (estirar un poco más)
+    final double translation = _pullDistance.clamp(0.0, 160.0);
+    const double scale = 1.0;
+    
+    // Interpolación dinámica del radio y borde para máxima fluidez sin saltos bruscos
+    final double progress = (translation / 40.0).clamp(0.0, 1.0);
+    final double currentRadius = progress * 24.0;
+    final BorderRadius foregroundRadius = BorderRadius.vertical(
+      top: Radius.circular(currentRadius),
+    );
+
+    final Border cardBorder = Border.all(
+      color: BentoTheme.creamAlpha(0.08 * progress),
+      width: 1.0,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // El encabezado queda fijo arriba ("Segundo Cerebro")
         _buildVaultsHeader(),
+        
+        // El contenido deslizable se separa justo debajo del encabezado
         Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (ScrollNotification notification) {
-              if (notification is ScrollUpdateNotification) {
-                final metrics = notification.metrics;
-                if (metrics.pixels > metrics.maxScrollExtent) {
-                  final overscroll = metrics.pixels - metrics.maxScrollExtent;
-                  if (overscroll > 100 && !_triggeringBiometrics) {
-                    _triggeringBiometrics = true;
-                    _openSecureVaultFromGesture();
-                  }
-                }
-              }
-              return false;
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 100),
-              children: [
-                if (vaults.isEmpty) ...[
-                  _buildUnvaultedCard(notes),
-                  const SizedBox(height: 60),
-                  // Contenido de vacío
-                  Center(
-                    child: Icon(Icons.inventory_2_outlined,
-                        size: 48, color: BentoTheme.creamTertiary),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: Text(
-                      'Sin bóvedas todavía',
-                      style: GoogleFonts.montserrat(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                          color: BentoTheme.cream),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      'Crea una bóveda para organizar\ntus notas por tema',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: BentoTheme.creamSecondary, fontSize: 13),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: ElevatedButton.icon(
-                      onPressed: _showCreateVaultDialog,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: BentoTheme.accentLime,
-                        foregroundColor: const Color(0xFF0C0C0D),
-                        elevation: 0,
+          child: Stack(
+            children: [
+              // Background Locked Card ("carta al fondo")
+              if (translation > 0)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildBackgroundVaultPortal(),
+                ),
+              
+              // Foreground Card ("modal/sábana" de lista de bóvedas)
+              Positioned.fill(
+                child: Transform.translate(
+                  offset: Offset(0, translation),
+                  child: Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: BentoTheme.darkBg, // Preservar el fondo oscuro original
+                        borderRadius: foregroundRadius,
+                        border: cardBorder,
                       ),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Crear bóveda'),
-                    ),
-                  ),
-                ] else ...[
-                  // "Sin bóveda" — notas sueltas
-                  _buildUnvaultedCard(notes),
-                  const SizedBox(height: 10),
-                  // Grid de bóvedas
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.1,
-                    ),
-                    itemCount: vaults.length,
-                    itemBuilder: (_, i) =>
-                        _buildVaultCard(vaults[i], notes),
-                  ),
-                ],
-                const SizedBox(height: 80),
-                // Indicador visual de la bóveda oculta al arrastrar
-                Opacity(
-                  opacity: 0.4,
-                  child: Column(
-                    children: [
-                      Icon(Icons.lock_outline, color: BentoTheme.creamAlpha(0.5), size: 22),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Arrastra hacia arriba para abrir la Carpeta Segura',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: BentoTheme.creamAlpha(0.5),
-                          fontWeight: FontWeight.bold,
+                      child: Listener(
+                        onPointerDown: (event) {
+                          _dragStartY = event.position.dy;
+                          _isDraggingVault = false;
+                        },
+                        onPointerMove: (event) {
+                          final double currentY = event.position.dy;
+                          final double deltaY = currentY - _dragStartY;
+                          final double scrollOffset = _vaultsScrollController.hasClients
+                              ? _vaultsScrollController.offset
+                              : 0.0;
+
+                          if (scrollOffset <= 0.0 && deltaY > 0) {
+                            _isDraggingVault = true;
+                            _pullController.value = (deltaY / 160.0).clamp(0.0, 1.0);
+                            
+                            if (_pullDistance >= 135 &&
+                                !_triggeringBiometrics &&
+                                !_isLockedLoading) {
+                              _triggerSecureVaultUnlock();
+                            }
+                          }
+                        },
+                        onPointerUp: (event) {
+                          if (_isDraggingVault && !_isLockedLoading) {
+                            _pullController.animateTo(0.0,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutQuad);
+                          }
+                          _isDraggingVault = false;
+                        },
+                        onPointerCancel: (event) {
+                          if (_isDraggingVault && !_isLockedLoading) {
+                            _pullController.animateTo(0.0,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutQuad);
+                          }
+                          _isDraggingVault = false;
+                        },
+                        child: ListView(
+                          controller: _vaultsScrollController,
+                          physics: const AlwaysScrollableScrollPhysics(
+                              parent: ClampingScrollPhysics()),
+                          padding: const EdgeInsets.fromLTRB(22, 18, 22, 100),
+                          children: [
+                            if (vaults.isEmpty) ...[
+                              _buildUnvaultedCard(notes),
+                              const SizedBox(height: 60),
+                              Center(
+                                child: Icon(Icons.inventory_2_outlined,
+                                    size: 48, color: BentoTheme.creamTertiary),
+                              ),
+                              const SizedBox(height: 12),
+                              Center(
+                                child: Text(
+                                  'Sin bóvedas todavía',
+                                  style: GoogleFonts.montserrat(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 18,
+                                      color: BentoTheme.cream),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Center(
+                                child: Text(
+                                  'Crea una bóveda para organizar\ntus notas por tema',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      color: BentoTheme.creamSecondary, fontSize: 13),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Center(
+                                child: ElevatedButton.icon(
+                                  onPressed: _showCreateVaultDialog,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: BentoTheme.accentBrain,
+                                    foregroundColor: const Color(0xFF0C0C0D),
+                                    elevation: 0,
+                                  ),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Crear bóveda'),
+                                ),
+                              ),
+                            ] else ...[
+                              _buildUnvaultedCard(notes),
+                              const SizedBox(height: 10),
+                              GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12,
+                                  childAspectRatio: 1.1,
+                                ),
+                                itemCount: vaults.length,
+                                itemBuilder: (_, i) =>
+                                    _buildVaultCard(vaults[i], notes),
+                              ),
+                            ],
+                            const SizedBox(height: 80),
+                            // Indicador visual de la bóveda oculta al arrastrar (ahora hacia abajo)
+                            Opacity(
+                              opacity: 0.4,
+                              child: Column(
+                                children: [
+                                  Icon(Icons.keyboard_arrow_down_rounded,
+                                      color: BentoTheme.creamAlpha(0.5), size: 24),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Desliza hacia abajo para abrir la Carpeta Segura',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: BentoTheme.creamAlpha(0.5),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -851,7 +1104,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
   /// Insignia de ícono estilo Notion: ícono Material sobre fondo tintado,
   /// con fallback a emoji para bóvedas creadas antes del rediseño.
   Widget _vaultIconBadge(NoteVault? vault, {double size = 40, Color? color}) {
-    final badgeColor = color ?? vault?.flutterColor ?? BentoTheme.accentBlue;
+    final badgeColor = color ?? vault?.flutterColor ?? BentoTheme.accentBrain;
     final iconData = vault?.iconData ?? (vault == null ? Icons.description_outlined : null);
 
     return Container(
@@ -884,7 +1137,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
       height: 126,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBlue)),
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBrain)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
             child: Column(
@@ -1163,7 +1416,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
           child: filtered.isEmpty
               ? _buildEmptyNotesList(vaultColor)
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
                   itemCount: filtered.length,
                   itemBuilder: (_, i) =>
                       _buildNoteListTile(filtered[i], allNotes, vaultColor),
@@ -1196,7 +1449,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
           ElevatedButton.icon(
             onPressed: _createNewNote,
             style: ElevatedButton.styleFrom(
-              backgroundColor: BentoTheme.accentLime,
+              backgroundColor: BentoTheme.accentBrain,
               foregroundColor: const Color(0xFF0C0C0D),
             ),
             icon: const Icon(Icons.add),
@@ -1308,7 +1561,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                 note.isReminderPending
                                     ? (note.selfDestruct
                                         ? BentoTheme.accentOrange
-                                        : BentoTheme.accentBlue)
+                                        : BentoTheme.accentBrain)
                                     : BentoTheme.creamSecondary,
                               ),
                             if (note.linkedNoteIds.isNotEmpty)
@@ -1353,7 +1606,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
   Widget _buildEditorToolbar() {
     final vaultColor =
-        _currentVault?.flutterColor ?? BentoTheme.accentBlue;
+        _currentVault?.flutterColor ?? BentoTheme.accentBrain;
 
     return Container(
       decoration: BoxDecoration(
@@ -1414,7 +1667,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
             _toolbarBtn(
               Icons.tune,
               'Opciones',
-              BentoTheme.accentLime,
+              BentoTheme.accentBrain,
               () {
                 final allNotes = ref.read(notesProvider);
                 _showEditorOptionsSheet(context, allNotes);
@@ -1437,50 +1690,30 @@ class _NotesTabState extends ConsumerState<NotesTab>
     );
   }
 
-  Widget _mdBtn(String label, String insert,
-      {bool bold = false, bool italic = false}) {
-    return GestureDetector(
-      onTap: () => _insertMarkdown(insert),
-      child: Container(
-        margin: const EdgeInsets.only(right: 4, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: BentoTheme.darkCardAlt,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: BentoTheme.creamAlpha(0.18), width: 1),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
-            fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-            color: BentoTheme.cream,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _insertMarkdown(String text) {
-    final ctrl = _contentController;
-    final sel = ctrl.selection;
-    final before = ctrl.text.substring(0, sel.start < 0 ? 0 : sel.start);
-    final after = ctrl.text.substring(sel.end < 0 ? 0 : sel.end);
-    final inserted = '$before$text$after';
-    ctrl.value = TextEditingValue(
-      text: inserted,
-      selection: TextSelection.collapsed(offset: before.length + text.length),
-    );
-  }
-
   Widget _buildMarkdownEditor() {
     return NotionEditor(
       key: ValueKey(_editingNote?.id ?? 'new_note'),
       titleController: _titleController,
       contentController: _contentController,
-      accentColor: _currentVault?.flutterColor ?? BentoTheme.accentBlue,
+      accentColor: _currentVault?.flutterColor ?? BentoTheme.accentBrain,
+      allNotes: ref.watch(notesProvider),
+      currentNoteId: _editingNote?.id,
+      onLinkNote: _onWikilinkSelected,
     );
+  }
+
+  /// Se dispara al elegir una nota en el autocompletado de wikilinks
+  /// '[[ ]]' del editor: vincula de inmediato vía [linkNotes] (persistencia
+  /// bidireccional) y además refleja el vínculo en [_selectedLinks] para que
+  /// el próximo guardado manual no lo pise con la lista local desactualizada.
+  void _onWikilinkSelected(String targetId) {
+    if (_editingNote == null) return;
+    setState(() {
+      if (!_selectedLinks.contains(targetId)) {
+        _selectedLinks.add(targetId);
+      }
+    });
+    ref.read(notesProvider.notifier).linkNotes(_editingNote!.id, targetId);
   }
 
   Widget _buildMarkdownPreview() {
@@ -1540,13 +1773,28 @@ class _NotesTabState extends ConsumerState<NotesTab>
             blockquoteDecoration: BoxDecoration(
               border: const Border(
                   left: BorderSide(
-                      color: BentoTheme.accentBlue, width: 4)),
-              color: BentoTheme.accentBlue.withValues(alpha: 0.08),
+                      color: BentoTheme.accentBrain, width: 4)),
+              color: BentoTheme.accentBrain.withValues(alpha: 0.08),
+            ),
+            tableHead: GoogleFonts.montserrat(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: BentoTheme.cream,
             ),
             tableBody: TextStyle(
-                fontSize: 14, color: BentoTheme.cream),
+              fontSize: 14,
+              color: BentoTheme.creamAlpha(0.85),
+            ),
+            tableBorder: TableBorder.all(
+              color: BentoTheme.creamAlpha(0.25),
+              width: 1.0,
+            ),
+            tableCellsDecoration: BoxDecoration(
+              color: BentoTheme.creamAlpha(0.02),
+            ),
+            tableCellsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             listBullet: const TextStyle(
-                fontSize: 15, color: BentoTheme.accentBlue),
+                fontSize: 15, color: BentoTheme.accentBrain),
           ),
         ),
       ],
@@ -1687,12 +1935,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: _editRemindAt != null
-                                  ? BentoTheme.accentBlue.withValues(alpha: 0.14)
+                                  ? BentoTheme.accentBrain.withValues(alpha: 0.14)
                                   : BentoTheme.darkCardAlt,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: _editRemindAt != null
-                                    ? BentoTheme.accentBlue
+                                    ? BentoTheme.accentBrain
                                     : BentoTheme.creamAlpha(0.20),
                                 width: 1.5,
                               ),
@@ -1701,7 +1949,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               children: [
                                 Icon(Icons.notifications_active_outlined,
                                     color: _editRemindAt != null
-                                        ? BentoTheme.accentBlue
+                                        ? BentoTheme.accentBrain
                                         : BentoTheme.creamSecondary),
                                 const SizedBox(width: 10),
                                 Expanded(
@@ -1713,14 +1961,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                       fontWeight: FontWeight.w800,
                                       fontSize: 13,
                                       color: _editRemindAt != null
-                                          ? BentoTheme.accentBlue
+                                          ? BentoTheme.accentBrain
                                           : BentoTheme.cream,
                                     ),
                                   ),
                                 ),
                                 if (_editRemindAt != null)
                                   const Icon(Icons.edit_calendar,
-                                      size: 16, color: BentoTheme.accentBlue)
+                                      size: 16, color: BentoTheme.accentBrain)
                                 else
                                   Icon(Icons.chevron_right,
                                       size: 16, color: BentoTheme.creamSecondary),
@@ -2043,14 +2291,11 @@ class _NotesTabState extends ConsumerState<NotesTab>
               border:
                   Border.all(color: BentoTheme.creamAlpha(0.20), width: 1.5),
             ),
-            child: InteractiveViewer(
-              boundaryMargin: const EdgeInsets.all(100),
-              minScale: 0.3,
-              maxScale: 3.0,
-              child: CustomPaint(
-                size: const Size(double.infinity, double.infinity),
-                painter: GraphPainter(notes: notes),
-              ),
+            padding: const EdgeInsets.only(top: 12),
+            child: KnowledgeGraphView(
+              notes: notes,
+              vaults: ref.watch(vaultsProvider),
+              onOpenNote: _openEditor,
             ),
           ),
         ),
@@ -2104,7 +2349,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
             ),
             ListTile(
               leading: const Icon(Icons.edit_outlined,
-                  color: BentoTheme.accentBlue),
+                  color: BentoTheme.accentBrain),
               title: Text('Editar bóveda',
                   style: TextStyle(
                       fontWeight: FontWeight.w700,
@@ -2168,7 +2413,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
               ),
               focusedBorder: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(14)),
-                borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+                borderSide: BorderSide(color: BentoTheme.accentBrain, width: 2),
               ),
             );
           }
@@ -2239,7 +2484,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             'FF${selectedColor.replaceAll('#', '')}',
                             radix: 16));
                       } catch (_) {
-                        previewColor = BentoTheme.accentBlue;
+                        previewColor = BentoTheme.accentBrain;
                       }
                       return GestureDetector(
                         onTap: () =>
@@ -2286,7 +2531,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             'FF${hexColor.replaceAll('#', '')}',
                             radix: 16));
                       } catch (_) {
-                        c = BentoTheme.accentBlue;
+                        c = BentoTheme.accentBrain;
                       }
                       return GestureDetector(
                         onTap: () =>
@@ -2324,7 +2569,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: BentoTheme.accentLime,
+                        backgroundColor: BentoTheme.accentBrain,
                         foregroundColor: const Color(0xFF0C0C0D),
                         elevation: 0,
                       ),
@@ -2442,106 +2687,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
         .replaceAll(RegExp(r'\n+'), ' ')
         .trim();
   }
-}
-
-// ─────────────────────────────────────────────────────
-//  GRAPH PAINTER
-// ─────────────────────────────────────────────────────
-
-class GraphPainter extends CustomPainter {
-  final List<Note> notes;
-
-  GraphPainter({required this.notes});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (notes.isEmpty) return;
-
-    final random = Random(42);
-    final Map<String, Offset> positions = {};
-    const nodeRadius = 34.0;
-
-    final center = Offset(
-        size.width == 0 ? 200 : size.width / 2,
-        size.height == 0 ? 300 : size.height / 2);
-
-    for (int i = 0; i < notes.length; i++) {
-      if (i == 0) {
-        positions[notes[i].id] = center;
-      } else {
-        final angle = (2 * pi / (notes.length - 1)) * (i - 1);
-        final distance = 120.0 + random.nextDouble() * 40;
-        positions[notes[i].id] = Offset(
-          center.dx + cos(angle) * distance,
-          center.dy + sin(angle) * distance,
-        );
-      }
-    }
-
-    // Líneas de conexión
-    final linePaint = Paint()
-      ..color = BentoTheme.accentBlue.withValues(alpha: 0.5)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    for (var note in notes) {
-      final startPos = positions[note.id];
-      if (startPos == null) continue;
-
-      for (var targetId in note.linkedNoteIds) {
-        final endPos = positions[targetId];
-        if (endPos != null && note.id.hashCode < targetId.hashCode) {
-          canvas.drawLine(startPos, endPos, linePaint);
-        }
-      }
-    }
-
-    // Nodos
-    for (int i = 0; i < notes.length; i++) {
-      final note = notes[i];
-      final pos = positions[note.id]!;
-      final isCenter = i == 0;
-      final priorityColor = note.priority == NotePriority.normal
-          ? BentoTheme.accentBlue
-          : note.priority.color;
-
-      final fillPaint = Paint()
-        ..color = isCenter ? BentoTheme.accentLime : BentoTheme.darkCardAlt
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(pos, nodeRadius, fillPaint);
-
-      final borderPaint = Paint()
-        ..color = isCenter ? BentoTheme.accentLime : priorityColor
-        ..strokeWidth = 2.0
-        ..style = PaintingStyle.stroke;
-      canvas.drawCircle(pos, nodeRadius, borderPaint);
-
-      final textSpan = TextSpan(
-        text: note.title.length > 8
-            ? '${note.title.substring(0, 7)}..'
-            : note.title,
-        style: TextStyle(
-          color: isCenter ? const Color(0xFF0C0C0D) : BentoTheme.cream,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.center,
-      );
-      textPainter.layout(minWidth: 0, maxWidth: nodeRadius * 2 - 8);
-      textPainter.paint(
-        canvas,
-        Offset(pos.dx - textPainter.width / 2,
-            pos.dy - textPainter.height / 2),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 extension StringTake on String {

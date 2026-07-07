@@ -112,9 +112,21 @@ const Map<String, IconData> vaultIconMap = {
 /// Claves disponibles para el selector de íconos de bóveda.
 final List<String> vaultIconKeyOptions = vaultIconMap.keys.toList();
 
-/// Opciones predefinidas de colores para bóvedas
+/// Opciones predefinidas de colores para bóvedas (Diseñadas para contraste en modo oscuro)
 const vaultColorOptions = [
-  '#758BFD', '#27187E', '#FF8600', '#8A84E2', '#38B000',
-  '#D90429', '#06D6A0', '#FFB703', '#FB8500', '#023E8A',
-  '#6A0572', '#0077B6', '#F72585', '#4CC9F0', '#7B2D8B',
+  '#8A9DFE', // Azul Periwinkle
+  '#E57373', // Rojo Coral suave (alto contraste)
+  '#F4A261', // Naranja Melocotón
+  '#6CB186', // Verde Salvia
+  '#E9C46A', // Amarillo Oro
+  '#BB86FC', // Violeta Vibrante
+  '#8ECAE6', // Celeste Hielo
+  '#48CAE4', // Turquesa
+  '#DFD3C3', // Crema Arena
+  '#F06292', // Rosa Orquídea
+  '#CE93D8', // Púrpura Lavanda
+  '#C5E1A5', // Verde Lima suave
+  '#A2B9C4', // Gris Plata
+  '#FFB74D', // Albaricoque
+  '#9FA8DA', // Indigo Lavanda
 ];

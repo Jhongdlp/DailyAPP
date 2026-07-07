@@ -57,7 +57,7 @@ InputDecoration _darkFieldDecoration(String hint) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: BentoTheme.accentLime, width: 1.5),
+      borderSide: const BorderSide(color: BentoTheme.accentHabits, width: 1.5),
     ),
   );
 }
@@ -335,8 +335,8 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: selected ? BentoTheme.accentLime.withValues(alpha: 0.16) : BentoTheme.creamAlpha(0.06),
-                                  border: Border.all(color: selected ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.14), width: selected ? 2 : 1.5),
+                                  color: selected ? BentoTheme.accentHabits.withValues(alpha: 0.16) : BentoTheme.creamAlpha(0.06),
+                                  border: Border.all(color: selected ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.14), width: selected ? 2 : 1.5),
                                 ),
                                 child: Text(e, style: const TextStyle(fontSize: 17)),
                               ),
@@ -433,14 +433,14 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                                     onTap: _updateAutomaticWaterReminders,
                                     child: Padding(
                                       padding: const EdgeInsets.only(right: 8),
-                                      child: Icon(Icons.auto_awesome, size: 20, color: BentoTheme.accentLime),
+                                      child: Icon(Icons.auto_awesome, size: 20, color: BentoTheme.accentHabits),
                                     ),
                                   ),
                                 Switch(
                                   value: _reminderEnabled,
                                   onChanged: (v) => setState(() => _reminderEnabled = v),
-                                  activeThumbColor: BentoTheme.accentLime,
-                                  activeTrackColor: BentoTheme.accentLime.withValues(alpha: 0.3),
+                                  activeThumbColor: BentoTheme.accentHabits,
+                                  activeTrackColor: BentoTheme.accentHabits.withValues(alpha: 0.3),
                                   inactiveThumbColor: BentoTheme.creamAlpha(0.6),
                                   inactiveTrackColor: BentoTheme.creamAlpha(0.12),
                                 ),
@@ -467,16 +467,16 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(100),
-                                    border: Border.all(color: BentoTheme.accentLime.withValues(alpha: 0.5)),
+                                    border: Border.all(color: BentoTheme.accentHabits.withValues(alpha: 0.5)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.add, size: 15, color: BentoTheme.accentLime),
+                                      const Icon(Icons.add, size: 15, color: BentoTheme.accentHabits),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Añadir hora',
-                                        style: GoogleFonts.montserrat(color: BentoTheme.accentLime, fontWeight: FontWeight.w600, fontSize: 12),
+                                        style: GoogleFonts.montserrat(color: BentoTheme.accentHabits, fontWeight: FontWeight.w600, fontSize: 12),
                                       ),
                                     ],
                                   ),
@@ -508,7 +508,7 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                                 height: cellSize,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: active ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.08),
+                                  color: active ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.08),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -552,7 +552,7 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             alignment: Alignment.center,
-                            decoration: BoxDecoration(color: BentoTheme.accentLime, borderRadius: BorderRadius.circular(100)),
+                            decoration: BoxDecoration(color: BentoTheme.accentHabits, borderRadius: BorderRadius.circular(100)),
                             child: Text(
                               isEditing ? 'Guardar' : 'Agregar',
                               style: GoogleFonts.montserrat(color: const Color(0xFF0C0C0D), fontWeight: FontWeight.w700, fontSize: 15),

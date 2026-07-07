@@ -155,7 +155,7 @@ create table public.notes (
   title text not null,
   content text not null,
   linked_note_ids uuid[] default '{}'::uuid[] not null,
-  embedding vector(1536), -- Vector para búsqueda semántica
+  embedding vector(1024), -- Vector para búsqueda semántica (bge-m3, 1024 dims)
   priority integer not null default 1 check (priority between 0 and 3), -- 0=baja, 1=normal, 2=alta, 3=urgente
   remind_at timestamptz, -- Recordatorio por notificación (null = sin recordatorio)
   self_destruct boolean not null default false, -- La nota se elimina sola cuando el recordatorio pasa
@@ -310,11 +310,18 @@ create policy "Usuarios pueden crear sus propios logs de alarmas"
 --
 -- alter table public.habits drop column if exists completed_dates;
 
--- 6. FUNCIÓN DE BÚSQUEDA SEMÁNTICA PARA NOTAS (Vectores)
+-- 6. MÁQUINA DE CONOCIMIENTO — BÚSQUEDA Y CONEXIONES SEMÁNTICAS (pgvector, bge-m3 1024 dims)
+
+-- Índice HNSW para búsquedas por coseno rápidas
+create index if not exists notes_embedding_hnsw_idx
+  on public.notes using hnsw (embedding vector_cosine_ops);
+
+-- 6.1 Búsqueda semántica: dado el embedding de una consulta, notas más cercanas
 create or replace function match_notes (
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   match_threshold float,
-  match_count int
+  match_count int,
+  exclude_id uuid default null
 )
 returns table (
   id uuid,
@@ -323,17 +330,62 @@ returns table (
   similarity float
 )
 language sql stable
+security invoker
+set search_path = public
 as $$
-  select
-    notes.id,
-    notes.title,
-    notes.content,
-    1 - (notes.embedding <=> query_embedding) as similarity
-  from notes
-  where 1 - (notes.embedding <=> query_embedding) > match_threshold
-    and notes.user_id = auth.uid()
-  order by notes.embedding <=> query_embedding
+  select n.id, n.title, n.content,
+         1 - (n.embedding <=> query_embedding) as similarity
+  from notes n
+  where n.user_id = auth.uid()
+    and n.embedding is not null
+    and (exclude_id is null or n.id <> exclude_id)
+    and 1 - (n.embedding <=> query_embedding) > match_threshold
+  order by n.embedding <=> query_embedding
   limit match_count;
+$$;
+
+-- 6.2 Notas relacionadas a una nota usando su embedding ya almacenado
+create or replace function related_notes (
+  p_note_id uuid,
+  match_threshold float,
+  match_count int
+)
+returns table (id uuid, title text, similarity float)
+language sql stable
+security invoker
+set search_path = public
+as $$
+  select n.id, n.title, 1 - (n.embedding <=> src.embedding) as similarity
+  from notes n,
+       (select embedding from notes where id = p_note_id and user_id = auth.uid()) src
+  where n.user_id = auth.uid()
+    and n.id <> p_note_id
+    and n.embedding is not null
+    and src.embedding is not null
+    and 1 - (n.embedding <=> src.embedding) > match_threshold
+  order by n.embedding <=> src.embedding
+  limit match_count;
+$$;
+
+-- 6.3 Pares de notas similares (aristas semánticas del grafo de conocimiento)
+create or replace function semantic_edges (
+  match_threshold float,
+  max_pairs int
+)
+returns table (source_id uuid, target_id uuid, similarity float)
+language sql stable
+security invoker
+set search_path = public
+as $$
+  select a.id, b.id, 1 - (a.embedding <=> b.embedding) as similarity
+  from notes a
+  join notes b on a.user_id = b.user_id and a.id < b.id
+  where a.user_id = auth.uid()
+    and a.embedding is not null
+    and b.embedding is not null
+    and 1 - (a.embedding <=> b.embedding) > match_threshold
+  order by similarity desc
+  limit max_pairs;
 $$;
 
 
@@ -454,6 +506,44 @@ create policy "Usuarios pueden actualizar sus propios elementos de la bóveda"
 
 create policy "Usuarios pueden eliminar sus propios elementos de la bóveda"
   on public.vault_items for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+
+-- 8.1 RESPALDO DE CLAVE DE BÓVEDA (recuperación ante reinstalación/cambio de equipo)
+-- Guarda el mismo blob que ya se guarda en Secure Storage local: la Vault Key
+-- envuelta (cifrada) con la clave derivada de la contraseña maestra (KEK), más
+-- la sal y el hash de verificación. Nunca contiene la contraseña ni la Vault
+-- Key en texto plano, así que sigue siendo "conocimiento cero" para Supabase.
+create table if not exists public.vault_recovery (
+  user_id uuid primary key references auth.users on delete cascade,
+  salt text not null,
+  vault_key_encrypted text not null,
+  vault_key_iv text not null,
+  master_password_hash text not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.vault_recovery enable row level security;
+
+create policy "Usuarios pueden ver su propio respaldo de bóveda"
+  on public.vault_recovery for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden crear su propio respaldo de bóveda"
+  on public.vault_recovery for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden actualizar su propio respaldo de bóveda"
+  on public.vault_recovery for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden eliminar su propio respaldo de bóveda"
+  on public.vault_recovery for delete
   to authenticated
   using ((select auth.uid()) = user_id);
 

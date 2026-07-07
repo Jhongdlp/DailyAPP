@@ -100,7 +100,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
       ),
       focusedBorder: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+        borderSide: BorderSide(color: BentoTheme.accentBrain, width: 2),
       ),
     );
   }
@@ -145,13 +145,13 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                   decoration: BoxDecoration(
                     color: BentoTheme.darkCard,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: BentoTheme.accentLime, width: 2),
+                    border: Border.all(color: BentoTheme.accentBrain, width: 2),
                   ),
                   child: Center(
                     child: Icon(
                       vaultState.isSetup ? Icons.lock_outline : Icons.enhanced_encryption_outlined,
                       size: 48,
-                      color: BentoTheme.accentLime,
+                      color: BentoTheme.accentBrain,
                     ),
                   ),
                 ),
@@ -219,14 +219,14 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                         decoration: BoxDecoration(
                           color: BentoTheme.darkCard,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: BentoTheme.accentLime, width: 1.5),
+                          border: Border.all(color: BentoTheme.accentBrain, width: 1.5),
                         ),
                         child: Column(
                           children: [
                             const Icon(
                               Icons.fingerprint_outlined,
                               size: 64,
-                              color: BentoTheme.accentLime,
+                              color: BentoTheme.accentBrain,
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -249,7 +249,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           _passwordController.clear();
                         });
                       },
-                      style: TextButton.styleFrom(foregroundColor: BentoTheme.accentLime),
+                      style: TextButton.styleFrom(foregroundColor: BentoTheme.accentBrain),
                       icon: const Icon(Icons.password_outlined),
                       label: const Text(
                         'Usar contraseña de respaldo',
@@ -299,11 +299,11 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: _isProcessing
-                                ? const Center(child: CircularProgressIndicator(color: BentoTheme.accentLime))
+                                ? const Center(child: CircularProgressIndicator(color: BentoTheme.accentBrain))
                                 : ElevatedButton(
                                     onPressed: _handlePasswordUnlock,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: BentoTheme.accentLime,
+                                      backgroundColor: BentoTheme.accentBrain,
                                       foregroundColor: const Color(0xFF0C0C0D),
                                       elevation: 0,
                                     ),
@@ -321,7 +321,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                         });
                         _attemptBiometricUnlock();
                       },
-                      style: TextButton.styleFrom(foregroundColor: BentoTheme.accentLime),
+                      style: TextButton.styleFrom(foregroundColor: BentoTheme.accentBrain),
                       icon: const Icon(Icons.fingerprint_outlined),
                       label: const Text(
                         'Volver a usar biometría',
@@ -406,11 +406,11 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: _isProcessing
-                                ? const Center(child: CircularProgressIndicator(color: BentoTheme.accentLime))
+                                ? const Center(child: CircularProgressIndicator(color: BentoTheme.accentBrain))
                                 : ElevatedButton(
                                     onPressed: _handleSetup,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: BentoTheme.accentLime,
+                                      backgroundColor: BentoTheme.accentBrain,
                                       foregroundColor: const Color(0xFF0C0C0D),
                                       elevation: 0,
                                     ),

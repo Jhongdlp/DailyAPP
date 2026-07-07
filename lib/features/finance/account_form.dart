@@ -155,7 +155,7 @@ class _AccountFormState extends ConsumerState<AccountForm> {
       ),
       focusedBorder: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+        borderSide: BorderSide(color: BentoTheme.accentFinance, width: 2),
       ),
     );
   }
@@ -251,7 +251,7 @@ class _AccountFormState extends ConsumerState<AccountForm> {
             ElevatedButton(
               onPressed: _saving ? null : _save,
               style: ElevatedButton.styleFrom(
-                backgroundColor: BentoTheme.accentLime,
+                backgroundColor: BentoTheme.accentFinance,
                 foregroundColor: const Color(0xFF0C0C0D),
                 elevation: 0,
               ),

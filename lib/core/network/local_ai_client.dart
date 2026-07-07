@@ -11,11 +11,13 @@ class LocalAIClient {
   final String baseUrl;
   final String textModelName;
   final String visionModelName;
+  final String embeddingModelName;
 
   LocalAIClient({
     this.baseUrl = 'http://10.0.2.2:11434', // Cambiar según el host (ej. IP de la red local)
     this.textModelName = 'qwen2.5:7b',
     this.visionModelName = 'qwen2-vl:7b',
+    this.embeddingModelName = 'bge-m3:latest',
   });
 
   /// Verifica si el servidor local de IA está activo
@@ -122,6 +124,73 @@ class LocalAIClient {
         throw Exception('Error al validar imagen con Qwen-VL local: $err');
       }
     }
+  }
+
+  /// Genera el embedding de un texto con el modelo de embeddings local (bge-m3).
+  /// Retorna un vector de 1024 dimensiones.
+  Future<List<double>> embed(String text) async {
+    final vectors = await embedBatch([text]);
+    return vectors.first;
+  }
+
+  /// Genera embeddings para varios textos en una sola llamada.
+  /// Intenta primero el API de Ollama (/api/embed) y cae a estilo OpenAI
+  /// (/v1/embeddings) si el servidor no lo soporta.
+  Future<List<List<double>>> embedBatch(List<String> texts) async {
+    if (texts.isEmpty) return [];
+    try {
+      final url = Uri.parse('$baseUrl/api/embed');
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'model': embeddingModelName,
+              'input': texts,
+              // Mantener el modelo de embeddings cargado en memoria del servidor
+              'keep_alive': '30m',
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final embeddings = data['embeddings'] as List;
+        return embeddings
+            .map((e) => (e as List).map((v) => (v as num).toDouble()).toList())
+            .toList();
+      }
+      return _embedBatchOpenAI(texts);
+    } catch (_) {
+      try {
+        return await _embedBatchOpenAI(texts);
+      } catch (err) {
+        throw Exception('Error al generar embeddings con el servidor local: $err');
+      }
+    }
+  }
+
+  /// Método auxiliar de embeddings para servidores tipo OpenAI (LM Studio, vLLM)
+  Future<List<List<double>>> _embedBatchOpenAI(List<String> texts) async {
+    final url = Uri.parse('$baseUrl/v1/embeddings');
+    final response = await http
+        .post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'model': embeddingModelName, 'input': texts}),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final items = data['data'] as List;
+      return items
+          .map((e) => ((e as Map)['embedding'] as List)
+              .map((v) => (v as num).toDouble())
+              .toList())
+          .toList();
+    }
+    throw Exception('Servidor de embeddings retornó código: ${response.statusCode}');
   }
 
   /// Método auxiliar para servidores tipo OpenAI (LM Studio, LocalAI, vLLM)

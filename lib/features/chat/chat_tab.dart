@@ -148,7 +148,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBlue)),
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentChat)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Align(
@@ -173,14 +173,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-          stops: [0.0, 0.6],
-        ),
-      ),
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -194,7 +187,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
-                final accent = msg.isUser ? BentoTheme.accentLime : BentoTheme.accentBlue;
+                final accent = msg.isUser ? BentoTheme.accentChat : BentoTheme.accentBlue;
                 return Align(
                   alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Padding(
@@ -245,13 +238,13 @@ class _ChatTabState extends ConsumerState<ChatTab> {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentLime),
+                child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentChat),
               ),
             ),
 
           // Input de texto
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 110),
             child: Row(
               children: [
                 Expanded(
@@ -274,7 +267,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                       ),
                       focusedBorder: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(16)),
-                        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+                        borderSide: BorderSide(color: BentoTheme.accentChat, width: 2),
                       ),
                     ),
                   ),
@@ -284,7 +277,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                 IconButton.filled(
                   onPressed: _loading ? null : _sendMessage,
                   style: IconButton.styleFrom(
-                    backgroundColor: BentoTheme.accentLime,
+                    backgroundColor: BentoTheme.accentChat,
                     padding: const EdgeInsets.all(16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

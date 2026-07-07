@@ -89,14 +89,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     final compactHabits = activeToday.where((h) => h.id != featured?.id).toList();
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-          stops: [0.0, 0.6],
-        ),
-      ),
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -104,7 +97,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           _buildStatsGrid(completedToday, activeToday.length, longestStreak),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.only(top: 4, bottom: 24),
+              padding: const EdgeInsets.only(top: 4, bottom: 110),
               children: [
                 _buildSectionHeader(context, activeToday.length, habits),
                 if (_aiFeedback != null) _buildAiFeedbackCard(context),
@@ -132,7 +125,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         for (final habit in compactHabits) ...[
-                          _buildCompactRow(context, habit, today),
+                          _buildCompactRow(context, habit, today, days),
                           const SizedBox(height: 10),
                         ],
                       ],
@@ -176,7 +169,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader()),
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentHabits)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Align(
@@ -342,7 +335,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 onTap: () => showHabitFormDialog(context, ref),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-                  decoration: BoxDecoration(color: BentoTheme.accentLime, borderRadius: BorderRadius.circular(100)),
+                  decoration: BoxDecoration(color: BentoTheme.accentHabits, borderRadius: BorderRadius.circular(100)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -366,30 +359,45 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   Widget _buildAiFeedbackCard(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
-      child: Container(
+      child: GlassCard(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: BentoTheme.darkCard,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BentoTheme.accentLime.withValues(alpha: 0.35)),
-        ),
+        borderRadius: 18,
+        backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
+        borderColor: BentoTheme.accentHabits.withValues(alpha: 0.35),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.psychology, color: BentoTheme.accentLime, size: 18),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    'Coach de IA',
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: BentoTheme.accentLime),
+                Row(
+                  children: [
+                    const Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Coach de IA',
+                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: BentoTheme.accentHabits),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _aiFeedback = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: BentoTheme.creamAlpha(0.06),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.close, color: BentoTheme.creamAlpha(0.6), size: 14),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             MarkdownBody(
               data: _aiFeedback!,
               shrinkWrap: true,
@@ -398,9 +406,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 strong: const TextStyle(fontSize: 13, color: BentoTheme.cream, fontWeight: FontWeight.w900, height: 1.4),
                 em: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontStyle: FontStyle.italic, height: 1.4),
                 listBullet: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), height: 1.4),
-                h1: const TextStyle(fontSize: 16, color: BentoTheme.accentLime, fontWeight: FontWeight.w900),
-                h2: const TextStyle(fontSize: 15, color: BentoTheme.accentLime, fontWeight: FontWeight.w900),
-                h3: const TextStyle(fontSize: 14, color: BentoTheme.accentLime, fontWeight: FontWeight.w900),
+                h1: const TextStyle(fontSize: 16, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
+                h2: const TextStyle(fontSize: 15, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
+                h3: const TextStyle(fontSize: 14, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -420,23 +428,19 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
-      child: GestureDetector(
+      child: GlassCard(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id))),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-          decoration: BoxDecoration(
-            color: BentoTheme.darkCard,
-            border: Border.all(color: BentoTheme.creamAlpha(0.08)),
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Stack(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        borderRadius: 22,
+        backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
+        child: Stack(
             children: [
               Positioned(
                 left: -18,
                 top: -18,
                 bottom: -16,
                 width: 3,
-                child: Container(color: BentoTheme.accentLime),
+                child: Container(color: BentoTheme.accentHabits),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,7 +522,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                       value: ratio,
                       minHeight: 6,
                       backgroundColor: BentoTheme.creamAlpha(0.09),
-                      color: BentoTheme.accentLime,
+                      color: BentoTheme.accentHabits,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -527,30 +531,35 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     children: days.map((day) {
                       final isToday = day == today;
                       final isCompleted = habit.isCompletedOn(day);
-                      return Column(
-                        children: [
-                          Text(
-                            DateFormat('E').format(day).substring(0, 1).toUpperCase(),
-                            style: GoogleFonts.montserrat(
-                              fontSize: 10,
-                              letterSpacing: 0.8,
-                              color: isToday ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.4),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isToday ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.2),
-                                width: 1.4,
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, day),
+                        child: Column(
+                          children: [
+                            Text(
+                              DateFormat('E').format(day).substring(0, 1).toUpperCase(),
+                              style: GoogleFonts.montserrat(
+                                fontSize: 10,
+                                letterSpacing: 0.8,
+                                color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.4),
                               ),
-                              color: isCompleted ? BentoTheme.accentLime : Colors.transparent,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.2),
+                                  width: 1.4,
+                                ),
+                                color: isCompleted ? BentoTheme.accentHabits : Colors.transparent,
+                              ),
+                              child: isCompleted ? const Icon(Icons.check, size: 14, color: Color(0xFF0C0C0D)) : null,
+                            ),
+                          ],
+                        ),
                       );
                     }).toList(),
                   ),
@@ -559,8 +568,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _stepperButton({required IconData icon, required bool filled, required VoidCallback onTap}) {
@@ -571,7 +579,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         height: 34,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: filled ? BentoTheme.accentLime : Colors.transparent,
+          color: filled ? BentoTheme.accentHabits : Colors.transparent,
           border: filled ? null : Border.all(color: BentoTheme.creamAlpha(0.18)),
         ),
         child: Icon(icon, size: 14, color: filled ? const Color(0xFF0C0C0D) : BentoTheme.cream),
@@ -579,7 +587,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     );
   }
 
-  Widget _buildCompactRow(BuildContext context, Habit habit, DateTime today) {
+  Widget _buildCompactRow(BuildContext context, Habit habit, DateTime today, List<DateTime> days) {
     final isCompleted = habit.isCompletedOn(today);
     final metaParts = <String>[
       if (habit.goalLabel != null) habit.goalLabel!,
@@ -587,66 +595,109 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         '${habit.reminderHour?.toString().padLeft(2, '0') ?? '--'}:${habit.reminderMinute?.toString().padLeft(2, '0') ?? '--'}',
     ];
 
-    return GestureDetector(
+    return GlassCard(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id))),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-        decoration: BoxDecoration(
-          color: BentoTheme.darkCardAlt,
-          border: Border.all(color: BentoTheme.creamAlpha(0.07)),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+      borderRadius: 16,
+      backgroundColor: BentoTheme.darkCardAlt.withValues(alpha: 0.60),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: BentoTheme.creamAlpha(0.12)),
-              ),
-              child: Text(habit.icon, style: const TextStyle(fontSize: 15)),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    habit.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 16, letterSpacing: -0.2, color: BentoTheme.cream),
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: BentoTheme.creamAlpha(0.12)),
                   ),
-                  if (metaParts.isNotEmpty) ...[
-                    const SizedBox(height: 5),
-                    Text(
-                      metaParts.join(' · ').toUpperCase(),
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.montserrat(fontSize: 10.5, letterSpacing: 1.1, color: BentoTheme.creamAlpha(0.4)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, today),
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: isCompleted ? habit.colorValue : BentoTheme.creamAlpha(0.2), width: 1.4),
-                  color: isCompleted ? habit.colorValue : Colors.transparent,
+                  child: Text(habit.icon, style: const TextStyle(fontSize: 15)),
                 ),
-                child: isCompleted ? const Icon(Icons.check, size: 15, color: Colors.white) : null,
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        habit.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 16, letterSpacing: -0.2, color: BentoTheme.cream),
+                      ),
+                      if (metaParts.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          metaParts.join(' · ').toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.montserrat(fontSize: 10.5, letterSpacing: 1.1, color: BentoTheme.creamAlpha(0.4)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                GestureDetector(
+                  onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, today),
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: isCompleted ? habit.colorValue : BentoTheme.creamAlpha(0.2), width: 1.4),
+                      color: isCompleted ? habit.colorValue : Colors.transparent,
+                    ),
+                    child: isCompleted ? const Icon(Icons.check, size: 15, color: Colors.white) : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: days.map((day) {
+                  final isToday = day == today;
+                  final isCompletedDay = habit.isCompletedOn(day);
+                  final color = habit.colorValue;
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, day),
+                    child: Column(
+                      children: [
+                        Text(
+                          DateFormat('E').format(day).substring(0, 1).toUpperCase(),
+                          style: GoogleFonts.montserrat(
+                            fontSize: 9,
+                            letterSpacing: 0.8,
+                            fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                            color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.4),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.2),
+                              width: 1.2,
+                            ),
+                            color: isCompletedDay ? color : Colors.transparent,
+                          ),
+                          child: isCompletedDay ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 }

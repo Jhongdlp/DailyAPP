@@ -15,7 +15,7 @@ class AlarmTab extends ConsumerWidget {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentOrange)),
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentAlarm)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Align(
@@ -65,7 +65,7 @@ class AlarmTab extends ConsumerWidget {
             ),
             child: Container(
               padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-              decoration: BoxDecoration(color: BentoTheme.accentLime, borderRadius: BorderRadius.circular(100)),
+              decoration: BoxDecoration(color: BentoTheme.accentAlarm, borderRadius: BorderRadius.circular(100)),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -89,14 +89,7 @@ class AlarmTab extends ConsumerWidget {
     final alarmsAsync = ref.watch(alarmsProvider);
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-          stops: [0.0, 0.6],
-        ),
-      ),
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -109,7 +102,7 @@ class AlarmTab extends ConsumerWidget {
                 Expanded(
                   child: alarmsAsync.when(
                     loading: () => const Center(
-                      child: CircularProgressIndicator(color: BentoTheme.accentLime),
+                      child: CircularProgressIndicator(color: BentoTheme.accentAlarm),
                     ),
                     error: (e, _) => Center(
                       child: Column(
@@ -128,7 +121,7 @@ class AlarmTab extends ConsumerWidget {
                           ElevatedButton(
                             onPressed: () => ref.invalidate(alarmsProvider),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: BentoTheme.accentLime,
+                              backgroundColor: BentoTheme.accentAlarm,
                               foregroundColor: const Color(0xFF0C0C0D),
                             ),
                             child: const Text('Reintentar'),
@@ -175,7 +168,7 @@ class AlarmTab extends ConsumerWidget {
                       }
 
                       return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+                        padding: const EdgeInsets.fromLTRB(22, 4, 22, 110),
                         itemCount: alarms.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (ctx, i) => AlarmCard(

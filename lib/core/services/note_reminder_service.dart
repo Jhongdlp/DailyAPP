@@ -19,46 +19,57 @@ class NoteReminderService {
       100000 + (noteId.hashCode.abs() % 100000);
 
   static Future<void> scheduleReminder(Note note) async {
-    await cancelReminder(note.id);
-    final remindAt = note.remindAt;
-    if (remindAt == null || !remindAt.isAfter(DateTime.now())) return;
+    try {
+      await cancelReminder(note.id);
+      if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) {
+        return;
+      }
+      final remindAt = note.remindAt;
+      if (remindAt == null || !remindAt.isAfter(DateTime.now())) return;
 
-    final details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: 'Recordatorios programados desde tus notas',
-        importance: Importance.max,
-        priority: Priority.high,
-        category: AndroidNotificationCategory.reminder,
-        playSound: true,
-        enableVibration: true,
-        styleInformation: BigTextStyleInformation(note.content),
-      ),
-    );
+      final details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: 'Recordatorios programados desde tus notas',
+          importance: Importance.max,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.reminder,
+          playSound: true,
+          enableVibration: true,
+          styleInformation: BigTextStyleInformation(note.content),
+        ),
+      );
 
-    final body = note.content.isEmpty ? 'Toca para ver la nota' : note.content;
-    final prefix = note.selfDestruct ? '💣' : '📌';
+      final body = note.content.isEmpty ? 'Toca para ver la nota' : note.content;
+      final prefix = note.selfDestruct ? '💣' : '📌';
 
-    if (defaultTargetPlatform == TargetPlatform.linux) {
-      return;
+      await _plugin.zonedSchedule(
+        _notifId(note.id),
+        '$prefix ${note.title}',
+        body,
+        tz.TZDateTime.from(remindAt, tz.local),
+        details,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: '$payloadPrefix${note.id}',
+      );
+    } catch (e) {
+      debugPrint('Error scheduling note reminder: $e');
     }
-
-    await _plugin.zonedSchedule(
-      _notifId(note.id),
-      '$prefix ${note.title}',
-      body,
-      tz.TZDateTime.from(remindAt, tz.local),
-      details,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: '$payloadPrefix${note.id}',
-    );
   }
 
-  static Future<void> cancelReminder(String noteId) =>
-      _plugin.cancel(_notifId(noteId));
+  static Future<void> cancelReminder(String noteId) async {
+    try {
+      if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) {
+        return;
+      }
+      await _plugin.cancel(_notifId(noteId));
+    } catch (e) {
+      debugPrint('Error canceling note reminder: $e');
+    }
+  }
 
   static Future<void> rescheduleAll(List<Note> notes) async {
     for (final note in notes) {

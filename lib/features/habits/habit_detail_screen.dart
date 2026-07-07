@@ -161,13 +161,10 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
       increment = 5.0;
     }
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: BentoTheme.darkCard,
-        border: Border.all(color: BentoTheme.creamAlpha(0.08)),
-        borderRadius: BorderRadius.circular(20),
-      ),
+      borderRadius: 20,
+      backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -220,7 +217,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       width: 32,
                       height: 32,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: BentoTheme.accentLime),
+                      decoration: const BoxDecoration(shape: BoxShape.circle, color: BentoTheme.accentHabits),
                       child: const Icon(Icons.add, size: 14, color: Color(0xFF0C0C0D)),
                     ),
                   ),
@@ -266,7 +263,9 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
     final color = habit.colorValue;
 
     return Scaffold(
+      backgroundColor: BentoTheme.darkBg,
       body: Container(
+        constraints: const BoxConstraints.expand(),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -312,13 +311,10 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   _buildProgressCard(context, habit, color),
                 ],
                 const SizedBox(height: 16),
-                Container(
+                GlassCard(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: BentoTheme.darkCard,
-                    border: Border.all(color: BentoTheme.creamAlpha(0.08)),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  borderRadius: 20,
+                  backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -342,18 +338,18 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(100),
-                      border: Border.all(color: BentoTheme.accentLime.withValues(alpha: 0.5)),
+                      border: Border.all(color: BentoTheme.accentHabits.withValues(alpha: 0.5)),
                     ),
                     child: _analyzing
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentLime))
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentHabits))
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.psychology_outlined, size: 18, color: BentoTheme.accentLime),
+                              const Icon(Icons.psychology_outlined, size: 18, color: BentoTheme.accentHabits),
                               const SizedBox(width: 8),
                               Text(
                                 'Analizar con IA',
-                                style: GoogleFonts.montserrat(color: BentoTheme.accentLime, fontWeight: FontWeight.w700, fontSize: 14),
+                                style: GoogleFonts.montserrat(color: BentoTheme.accentHabits, fontWeight: FontWeight.w700, fontSize: 14),
                               ),
                             ],
                           ),
@@ -361,16 +357,50 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                 ),
                 if (_aiFeedback != null) ...[
                   const SizedBox(height: 16),
-                  Container(
+                  GlassCard(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: BentoTheme.darkCard,
-                      border: Border.all(color: BentoTheme.accentLime.withValues(alpha: 0.35)),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Text(
-                      _aiFeedback!,
-                      style: GoogleFonts.montserrat(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontWeight: FontWeight.w500, height: 1.4),
+                    borderRadius: 18,
+                    backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
+                    borderColor: BentoTheme.accentHabits.withValues(alpha: 0.35),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Coach de IA',
+                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: BentoTheme.accentHabits),
+                                ),
+                              ],
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _aiFeedback = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: BentoTheme.creamAlpha(0.06),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.close, color: BentoTheme.creamAlpha(0.6), size: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _aiFeedback!,
+                          style: GoogleFonts.montserrat(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontWeight: FontWeight.w500, height: 1.4),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -391,13 +421,10 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassCard(
+      borderRadius: 14,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: BentoTheme.darkCardAlt,
-        border: Border.all(color: BentoTheme.creamAlpha(0.07)),
-        borderRadius: BorderRadius.circular(14),
-      ),
+      backgroundColor: BentoTheme.darkCardAlt.withValues(alpha: 0.60),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

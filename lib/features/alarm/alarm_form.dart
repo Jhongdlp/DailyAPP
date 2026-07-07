@@ -195,7 +195,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: active ? BentoTheme.accentLime : BentoTheme.darkCardAlt,
+          color: active ? BentoTheme.accentAlarm : BentoTheme.darkCardAlt,
           border: active ? null : Border.all(color: BentoTheme.creamAlpha(0.14)),
         ),
         child: Text(
@@ -231,7 +231,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
       ),
       focusedBorder: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(16)),
-        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+        borderSide: BorderSide(color: BentoTheme.accentAlarm, width: 2),
       ),
     );
   }
@@ -271,7 +271,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
               decoration: BoxDecoration(
                 color: BentoTheme.darkCard,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: BentoTheme.accentLime, width: 1.5),
+                border: Border.all(color: BentoTheme.accentAlarm, width: 1.5),
               ),
               child: Column(
                 children: [
@@ -372,7 +372,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: active
-                          ? BentoTheme.accentLime
+                          ? BentoTheme.accentAlarm
                           : BentoTheme.darkCardAlt,
                       border: active ? null : Border.all(color: BentoTheme.creamAlpha(0.14)),
                     ),
@@ -439,7 +439,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
             child: ElevatedButton.icon(
               onPressed: _saving ? null : _save,
               style: ElevatedButton.styleFrom(
-                backgroundColor: BentoTheme.accentLime,
+                backgroundColor: BentoTheme.accentAlarm,
                 foregroundColor: const Color(0xFF0C0C0D),
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 18),

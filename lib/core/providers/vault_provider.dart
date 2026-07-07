@@ -92,9 +92,41 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
         key: _scopedKey('vault_master_password_hash'),
         aOptions: _getAndroidOptions(),
       );
-      state = state.copyWith(isSetup: hasHash != null);
+      if (hasHash != null) {
+        state = state.copyWith(isSetup: true);
+        return;
+      }
+
+      // No hay configuración local (p. ej. app recién reinstalada o dispositivo
+      // nuevo). Antes de asumir que es la primera vez, revisamos si existe un
+      // respaldo cifrado en la nube: si existe, la bóveda ya está configurada
+      // y el usuario solo necesita su contraseña maestra para recuperarla.
+      final remote = _hasSupabase ? await _fetchRemoteRecovery() : null;
+      state = state.copyWith(isSetup: remote != null);
     } catch (_) {
       state = state.copyWith(isSetup: false);
+    }
+  }
+
+  /// Descarga el respaldo cifrado de la Vault Key desde Supabase, si existe.
+  /// Nunca contiene la contraseña maestra ni la Vault Key en texto plano.
+  Future<Map<String, String>?> _fetchRemoteRecovery() async {
+    try {
+      final client = Supabase.instance.client;
+      final row = await client
+          .from('vault_recovery')
+          .select()
+          .eq('user_id', client.auth.currentUser!.id)
+          .maybeSingle();
+      if (row == null) return null;
+      return {
+        'salt': row['salt'] as String,
+        'master_password_hash': row['master_password_hash'] as String,
+        'vault_key_encrypted': row['vault_key_encrypted'] as String,
+        'vault_key_iv': row['vault_key_iv'] as String,
+      };
+    } catch (_) {
+      return null;
     }
   }
 
@@ -124,6 +156,25 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
       await _storage.write(key: _scopedKey('vault_key_iv'), value: encryptedVault['iv']!, aOptions: _getAndroidOptions());
       await _storage.write(key: _scopedKey('vault_key_raw'), value: vaultKey.base64, aOptions: _getAndroidOptions());
       await _storage.write(key: _scopedKey('vault_master_password_hash'), value: passwordHash, aOptions: _getAndroidOptions());
+
+      // Subir el mismo blob envuelto (nunca la contraseña ni la Vault Key en
+      // claro) a Supabase como respaldo, para poder recuperar la bóveda si el
+      // usuario reinstala la app o cambia de dispositivo.
+      if (_hasSupabase) {
+        try {
+          final client = Supabase.instance.client;
+          await client.from('vault_recovery').upsert({
+            'user_id': client.auth.currentUser!.id,
+            'salt': salt,
+            'vault_key_encrypted': encryptedVault['ciphertext'],
+            'vault_key_iv': encryptedVault['iv'],
+            'master_password_hash': passwordHash,
+          });
+        } catch (_) {
+          // Best-effort: si falla la subida, la bóveda sigue funcionando en
+          // este dispositivo, solo no sobrevivirá una reinstalación.
+        }
+      }
 
       state = state.copyWith(
         isSetup: true,
@@ -183,10 +234,23 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
   /// Desbloquea la bóveda usando la contraseña maestra de respaldo.
   Future<bool> unlockWithPassword(String masterPassword) async {
     try {
-      final salt = await _storage.read(key: _scopedKey('vault_salt'), aOptions: _getAndroidOptions());
-      final hashStored = await _storage.read(key: _scopedKey('vault_master_password_hash'), aOptions: _getAndroidOptions());
-      final encryptedVaultKey = await _storage.read(key: _scopedKey('vault_key_encrypted'), aOptions: _getAndroidOptions());
-      final ivStored = await _storage.read(key: _scopedKey('vault_key_iv'), aOptions: _getAndroidOptions());
+      var salt = await _storage.read(key: _scopedKey('vault_salt'), aOptions: _getAndroidOptions());
+      var hashStored = await _storage.read(key: _scopedKey('vault_master_password_hash'), aOptions: _getAndroidOptions());
+      var encryptedVaultKey = await _storage.read(key: _scopedKey('vault_key_encrypted'), aOptions: _getAndroidOptions());
+      var ivStored = await _storage.read(key: _scopedKey('vault_key_iv'), aOptions: _getAndroidOptions());
+
+      // Si falta algo localmente (app reinstalada, dispositivo nuevo), intentar
+      // recuperar el respaldo cifrado desde Supabase antes de rendirse.
+      final missingLocally = salt == null || hashStored == null || encryptedVaultKey == null || ivStored == null;
+      if (missingLocally && _hasSupabase) {
+        final remote = await _fetchRemoteRecovery();
+        if (remote != null) {
+          salt = remote['salt'];
+          hashStored = remote['master_password_hash'];
+          encryptedVaultKey = remote['vault_key_encrypted'];
+          ivStored = remote['vault_key_iv'];
+        }
+      }
 
       if (salt == null || hashStored == null || encryptedVaultKey == null || ivStored == null) {
         state = state.copyWith(error: 'Error en la configuración local de la bóveda.');
@@ -209,7 +273,13 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
       // Guardar la Vault Key descifrada en memoria
       final vaultKey = enc.Key.fromBase64(vaultKeyBase64);
 
-      // Actualizar también la clave en texto plano del Secure Storage por si acaso se borró
+      // Restaurar/actualizar la copia local completa (incluida la clave en texto
+      // plano) para que futuros desbloqueos y la biometría vuelvan a funcionar
+      // sin depender de la red.
+      await _storage.write(key: _scopedKey('vault_salt'), value: salt, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_key_encrypted'), value: encryptedVaultKey, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_key_iv'), value: ivStored, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_master_password_hash'), value: hashStored, aOptions: _getAndroidOptions());
       await _storage.write(key: _scopedKey('vault_key_raw'), value: vaultKeyBase64, aOptions: _getAndroidOptions());
 
       state = state.copyWith(
@@ -249,6 +319,7 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
       try {
         final client = Supabase.instance.client;
         await client.from('vault_items').delete().eq('user_id', client.auth.currentUser!.id);
+        await client.from('vault_recovery').delete().eq('user_id', client.auth.currentUser!.id);
       } catch (_) {}
     }
 

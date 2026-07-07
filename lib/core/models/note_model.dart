@@ -101,4 +101,18 @@ class Note {
         'self_destruct': selfDestruct,
         'vault_id': vaultId,
       };
+
+  Map<String, dynamic> toCacheJson() => {
+        'id': id,
+        'title': title,
+        'content': content,
+        'linked_note_ids': linkedNoteIds,
+        'priority': priority.value,
+        'remind_at': remindAt?.toIso8601String(),
+        'self_destruct': selfDestruct,
+        'created_at': createdAt?.toIso8601String(),
+        'vault_id': vaultId,
+      };
+
+  factory Note.fromCacheJson(Map<String, dynamic> json) => Note.fromJson(json);
 }

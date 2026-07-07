@@ -105,10 +105,10 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
         width: 60,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: active ? BentoTheme.accentLime : Colors.transparent,
+          color: active ? BentoTheme.accentAlarm : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: active ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.18),
+            color: active ? BentoTheme.accentAlarm : BentoTheme.creamAlpha(0.18),
             width: 2,
           ),
         ),

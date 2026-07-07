@@ -66,7 +66,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.successGreen)),
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentFinance)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Row(
@@ -149,14 +149,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-          stops: [0.0, 0.6],
-        ),
-      ),
+      color: Colors.transparent,
       child: Stack(
         children: [
           Column(
@@ -165,14 +158,14 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
               _buildHeader(context),
               Expanded(
                 child: RefreshIndicator(
-                  color: BentoTheme.accentLime,
+                  color: BentoTheme.accentFinance,
                   backgroundColor: BentoTheme.darkCard,
                   onRefresh: () async {
                     ref.invalidate(accountsProvider);
                     ref.invalidate(transactionsProvider);
                   },
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    padding: const EdgeInsets.only(left: 22, right: 22, top: 0, bottom: 110),
                     children: [
                       const SizedBox(height: 4),
 
@@ -340,7 +333,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                             ),
                             focusedBorder: const OutlineInputBorder(
                               borderRadius: BorderRadius.all(Radius.circular(16)),
-                              borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+                              borderSide: BorderSide(color: BentoTheme.accentFinance, width: 2),
                             ),
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? IconButton(
@@ -364,7 +357,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                             _buildTypeChip(
                               'Todos',
                               _selectedType == null,
-                              BentoTheme.accentLime,
+                              BentoTheme.accentFinance,
                               () => setState(() => _selectedType = null),
                             ),
                             const SizedBox(width: 8),
@@ -388,7 +381,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                         const Padding(
                           padding: EdgeInsets.all(40),
                           child: Center(
-                            child: CircularProgressIndicator(color: BentoTheme.accentLime),
+                            child: CircularProgressIndicator(color: BentoTheme.accentFinance),
                           ),
                         )
                       else if (accounts.isEmpty)
@@ -433,18 +426,18 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
 
           // FAB para agregar movimiento
           Positioned(
-            bottom: 16,
-            right: 4,
+            bottom: 100,
+            right: 16,
             child: FloatingActionButton(
               heroTag: 'finance_fab',
               onPressed: () => showTransactionForm(context),
-              backgroundColor: BentoTheme.accentLime,
+              backgroundColor: BentoTheme.accentFinance,
               foregroundColor: const Color(0xFF0C0C0D),
-              elevation: 0,
+              elevation: 4,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.add),
+              child: const Icon(Icons.add, size: 28),
             ),
           ),
         ],
@@ -491,7 +484,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
         children: [
           Row(
             children: [
-              const Icon(Icons.pie_chart_outline_rounded, size: 16, color: BentoTheme.accentLime),
+              const Icon(Icons.pie_chart_outline_rounded, size: 16, color: BentoTheme.accentFinance),
               const SizedBox(width: 6),
               Text(
                 'Gastos por Categoría (Este Mes)',
@@ -897,8 +890,8 @@ class _EmptyState extends StatelessWidget {
           OutlinedButton(
             onPressed: onPressed,
             style: OutlinedButton.styleFrom(
-              foregroundColor: BentoTheme.accentLime,
-              side: const BorderSide(color: BentoTheme.accentLime, width: 2),
+              foregroundColor: BentoTheme.accentFinance,
+              side: const BorderSide(color: BentoTheme.accentFinance, width: 2),
             ),
             child: Text(buttonLabel),
           ),

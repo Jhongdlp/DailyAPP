@@ -9,6 +9,7 @@ const String kSupabaseAnonKey =
 const String kLocalAiUrl = 'http://63.141.255.7:11434';
 const String kTextModel = 'qwen2.5-coder:14b';
 const String kVisionModel = 'qwen3-vl:8b';
+const String kEmbeddingModel = 'bge-m3:latest';
 
 class AppSettings {
   final String supabaseUrl;
@@ -16,6 +17,7 @@ class AppSettings {
   final String localAiUrl;
   final String textModel;
   final String visionModel;
+  final String embeddingModel;
   final bool isSupabaseConfigured;
 
   const AppSettings({
@@ -24,6 +26,7 @@ class AppSettings {
     this.localAiUrl = kLocalAiUrl,
     this.textModel = kTextModel,
     this.visionModel = kVisionModel,
+    this.embeddingModel = kEmbeddingModel,
     this.isSupabaseConfigured = true,
   });
 }

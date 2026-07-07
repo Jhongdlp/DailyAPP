@@ -40,6 +40,19 @@ class Habit {
   final List<String> reminderTimes; // ej. ['08:00', '10:00']
   final Map<DateTime, double> dailyProgress; // mapas de progreso por fecha
 
+  // Caché lazy de cálculos derivados (streaks/tasa de cumplimiento). Son
+  // funciones puras de los campos de arriba, que nunca cambian una vez creada
+  // la instancia (copyWith siempre crea una instancia nueva), así que es
+  // seguro memoizarlas por instancia. Se invalidan si cambia el día actual,
+  // para que una instancia que sigue viva a la medianoche no devuelva un
+  // streak desactualizado.
+  int? _currentStreakCache;
+  DateTime? _currentStreakCacheDate;
+  int? _bestStreakCache;
+  DateTime? _bestStreakCacheDate;
+  double? _completionRateCache;
+  DateTime? _completionRateCacheDate;
+
   Habit({
     required this.id,
     required this.name,
@@ -85,6 +98,18 @@ class Habit {
   /// Racha actual: cuenta hacia atrás desde hoy, saltando días no activos,
   /// y sin romper la racha si el día de hoy (activo) aún no se completó.
   int currentStreak({DateTime? now}) {
+    if (now != null) return _computeCurrentStreak(now);
+    final today = _dateOnly(DateTime.now());
+    if (_currentStreakCache != null && _currentStreakCacheDate == today) {
+      return _currentStreakCache!;
+    }
+    final result = _computeCurrentStreak(null);
+    _currentStreakCache = result;
+    _currentStreakCacheDate = today;
+    return result;
+  }
+
+  int _computeCurrentStreak(DateTime? now) {
     var cursor = _dateOnly(now ?? DateTime.now());
     if (isActiveOn(cursor) && !isCompletedOn(cursor)) {
       cursor = cursor.subtract(const Duration(days: 1));
@@ -109,6 +134,18 @@ class Habit {
 
   /// Mejor racha histórica registrada, con la misma lógica de saltar días no activos.
   int bestStreak({DateTime? now}) {
+    if (now != null) return _computeBestStreak(now);
+    final today = _dateOnly(DateTime.now());
+    if (_bestStreakCache != null && _bestStreakCacheDate == today) {
+      return _bestStreakCache!;
+    }
+    final result = _computeBestStreak(null);
+    _bestStreakCache = result;
+    _bestStreakCacheDate = today;
+    return result;
+  }
+
+  int _computeBestStreak(DateTime? now) {
     if (completedDates.isEmpty) return 0;
     final today = _dateOnly(now ?? DateTime.now());
     var start = completedDates.reduce((a, b) => a.isBefore(b) ? a : b);
@@ -135,6 +172,18 @@ class Habit {
 
   /// % de cumplimiento sobre los días activos de la ventana [days] terminando hoy.
   double completionRate({int days = 30, DateTime? now}) {
+    if (now != null || days != 30) return _computeCompletionRate(days, now);
+    final today = _dateOnly(DateTime.now());
+    if (_completionRateCache != null && _completionRateCacheDate == today) {
+      return _completionRateCache!;
+    }
+    final result = _computeCompletionRate(days, null);
+    _completionRateCache = result;
+    _completionRateCacheDate = today;
+    return result;
+  }
+
+  double _computeCompletionRate(int days, DateTime? now) {
     final today = _dateOnly(now ?? DateTime.now());
     int expected = 0;
     int done = 0;
@@ -236,4 +285,52 @@ class Habit {
         'reminder_minute': reminderMinute,
         'reminder_times': reminderTimes,
       };
+
+  Map<String, dynamic> toCacheJson() => {
+        'id': id,
+        'name': name,
+        'icon': icon,
+        'color': color,
+        'category': category.value,
+        'days_of_week': daysOfWeek,
+        'archived': archived,
+        'created_at': createdAt?.toIso8601String(),
+        'goal_value': goalValue,
+        'goal_unit': goalUnit,
+        'reminder_hour': reminderHour,
+        'reminder_minute': reminderMinute,
+        'reminder_times': reminderTimes,
+        'completed_dates': completedDates.map((d) => d.toIso8601String()).toList(),
+        'daily_progress': dailyProgress.map((k, v) => MapEntry(k.toIso8601String(), v)),
+      };
+
+  factory Habit.fromCacheJson(Map<String, dynamic> json) {
+    final completedList = json['completed_dates'] as List? ?? [];
+    final completedDates = completedList.map((d) => DateTime.parse(d as String)).toSet();
+
+    final progressMap = json['daily_progress'] as Map? ?? {};
+    final dailyProgress = progressMap.map<DateTime, double>(
+      (k, v) => MapEntry(DateTime.parse(k as String), (v as num).toDouble()),
+    );
+
+    return Habit(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      icon: json['icon'] as String? ?? '✅',
+      color: json['color'] as String? ?? '#758BFD',
+      category: HabitCategory.fromValue(json['category'] as String?),
+      daysOfWeek: List<int>.from(json['days_of_week'] as List? ?? const [1, 2, 3, 4, 5, 6, 7]),
+      archived: json['archived'] as bool? ?? false,
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String).toLocal() : null,
+      completedDates: completedDates,
+      goalValue: (json['goal_value'] as num?)?.toDouble(),
+      goalUnit: json['goal_unit'] as String?,
+      reminderHour: json['reminder_hour'] as int?,
+      reminderMinute: json['reminder_minute'] as int?,
+      reminderTimes: json['reminder_times'] != null
+          ? List<String>.from(json['reminder_times'] as List)
+          : const [],
+      dailyProgress: dailyProgress,
+    );
+  }
 }

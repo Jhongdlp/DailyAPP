@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../models/habit_model.dart';
@@ -21,8 +22,12 @@ class HabitReminderService {
       200000 + ('${habitId}_${day}_$timeIndex'.hashCode.abs() % 100000);
 
   static Future<void> scheduleReminder(Habit habit) async {
-    await cancelReminder(habit.id);
-    if (!habit.hasReminder || habit.archived || habit.daysOfWeek.isEmpty) return;
+    try {
+      await cancelReminder(habit.id);
+      if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) {
+        return;
+      }
+      if (!habit.hasReminder || habit.archived || habit.daysOfWeek.isEmpty) return;
 
     final goal = habit.goalLabel;
     final body = goal == null ? 'Toca para marcarlo como completado hoy' : 'Meta de hoy: $goal';
@@ -111,10 +116,17 @@ class HabitReminderService {
     }
 
     await Future.wait(futures);
+    } catch (e) {
+      debugPrint('Error scheduling habit reminders: $e');
+    }
   }
 
   static Future<void> cancelReminder(String habitId) async {
-    final futures = <Future<void>>[];
+    try {
+      if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) {
+        return;
+      }
+      final futures = <Future<void>>[];
     for (int day = 1; day <= 7; day++) {
       for (int timeIdx = 0; timeIdx < 15; timeIdx++) {
         futures.add(_plugin.cancel(_notifId(habitId, day, timeIdx)));
@@ -122,6 +134,9 @@ class HabitReminderService {
       futures.add(_plugin.cancel(_legacyNotifId(habitId, day)));
     }
     await Future.wait(futures);
+    } catch (e) {
+      debugPrint('Error canceling habit reminders: $e');
+    }
   }
 
   static Future<void> rescheduleAll(List<Habit> habits) async {
@@ -137,7 +152,11 @@ class HabitReminderService {
   /// de hábitos eliminados pueden seguir llegando indefinidamente porque
   /// cancelReminder() sólo sabe recalcular ids a partir de un habitId vigente.
   static Future<void> pruneOrphaned(List<Habit> currentHabits) async {
-    final validIds = currentHabits
+    try {
+      if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) {
+        return;
+      }
+      final validIds = currentHabits
         .where((h) => h.hasReminder && !h.archived && h.daysOfWeek.isNotEmpty)
         .map((h) => h.id)
         .toSet();
@@ -153,6 +172,9 @@ class HabitReminderService {
       }
     }
     await Future.wait(futures);
+    } catch (e) {
+      debugPrint('Error pruning orphaned reminders: $e');
+    }
   }
 
   static tz.TZDateTime _nextOccurrence(int weekday, int hour, int minute) {

@@ -24,7 +24,7 @@ class AlarmModel {
   factory AlarmModel.fromJson(Map<String, dynamic> json) {
     return AlarmModel(
       id: json['id'] as String,
-      userId: json['user_id'] as String,
+      userId: (json['user_id'] as String?) ?? '',
       enabled: json['enabled'] as bool,
       hour: json['hour'] as int,
       minute: json['minute'] as int,
@@ -38,12 +38,15 @@ class AlarmModel {
   }
 
   Map<String, dynamic> toJson() => {
+        'id': id,
+        'user_id': userId,
         'enabled': enabled,
         'hour': hour,
         'minute': minute,
         'target_object': targetObject,
         'label': label,
         'days_of_week': daysOfWeek,
+        'created_at': createdAt.toIso8601String(),
       };
 
   AlarmModel copyWith({

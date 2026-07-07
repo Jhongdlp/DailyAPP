@@ -1,6 +1,6 @@
 {
-    "name": "sistem_daily",
-    "short_name": "sistem_daily",
+    "name": "Kapt",
+    "short_name": "Kapt",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

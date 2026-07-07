@@ -1,4 +1,5 @@
 import 'package:alarm/alarm.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -9,32 +10,83 @@ class AlarmService {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
+  static AndroidFlutterLocalNotificationsPlugin? get _androidImpl => _plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
   static Future<void> initialize({
     required void Function(NotificationResponse) onNotificationTap,
   }) async {
     if (_initialized) return;
 
-    // Inicializar el paquete de alarmas genuinas
-    await Alarm.init();
+    // Cada paso se protege por separado: un fallo en uno (p.ej. timezone)
+    // no debe impedir que se soliciten los permisos de notificación.
+    try {
+      // Inicializar el paquete de alarmas genuinas
+      await Alarm.init();
+    } catch (e) {
+      debugPrint('AlarmService: Alarm.init falló: $e');
+    }
 
-    tz_data.initializeTimeZones();
-    final tzInfo = await FlutterTimezone.getLocalTimezone();
-    tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
+    try {
+      tz_data.initializeTimeZones();
+      final tzInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
+    } catch (e) {
+      debugPrint('AlarmService: timezone falló: $e');
+    }
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidSettings);
+    try {
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initSettings = InitializationSettings(android: androidSettings);
 
-    await _plugin.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: onNotificationTap,
-    );
+      await _plugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: onNotificationTap,
+      );
+    } catch (e) {
+      debugPrint('AlarmService: plugin.initialize falló: $e');
+    }
 
-    final androidImpl = _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await androidImpl?.requestNotificationsPermission();
-    await androidImpl?.requestExactAlarmsPermission();
+    await requestPermissions();
 
     _initialized = true;
+  }
+
+  /// Solicita todos los permisos necesarios para que las alarmas funcionen.
+  /// Devuelve `true` si las notificaciones están habilitadas al terminar.
+  static Future<bool> requestPermissions() async {
+    final androidImpl = _androidImpl;
+    if (androidImpl == null) return true;
+
+    try {
+      await androidImpl.requestNotificationsPermission();
+    } catch (e) {
+      debugPrint('AlarmService: requestNotificationsPermission falló: $e');
+    }
+    try {
+      await androidImpl.requestExactAlarmsPermission();
+    } catch (e) {
+      debugPrint('AlarmService: requestExactAlarmsPermission falló: $e');
+    }
+    try {
+      // Android 14+ restringe USE_FULL_SCREEN_INTENT; sin él, la pantalla
+      // de la alarma no se abre con la app cerrada/bloqueada.
+      await androidImpl.requestFullScreenIntentPermission();
+    } catch (e) {
+      debugPrint('AlarmService: requestFullScreenIntentPermission falló: $e');
+    }
+
+    return areNotificationsEnabled();
+  }
+
+  /// Comprueba si el usuario tiene las notificaciones habilitadas.
+  static Future<bool> areNotificationsEnabled() async {
+    try {
+      return await _androidImpl?.areNotificationsEnabled() ?? true;
+    } catch (e) {
+      debugPrint('AlarmService: areNotificationsEnabled falló: $e');
+      return true;
+    }
   }
 
   static Future<NotificationAppLaunchDetails?> getLaunchDetails() =>
