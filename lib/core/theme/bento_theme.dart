@@ -31,6 +31,12 @@ class BentoTheme {
   /// Texto crema con opacidad, para las jerarquías secundarias sobre fondo oscuro.
   static Color creamAlpha(double opacity) => cream.withValues(alpha: opacity);
 
+  /// Texto secundario de alto contraste (subtítulos, metadatos).
+  static Color get creamSecondary => creamAlpha(0.72);
+
+  /// Texto terciario/deshabilitado (hints, placeholders).
+  static Color get creamTertiary => creamAlpha(0.45);
+
   /// Obtiene la configuración del tema de la aplicación (100% plano, moderno y Bento UI)
   static ThemeData get lightTheme {
     return ThemeData(

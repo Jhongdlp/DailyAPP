@@ -56,6 +56,13 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
         encryptedSharedPreferences: true,
       );
 
+  /// Namespacea las claves de Secure Storage por usuario de Supabase para que
+  /// cada cuenta tenga su propia contraseña maestra y clave de cifrado en el
+  /// mismo dispositivo.
+  String get _userId => Supabase.instance.client.auth.currentUser?.id ?? 'anon';
+
+  String _scopedKey(String base) => '${base}_$_userId';
+
   @override
   VaultState build() {
     _checkSetup();
@@ -82,7 +89,7 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
   Future<void> _checkSetup() async {
     try {
       final hasHash = await _storage.read(
-        key: 'vault_master_password_hash',
+        key: _scopedKey('vault_master_password_hash'),
         aOptions: _getAndroidOptions(),
       );
       state = state.copyWith(isSetup: hasHash != null);
@@ -112,11 +119,11 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
       final passwordHash = sha256.convert(utf8.encode(hashInput)).toString();
 
       // 6. Guardar todo en Secure Storage
-      await _storage.write(key: 'vault_salt', value: salt, aOptions: _getAndroidOptions());
-      await _storage.write(key: 'vault_key_encrypted', value: encryptedVault['ciphertext']!, aOptions: _getAndroidOptions());
-      await _storage.write(key: 'vault_key_iv', value: encryptedVault['iv']!, aOptions: _getAndroidOptions());
-      await _storage.write(key: 'vault_key_raw', value: vaultKey.base64, aOptions: _getAndroidOptions());
-      await _storage.write(key: 'vault_master_password_hash', value: passwordHash, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_salt'), value: salt, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_key_encrypted'), value: encryptedVault['ciphertext']!, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_key_iv'), value: encryptedVault['iv']!, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_key_raw'), value: vaultKey.base64, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_master_password_hash'), value: passwordHash, aOptions: _getAndroidOptions());
 
       state = state.copyWith(
         isSetup: true,
@@ -147,7 +154,7 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
 
       if (authenticated) {
         final vaultKeyBase64 = await _storage.read(
-          key: 'vault_key_raw',
+          key: _scopedKey('vault_key_raw'),
           aOptions: _getAndroidOptions(),
         );
 
@@ -176,10 +183,10 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
   /// Desbloquea la bóveda usando la contraseña maestra de respaldo.
   Future<bool> unlockWithPassword(String masterPassword) async {
     try {
-      final salt = await _storage.read(key: 'vault_salt', aOptions: _getAndroidOptions());
-      final hashStored = await _storage.read(key: 'vault_master_password_hash', aOptions: _getAndroidOptions());
-      final encryptedVaultKey = await _storage.read(key: 'vault_key_encrypted', aOptions: _getAndroidOptions());
-      final ivStored = await _storage.read(key: 'vault_key_iv', aOptions: _getAndroidOptions());
+      final salt = await _storage.read(key: _scopedKey('vault_salt'), aOptions: _getAndroidOptions());
+      final hashStored = await _storage.read(key: _scopedKey('vault_master_password_hash'), aOptions: _getAndroidOptions());
+      final encryptedVaultKey = await _storage.read(key: _scopedKey('vault_key_encrypted'), aOptions: _getAndroidOptions());
+      final ivStored = await _storage.read(key: _scopedKey('vault_key_iv'), aOptions: _getAndroidOptions());
 
       if (salt == null || hashStored == null || encryptedVaultKey == null || ivStored == null) {
         state = state.copyWith(error: 'Error en la configuración local de la bóveda.');
@@ -203,7 +210,7 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
       final vaultKey = enc.Key.fromBase64(vaultKeyBase64);
 
       // Actualizar también la clave en texto plano del Secure Storage por si acaso se borró
-      await _storage.write(key: 'vault_key_raw', value: vaultKeyBase64, aOptions: _getAndroidOptions());
+      await _storage.write(key: _scopedKey('vault_key_raw'), value: vaultKeyBase64, aOptions: _getAndroidOptions());
 
       state = state.copyWith(
         isUnlocked: true,
@@ -231,11 +238,11 @@ class VaultNotifier extends Notifier<VaultState> with WidgetsBindingObserver {
 
   /// Elimina por completo la configuración local de la bóveda (Reseteo).
   Future<void> resetVault() async {
-    await _storage.delete(key: 'vault_salt', aOptions: _getAndroidOptions());
-    await _storage.delete(key: 'vault_key_encrypted', aOptions: _getAndroidOptions());
-    await _storage.delete(key: 'vault_key_iv', aOptions: _getAndroidOptions());
-    await _storage.delete(key: 'vault_key_raw', aOptions: _getAndroidOptions());
-    await _storage.delete(key: 'vault_master_password_hash', aOptions: _getAndroidOptions());
+    await _storage.delete(key: _scopedKey('vault_salt'), aOptions: _getAndroidOptions());
+    await _storage.delete(key: _scopedKey('vault_key_encrypted'), aOptions: _getAndroidOptions());
+    await _storage.delete(key: _scopedKey('vault_key_iv'), aOptions: _getAndroidOptions());
+    await _storage.delete(key: _scopedKey('vault_key_raw'), aOptions: _getAndroidOptions());
+    await _storage.delete(key: _scopedKey('vault_master_password_hash'), aOptions: _getAndroidOptions());
     
     // Si hay Supabase configurado, eliminar también de la nube
     if (_hasSupabase) {

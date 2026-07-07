@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/models/account_model.dart';
 import '../../core/models/transaction_model.dart';
@@ -108,6 +109,31 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     }
   }
 
+  InputDecoration _darkInputDecoration({required String label, String? hint, String? prefixText}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixText: prefixText,
+      labelStyle: TextStyle(color: BentoTheme.creamAlpha(0.55)),
+      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+      prefixStyle: const TextStyle(color: BentoTheme.cream),
+      filled: true,
+      fillColor: BentoTheme.darkCardAlt,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(14)),
+        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accounts = ref.watch(accountsProvider).value ?? [];
@@ -127,9 +153,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
-          color: BentoTheme.cardBg,
+          color: BentoTheme.darkCard,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border(top: BorderSide(color: BentoTheme.primaryDark, width: 2)),
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -138,10 +163,10 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
             children: [
               Text(
                 _isEditing ? 'Editar Movimiento' : 'Nuevo Movimiento',
-                style: const TextStyle(
+                style: GoogleFonts.montserrat(
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: BentoTheme.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  color: BentoTheme.cream,
                 ),
               ),
               const SizedBox(height: 20),
@@ -159,9 +184,9 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
-                          color: selected ? type.color.withOpacity(0.12) : Colors.transparent,
+                          color: selected ? type.color.withValues(alpha: 0.16) : BentoTheme.darkCardAlt,
                           border: Border.all(
-                            color: selected ? type.color : BentoTheme.borderMuted,
+                            color: selected ? type.color : BentoTheme.creamAlpha(0.14),
                             width: 2,
                           ),
                         ),
@@ -171,7 +196,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: selected ? type.color : BentoTheme.textSecondary,
+                            color: selected ? type.color : BentoTheme.creamAlpha(0.55),
                           ),
                         ),
                       ),
@@ -187,23 +212,22 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 autofocus: !_isEditing,
                 style: const TextStyle(
-                  color: BentoTheme.textPrimary,
+                  color: BentoTheme.cream,
                   fontWeight: FontWeight.w900,
                   fontSize: 24,
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Monto (USD)',
-                  hintText: '0.00',
-                  prefixText: '\$ ',
-                ),
+                decoration: _darkInputDecoration(label: 'Monto (USD)', hint: '0.00', prefixText: '\$ '),
               ),
               const SizedBox(height: 16),
 
               // Cuenta (origen)
               DropdownButtonFormField<String>(
                 initialValue: _accountId,
-                decoration: InputDecoration(
-                  labelText: _type == TransactionType.transfer ? 'Desde la cuenta' : 'Cuenta',
+                dropdownColor: BentoTheme.darkCardAlt,
+                style: const TextStyle(color: BentoTheme.cream),
+                iconEnabledColor: BentoTheme.creamAlpha(0.55),
+                decoration: _darkInputDecoration(
+                  label: _type == TransactionType.transfer ? 'Desde la cuenta' : 'Cuenta',
                 ),
                 items: accounts
                     .map((a) => DropdownMenuItem(
@@ -212,7 +236,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                             children: [
                               Icon(a.type.icon, size: 18, color: a.type.color),
                               const SizedBox(width: 8),
-                              Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600, color: BentoTheme.cream)),
                             ],
                           ),
                         ))
@@ -225,7 +249,10 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: _transferAccountId,
-                  decoration: const InputDecoration(labelText: 'Hacia la cuenta'),
+                  dropdownColor: BentoTheme.darkCardAlt,
+                  style: const TextStyle(color: BentoTheme.cream),
+                  iconEnabledColor: BentoTheme.creamAlpha(0.55),
+                  decoration: _darkInputDecoration(label: 'Hacia la cuenta'),
                   items: accounts
                       .where((a) => a.id != _accountId)
                       .map((a) => DropdownMenuItem(
@@ -234,7 +261,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                               children: [
                                 Icon(a.type.icon, size: 18, color: a.type.color),
                                 const SizedBox(width: 8),
-                                Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600, color: BentoTheme.cream)),
                               ],
                             ),
                           ))
@@ -257,23 +284,23 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
-                          color: selected ? cat.color.withOpacity(0.12) : Colors.transparent,
+                          color: selected ? cat.color.withValues(alpha: 0.16) : BentoTheme.darkCardAlt,
                           border: Border.all(
-                            color: selected ? cat.color : BentoTheme.borderMuted,
+                            color: selected ? cat.color : BentoTheme.creamAlpha(0.14),
                             width: 2,
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(cat.icon, size: 16, color: selected ? cat.color : BentoTheme.textSecondary),
+                            Icon(cat.icon, size: 16, color: selected ? cat.color : BentoTheme.creamAlpha(0.55)),
                             const SizedBox(width: 4),
                             Text(
                               cat.label,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
-                                color: selected ? cat.color : BentoTheme.textSecondary,
+                                color: selected ? cat.color : BentoTheme.creamAlpha(0.55),
                               ),
                             ),
                           ],
@@ -288,17 +315,18 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               // Descripción
               TextField(
                 controller: _descriptionController,
-                style: const TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.w500),
-                decoration: const InputDecoration(
-                  labelText: 'Descripción (opcional)',
-                  hintText: 'Ej: Almuerzo con el equipo',
-                ),
+                style: const TextStyle(color: BentoTheme.cream, fontWeight: FontWeight.w500),
+                decoration: _darkInputDecoration(label: 'Descripción (opcional)', hint: 'Ej: Almuerzo con el equipo'),
               ),
               const SizedBox(height: 16),
 
               // Fecha
               OutlinedButton.icon(
                 onPressed: _pickDate,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BentoTheme.cream,
+                  side: BorderSide(color: BentoTheme.creamAlpha(0.2), width: 2),
+                ),
                 icon: const Icon(Icons.calendar_today_outlined, size: 18),
                 label: Text(DateFormat('EEE d MMM, yyyy', 'es').format(_date)),
               ),
@@ -306,21 +334,26 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
 
               ElevatedButton(
                 onPressed: _saving || accounts.isEmpty ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BentoTheme.accentLime,
+                  foregroundColor: const Color(0xFF0C0C0D),
+                  elevation: 0,
+                ),
                 child: _saving
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0C0C0D)),
                       )
                     : Text(_isEditing ? 'Guardar Cambios' : 'Registrar'),
               ),
               if (accounts.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     'Primero crea una cuenta para registrar movimientos.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: BentoTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: BentoTheme.creamAlpha(0.55), fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ),
             ],

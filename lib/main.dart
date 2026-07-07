@@ -12,7 +12,6 @@ import 'core/services/alarm_service.dart';
 import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
-import 'features/setup/setup_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/auth/auth_screen.dart';
 
@@ -38,7 +37,6 @@ class SistemDailyApp extends ConsumerStatefulWidget {
 
 class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
   bool _initializing = true;
-  bool _supabaseLoaded = false;
   String? _pendingAlarmId;
   String? _activeDismissAlarmId;
 
@@ -98,9 +96,6 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
   }
 
   Future<void> _initializeApp() async {
-    // Esperar a que settingsProvider cargue SharedPreferences
-    await Future.delayed(const Duration(milliseconds: 500));
-
     final settings = ref.read(settingsProvider);
 
     // Inicializar notificaciones y alarmas
@@ -163,21 +158,15 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
       // No bloquear inicio si falla la inicialización
     }
 
-    if (settings.isSupabaseConfigured) {
-      try {
-        await Supabase.initialize(
-          url: settings.supabaseUrl,
-          anonKey: settings.supabaseAnonKey,
-          debug: false,
-        );
-        setState(() {
-          _supabaseLoaded = true;
-        });
-      } catch (e) {
-        setState(() {
-          _supabaseLoaded = true;
-        });
-      }
+    try {
+      await Supabase.initialize(
+        url: settings.supabaseUrl,
+        anonKey: settings.supabaseAnonKey,
+        debug: false,
+      );
+    } catch (e) {
+      // Ya inicializado o error de red; se reintenta implícitamente en cada
+      // llamada a Supabase.instance dentro de los providers.
     }
 
     setState(() {
@@ -221,16 +210,8 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
       );
     }
 
-    final settings = ref.watch(settingsProvider);
-    final hasConfig = settings.isSupabaseConfigured || _supabaseLoaded;
-
-    Widget homeWidget;
-    if (!hasConfig) {
-      homeWidget = const SetupScreen();
-    } else {
-      final session = Supabase.instance.client.auth.currentSession;
-      homeWidget = session != null ? const DashboardScreen() : const AuthScreen();
-    }
+    final session = Supabase.instance.client.auth.currentSession;
+    final homeWidget = session != null ? const DashboardScreen() : const AuthScreen();
 
     return MaterialApp(
       title: 'SistemDaily',

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/models/note_model.dart';
 import '../../core/models/note_vault_model.dart';
@@ -12,6 +13,7 @@ import '../../core/network/local_ai_client.dart';
 import '../../core/utils/error_snackbar.dart';
 import 'notion_editor.dart';
 import '../vault/screens/vault_lock_screen.dart';
+import '../habits/widgets/habit_blob_header.dart';
 
 
 export '../../core/models/note_model.dart';
@@ -135,7 +137,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -158,45 +160,67 @@ class _NotesTabState extends ConsumerState<NotesTab>
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: BentoTheme.borderMuted,
+                        color: BentoTheme.creamAlpha(0.2),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    '✍️ Nueva Nota',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: BentoTheme.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.edit_note_rounded, size: 20, color: BentoTheme.cream),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Nueva nota',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: BentoTheme.cream,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   // Title Input
                   TextField(
                     controller: titleCtrl,
                     autofocus: true,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: BentoTheme.textPrimary,
+                      color: BentoTheme.cream,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Título de la nota',
                       hintText: 'ej: Ideas de negocio, Lista de compras...',
+                      labelStyle: TextStyle(color: BentoTheme.creamSecondary),
+                      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+                      filled: true,
+                      fillColor: BentoTheme.darkCardAlt,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.20)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.20)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: BentoTheme.accentLime, width: 2),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
 
                   // Vault Selection
-                  const Text(
+                  Text(
                     'Guardar en Bóveda',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: BentoTheme.textSecondary,
+                      color: BentoTheme.creamSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -215,26 +239,26 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
                               color: selectedVault == null
-                                  ? BentoTheme.primaryDark.withValues(alpha: 0.1)
-                                  : BentoTheme.bgLight,
+                                  ? BentoTheme.accentLime.withValues(alpha: 0.14)
+                                  : BentoTheme.darkCardAlt,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: selectedVault == null
-                                    ? BentoTheme.primaryDark
-                                    : BentoTheme.borderMuted,
+                                    ? BentoTheme.accentLime
+                                    : BentoTheme.creamAlpha(0.20),
                                 width: 1.5,
                               ),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
-                                Text('📄', style: TextStyle(fontSize: 18)),
-                                SizedBox(width: 8),
+                                _vaultIconGlyph(null, size: 16, color: BentoTheme.cream),
+                                const SizedBox(width: 8),
                                 Text(
                                   'Sin clasificar',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: BentoTheme.textPrimary,
+                                    color: BentoTheme.cream,
                                   ),
                                 ),
                               ],
@@ -254,24 +278,24 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
                                 color: selected
-                                    ? color.withValues(alpha: 0.12)
-                                    : BentoTheme.bgLight,
+                                    ? color.withValues(alpha: 0.16)
+                                    : BentoTheme.darkCardAlt,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: selected ? color : BentoTheme.borderMuted,
+                                  color: selected ? color : BentoTheme.creamAlpha(0.20),
                                   width: 1.5,
                                 ),
                               ),
                               child: Row(
                                 children: [
-                                  Text(vault.icon, style: const TextStyle(fontSize: 18)),
+                                  _vaultIconGlyph(vault, size: 16, color: selected ? color : BentoTheme.cream),
                                   const SizedBox(width: 8),
                                   Text(
                                     vault.name,
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w800,
-                                      color: selected ? color : BentoTheme.textPrimary,
+                                      color: selected ? color : BentoTheme.cream,
                                     ),
                                   ),
                                 ],
@@ -285,12 +309,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   const SizedBox(height: 20),
 
                   // Priority selection
-                  const Text(
+                  Text(
                     'Prioridad',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: BentoTheme.textSecondary,
+                      color: BentoTheme.creamSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -307,11 +331,11 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             decoration: BoxDecoration(
                               color: selected
-                                  ? p.color.withValues(alpha: 0.12)
-                                  : BentoTheme.bgLight,
+                                  ? p.color.withValues(alpha: 0.16)
+                                  : BentoTheme.darkCardAlt,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: selected ? p.color : BentoTheme.borderMuted,
+                                color: selected ? p.color : BentoTheme.creamAlpha(0.20),
                                 width: 1.5,
                               ),
                             ),
@@ -320,14 +344,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               children: [
                                 Icon(p.icon,
                                     size: 16,
-                                    color: selected ? p.color : BentoTheme.textSecondary),
+                                    color: selected ? p.color : BentoTheme.creamSecondary),
                                 const SizedBox(width: 4),
                                 Text(
                                   p.label,
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w800,
-                                    color: selected ? p.color : BentoTheme.textSecondary,
+                                    color: selected ? p.color : BentoTheme.creamSecondary,
                                   ),
                                 ),
                               ],
@@ -341,6 +365,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
                   // Create Button
                   ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: BentoTheme.accentLime,
+                      foregroundColor: const Color(0xFF0C0C0D),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide.none),
+                    ),
                     onPressed: () async {
                       final title = titleCtrl.text.trim();
                       final actualTitle = title.isEmpty ? 'Nota sin título' : title;
@@ -396,7 +426,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('✅ Nota guardada'),
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('Nota guardada', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ],
+        ),
         duration: const Duration(milliseconds: 800),
         backgroundColor: BentoTheme.successGreen,
         behavior: SnackBarBehavior.floating,
@@ -424,7 +460,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
     await showModalBottomSheet(
       context: context,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -435,20 +471,20 @@ class _NotesTabState extends ConsumerState<NotesTab>
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
+                color: color.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 18),
             ),
             title: Text(label,
-                style: const TextStyle(
+                style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: BentoTheme.textPrimary,
+                    color: BentoTheme.cream,
                     fontSize: 14)),
             trailing: Text(
               _formatReminder(when),
               style:
-                  const TextStyle(fontSize: 12, color: BentoTheme.textSecondary),
+                  TextStyle(fontSize: 12, color: BentoTheme.creamSecondary),
             ),
             onTap: () {
               result = when;
@@ -470,17 +506,23 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: BentoTheme.borderMuted,
+                  color: BentoTheme.creamAlpha(0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('⏰ ¿Cuándo te lo recuerdo?',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: BentoTheme.textPrimary)),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.notifications_active_rounded, size: 18, color: BentoTheme.cream),
+                    const SizedBox(width: 8),
+                    Text('¿Cuándo te lo recuerdo?',
+                        style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: BentoTheme.cream)),
+                  ],
+                ),
               ),
               preset('En 1 hora', Icons.hourglass_bottom,
                   now.add(const Duration(hours: 1)), BentoTheme.accentBlue),
@@ -488,7 +530,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   now.add(const Duration(hours: 3)), BentoTheme.accentPurple),
               if (tonight.isAfter(now))
                 preset('Esta noche (8pm)', Icons.nights_stay, tonight,
-                    BentoTheme.primaryDark),
+                    BentoTheme.accentLime),
               preset('Mañana (8am)', Icons.wb_sunny_outlined, tomorrow,
                   BentoTheme.accentOrange),
               ListTile(
@@ -496,16 +538,16 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: BentoTheme.accentPurple.withValues(alpha: 0.12),
+                    color: BentoTheme.accentPurple.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.edit_calendar,
                       color: BentoTheme.accentPurple, size: 18),
                 ),
-                title: const Text('Elegir fecha y hora...',
+                title: Text('Elegir fecha y hora...',
                     style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: BentoTheme.textPrimary,
+                        color: BentoTheme.cream,
                         fontSize: 14)),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -531,7 +573,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: BentoTheme.errorRed.withValues(alpha: 0.1),
+                      color: BentoTheme.errorRed.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.notifications_off,
@@ -610,37 +652,46 @@ class _NotesTabState extends ConsumerState<NotesTab>
   Widget build(BuildContext context) {
     final showFab = _view == _NotesView.vaults || _view == _NotesView.notesList;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: switch (_view) {
-              _NotesView.vaults => _buildVaultsScreen(),
-              _NotesView.notesList => _buildNotesListScreen(),
-              _NotesView.editor => _buildEditorScreen(),
-              _NotesView.graph => _buildGraphScreen(),
-            },
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
+          stops: [0.0, 0.6],
         ),
-        if (showFab)
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: FloatingActionButton(
-              heroTag: 'notes_fab',
-              onPressed: _showCreateNoteSheet,
-              backgroundColor: BentoTheme.primaryDark,
-              foregroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: BentoTheme.primaryDark, width: 2),
-              ),
-              child: const Icon(Icons.add, size: 28),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: switch (_view) {
+                _NotesView.vaults => _buildVaultsScreen(),
+                _NotesView.notesList => _buildNotesListScreen(),
+                _NotesView.editor => _buildEditorScreen(),
+                _NotesView.graph => _buildGraphScreen(),
+              },
             ),
           ),
-      ],
+          if (showFab)
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: FloatingActionButton(
+                heroTag: 'notes_fab',
+                onPressed: _showCreateNoteSheet,
+                backgroundColor: BentoTheme.accentLime,
+                foregroundColor: const Color(0xFF0C0C0D),
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.add, size: 28),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -673,35 +724,43 @@ class _NotesTabState extends ConsumerState<NotesTab>
             },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 100),
               children: [
                 if (vaults.isEmpty) ...[
                   _buildUnvaultedCard(notes),
                   const SizedBox(height: 60),
                   // Contenido de vacío
-                  const Center(child: Text('🗄️', style: TextStyle(fontSize: 48))),
+                  Center(
+                    child: Icon(Icons.inventory_2_outlined,
+                        size: 48, color: BentoTheme.creamTertiary),
+                  ),
                   const SizedBox(height: 12),
-                  const Center(
+                  Center(
                     child: Text(
                       'Sin bóvedas todavía',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w900,
+                      style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: BentoTheme.textPrimary),
+                          color: BentoTheme.cream),
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Center(
+                  Center(
                     child: Text(
                       'Crea una bóveda para organizar\ntus notas por tema',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: BentoTheme.textSecondary, fontSize: 13),
+                      style: TextStyle(color: BentoTheme.creamSecondary, fontSize: 13),
                     ),
                   ),
                   const SizedBox(height: 20),
                   Center(
                     child: ElevatedButton.icon(
                       onPressed: _showCreateVaultDialog,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: BentoTheme.accentLime,
+                        foregroundColor: const Color(0xFF0C0C0D),
+                        elevation: 0,
+                      ),
                       icon: const Icon(Icons.add),
                       label: const Text('Crear bóveda'),
                     ),
@@ -709,7 +768,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 ] else ...[
                   // "Sin bóveda" — notas sueltas
                   _buildUnvaultedCard(notes),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   // Grid de bóvedas
                   GridView.builder(
                     shrinkWrap: true,
@@ -729,16 +788,16 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 const SizedBox(height: 80),
                 // Indicador visual de la bóveda oculta al arrastrar
                 Opacity(
-                  opacity: 0.35,
+                  opacity: 0.4,
                   child: Column(
                     children: [
-                      const Icon(Icons.lock_outline, color: BentoTheme.textSecondary, size: 22),
+                      Icon(Icons.lock_outline, color: BentoTheme.creamAlpha(0.5), size: 22),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'Arrastra hacia arriba para abrir la Carpeta Segura',
                         style: TextStyle(
                           fontSize: 11,
-                          color: BentoTheme.textSecondary,
+                          color: BentoTheme.creamAlpha(0.5),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -753,31 +812,113 @@ class _NotesTabState extends ConsumerState<NotesTab>
     );
   }
 
-  Widget _buildVaultsHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Text(
-              '🧠 Segundo Cerebro',
+  Widget _buildHeaderActionPill({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: BentoTheme.darkCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: BentoTheme.creamAlpha(0.20), width: 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 17, color: BentoTheme.cream),
+            const SizedBox(width: 8),
+            Text(
+              label,
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: BentoTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: BentoTheme.cream,
               ),
             ),
-          ),
-          IconButton(
-            onPressed: () => setState(() => _view = _NotesView.graph),
-            icon: const Icon(Icons.hub_outlined, color: BentoTheme.accentBlue),
-            tooltip: 'Grafo de notas',
-          ),
-          IconButton(
-            onPressed: _showCreateVaultDialog,
-            icon: const Icon(Icons.create_new_folder_outlined,
-                color: BentoTheme.accentPurple),
-            tooltip: 'Nueva bóveda',
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Insignia de ícono estilo Notion: ícono Material sobre fondo tintado,
+  /// con fallback a emoji para bóvedas creadas antes del rediseño.
+  Widget _vaultIconBadge(NoteVault? vault, {double size = 40, Color? color}) {
+    final badgeColor = color ?? vault?.flutterColor ?? BentoTheme.accentBlue;
+    final iconData = vault?.iconData ?? (vault == null ? Icons.description_outlined : null);
+
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(size * 0.28),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.35), width: 1.5),
+      ),
+      child: iconData != null
+          ? Icon(iconData, size: size * 0.5, color: badgeColor)
+          : Text(vault?.icon ?? '📁', style: TextStyle(fontSize: size * 0.46)),
+    );
+  }
+
+  /// Igual que [_vaultIconBadge] pero sin fondo/borde, para usar en chips
+  /// compactos y filas de texto (tamaño de ícono en vez de insignia).
+  Widget _vaultIconGlyph(NoteVault? vault, {double size = 16, Color? color}) {
+    final glyphColor = color ?? vault?.flutterColor ?? BentoTheme.cream;
+    final iconData = vault?.iconData ?? (vault == null ? Icons.description_outlined : null);
+    return iconData != null
+        ? Icon(iconData, size: size, color: glyphColor)
+        : Text(vault?.icon ?? '📁', style: TextStyle(fontSize: size));
+  }
+
+  Widget _buildVaultsHeader() {
+    return SizedBox(
+      height: 126,
+      child: Stack(
+        children: [
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBlue)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _buildHeaderActionPill(
+                      icon: Icons.hub_outlined,
+                      label: 'Grafo',
+                      onPressed: () => setState(() => _view = _NotesView.graph),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildHeaderActionPill(
+                      icon: Icons.create_new_folder_outlined,
+                      label: 'Nueva',
+                      onPressed: _showCreateVaultDialog,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Segundo Cerebro',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 30,
+                    height: 0.98,
+                    letterSpacing: -0.8,
+                    color: BentoTheme.cream,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -796,42 +937,34 @@ class _NotesTabState extends ConsumerState<NotesTab>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: BentoTheme.bgLight,
+          color: BentoTheme.darkCardAlt,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BentoTheme.borderMuted, width: 1.5),
+          border: Border.all(color: BentoTheme.creamAlpha(0.1), width: 1.5),
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: BentoTheme.textSecondary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(child: Text('📄', style: TextStyle(fontSize: 20))),
-            ),
+            _vaultIconBadge(null, size: 40),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Sin clasificar',
                     style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        color: BentoTheme.textPrimary,
+                        color: BentoTheme.cream,
                         fontSize: 14),
                   ),
                   Text(
                     '$count ${count == 1 ? 'nota' : 'notas'}',
-                    style: const TextStyle(
-                        fontSize: 12, color: BentoTheme.textSecondary),
+                    style: TextStyle(
+                        fontSize: 12, color: BentoTheme.creamSecondary),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: BentoTheme.textSecondary),
+            Icon(Icons.chevron_right, color: BentoTheme.creamAlpha(0.4)),
           ],
         ),
       ),
@@ -848,9 +981,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
+          color: BentoTheme.darkCardAlt,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+          border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
         ),
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -859,13 +992,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(vault.icon,
-                    style: const TextStyle(fontSize: 28)),
+                _vaultIconBadge(vault, size: 40),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
+                    color: color.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -881,10 +1013,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
             const Spacer(),
             Text(
               vault.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 15,
-                color: BentoTheme.textPrimary,
+                color: BentoTheme.cream,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -893,8 +1025,8 @@ class _NotesTabState extends ConsumerState<NotesTab>
               const SizedBox(height: 2),
               Text(
                 vault.description!,
-                style: const TextStyle(
-                    fontSize: 11, color: BentoTheme.textSecondary),
+                style: TextStyle(
+                    fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -904,7 +1036,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
               '$count ${count == 1 ? 'nota' : 'notas'}',
               style: TextStyle(
                   fontSize: 11,
-                  color: color.withValues(alpha: 0.8),
+                  color: color.withValues(alpha: 0.85),
                   fontWeight: FontWeight.w600),
             ),
           ],
@@ -932,7 +1064,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 n.content.toLowerCase().contains(searchQuery))
             .toList();
 
-    final vaultColor = _currentVault?.flutterColor ?? BentoTheme.textSecondary;
+    final vaultColor = _currentVault?.flutterColor ?? BentoTheme.creamSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -940,10 +1072,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
         // Header
         Container(
           decoration: BoxDecoration(
-            color: vaultColor.withValues(alpha: 0.05),
+            color: vaultColor.withValues(alpha: 0.08),
             border: Border(
               bottom: BorderSide(
-                  color: vaultColor.withValues(alpha: 0.15), width: 1),
+                  color: vaultColor.withValues(alpha: 0.2), width: 1),
             ),
           ),
           child: Column(
@@ -954,21 +1086,18 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   children: [
                     IconButton(
                       onPressed: _goToVaults,
-                      icon: const Icon(Icons.arrow_back_ios_new,
-                          size: 18, color: BentoTheme.textPrimary),
+                      icon: Icon(Icons.arrow_back_ios_new,
+                          size: 18, color: BentoTheme.cream),
                     ),
-                    Text(
-                      _currentVault?.icon ?? '📄',
-                      style: const TextStyle(fontSize: 22),
-                    ),
+                    _vaultIconGlyph(_currentVault, size: 22),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _currentVault?.name ?? 'Sin clasificar',
-                        style: const TextStyle(
+                        style: GoogleFonts.montserrat(
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                          color: BentoTheme.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          color: BentoTheme.cream,
                         ),
                       ),
                     ),
@@ -977,7 +1106,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                           setState(() => _showSearch = !_showSearch),
                       icon: Icon(
                           _showSearch ? Icons.search_off : Icons.search,
-                          color: BentoTheme.textSecondary),
+                          color: BentoTheme.creamSecondary),
                     ),
                     IconButton(
                       onPressed: _createNewNote,
@@ -996,16 +1125,29 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     controller: _searchController,
                     autofocus: true,
                     onChanged: (_) => setState(() {}),
+                    style: TextStyle(color: BentoTheme.cream),
                     decoration: InputDecoration(
                       hintText: 'Buscar en notas...',
-                      prefixIcon: const Icon(Icons.search,
-                          color: BentoTheme.textSecondary),
+                      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+                      prefixIcon: Icon(Icons.search,
+                          color: BentoTheme.creamSecondary),
+                      filled: true,
+                      fillColor: BentoTheme.darkCardAlt,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
                             color: vaultColor.withValues(alpha: 0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                            color: vaultColor.withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: vaultColor, width: 2),
                       ),
                     ),
                   ),
@@ -1036,25 +1178,26 @@ class _NotesTabState extends ConsumerState<NotesTab>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('✍️', style: const TextStyle(fontSize: 44)),
+          Icon(Icons.edit_note_outlined, size: 44, color: BentoTheme.creamTertiary),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Esta bóveda está vacía',
-            style: TextStyle(
-                fontWeight: FontWeight.w900,
+            style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800,
                 fontSize: 17,
-                color: BentoTheme.textPrimary),
+                color: BentoTheme.cream),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Presiona + para crear tu primera nota',
-            style: TextStyle(color: BentoTheme.textSecondary, fontSize: 13),
+            style: TextStyle(color: BentoTheme.creamSecondary, fontSize: 13),
           ),
           const SizedBox(height: 20),
           ElevatedButton.icon(
             onPressed: _createNewNote,
             style: ElevatedButton.styleFrom(
-              backgroundColor: vaultColor,
+              backgroundColor: BentoTheme.accentLime,
+              foregroundColor: const Color(0xFF0C0C0D),
             ),
             icon: const Icon(Icons.add),
             label: const Text('Crear nota'),
@@ -1099,21 +1242,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: BentoTheme.cardBg,
+              color: BentoTheme.darkCardAlt,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isUrgent
                     ? BentoTheme.errorRed.withValues(alpha: 0.5)
-                    : vaultColor.withValues(alpha: 0.2),
+                    : vaultColor.withValues(alpha: 0.25),
                 width: 1.5,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: vaultColor.withValues(alpha: 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1125,7 +1261,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   margin: const EdgeInsets.only(right: 12),
                   decoration: BoxDecoration(
                     color: note.priority == NotePriority.normal
-                        ? vaultColor.withValues(alpha: 0.3)
+                        ? vaultColor.withValues(alpha: 0.4)
                         : note.priority.color,
                     borderRadius: BorderRadius.circular(2),
                   ),
@@ -1136,10 +1272,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     children: [
                       Text(
                         note.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: BentoTheme.textPrimary,
+                          color: BentoTheme.cream,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1150,9 +1286,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
                           _stripMarkdown(note.content),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: BentoTheme.textSecondary,
+                            color: BentoTheme.creamSecondary,
                             height: 1.4,
                           ),
                         ),
@@ -1166,17 +1302,19 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             if (hasReminder)
                               _miniChip(
                                 note.selfDestruct
-                                    ? '💣 ${_formatReminder(note.remindAt!)}'
-                                    : '⏰ ${_formatReminder(note.remindAt!)}',
+                                    ? Icons.local_fire_department_outlined
+                                    : Icons.notifications_active_outlined,
+                                _formatReminder(note.remindAt!),
                                 note.isReminderPending
                                     ? (note.selfDestruct
                                         ? BentoTheme.accentOrange
                                         : BentoTheme.accentBlue)
-                                    : BentoTheme.textSecondary,
+                                    : BentoTheme.creamSecondary,
                               ),
                             if (note.linkedNoteIds.isNotEmpty)
                               _miniChip(
-                                  '🔗 ${note.linkedNoteIds.length}',
+                                  Icons.link_rounded,
+                                  '${note.linkedNoteIds.length}',
                                   BentoTheme.accentPurple),
                           ],
                         ),
@@ -1184,8 +1322,8 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right,
-                    color: BentoTheme.textSecondary, size: 18),
+                Icon(Icons.chevron_right,
+                    color: BentoTheme.creamAlpha(0.4), size: 18),
               ],
             ),
           ),
@@ -1219,9 +1357,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
     return Container(
       decoration: BoxDecoration(
-        color: BentoTheme.cardBg,
+        color: BentoTheme.darkCard,
         border: Border(
-          bottom: BorderSide(color: BentoTheme.borderMuted, width: 1.5),
+          bottom: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
         ),
       ),
       child: Padding(
@@ -1233,19 +1371,23 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 _saveEditor();
                 setState(() => _view = _NotesView.notesList);
               },
-              icon: const Icon(Icons.arrow_back_ios_new,
-                  size: 18, color: BentoTheme.textPrimary),
+              icon: Icon(Icons.arrow_back_ios_new,
+                  size: 18, color: BentoTheme.cream),
             ),
             const SizedBox(width: 8),
+            if (_editingNote != null) ...[
+              _vaultIconGlyph(_currentVault, size: 15, color: BentoTheme.creamSecondary),
+              const SizedBox(width: 6),
+            ],
             Expanded(
               child: Text(
                 _editingNote == null
                     ? 'Nueva nota'
-                    : (_currentVault == null ? '📄 Sin clasificar' : '${_currentVault!.icon} ${_currentVault!.name}'),
-                style: const TextStyle(
+                    : (_currentVault?.name ?? 'Sin clasificar'),
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: BentoTheme.textSecondary,
+                  color: BentoTheme.creamSecondary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1272,7 +1414,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
             _toolbarBtn(
               Icons.tune,
               'Opciones',
-              BentoTheme.primaryDark,
+              BentoTheme.accentLime,
               () {
                 final allNotes = ref.read(notesProvider);
                 _showEditorOptionsSheet(context, allNotes);
@@ -1303,9 +1445,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
         margin: const EdgeInsets.only(right: 4, bottom: 4),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: BentoTheme.bgLight,
+          color: BentoTheme.darkCardAlt,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: BentoTheme.borderMuted, width: 1),
+          border: Border.all(color: BentoTheme.creamAlpha(0.18), width: 1),
         ),
         child: Text(
           label,
@@ -1313,7 +1455,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
             fontSize: 11,
             fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
             fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-            color: BentoTheme.textPrimary,
+            color: BentoTheme.cream,
           ),
         ),
       ),
@@ -1354,55 +1496,55 @@ class _NotesTabState extends ConsumerState<NotesTab>
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: GoogleFonts.montserrat(
             fontSize: 26,
-            fontWeight: FontWeight.w900,
-            color: BentoTheme.textPrimary,
+            fontWeight: FontWeight.w800,
+            color: BentoTheme.cream,
           ),
         ),
         const SizedBox(height: 8),
         Container(
           height: 1.5,
-          color: BentoTheme.borderMuted,
+          color: BentoTheme.creamAlpha(0.18),
         ),
         const SizedBox(height: 16),
         MarkdownBody(
           data: content,
           styleSheet: MarkdownStyleSheet(
-            h1: const TextStyle(
+            h1: GoogleFonts.montserrat(
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: BentoTheme.textPrimary),
-            h2: const TextStyle(
-                fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: BentoTheme.textPrimary),
-            h3: const TextStyle(
+                color: BentoTheme.cream),
+            h2: GoogleFonts.montserrat(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: BentoTheme.cream),
+            h3: GoogleFonts.montserrat(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: BentoTheme.textPrimary),
-            p: const TextStyle(
+                color: BentoTheme.cream),
+            p: TextStyle(
                 fontSize: 15,
-                color: BentoTheme.textPrimary,
+                color: BentoTheme.cream,
                 height: 1.6),
-            code: const TextStyle(
+            code: TextStyle(
               fontSize: 13.5,
               fontFamily: 'monospace',
               color: BentoTheme.accentPurple,
-              backgroundColor: Color(0xFFEEEDFF),
+              backgroundColor: BentoTheme.darkCardAlt,
             ),
-            blockquote: const TextStyle(
+            blockquote: TextStyle(
                 fontSize: 14,
-                color: BentoTheme.textSecondary,
+                color: BentoTheme.creamSecondary,
                 fontStyle: FontStyle.italic),
             blockquoteDecoration: BoxDecoration(
               border: const Border(
                   left: BorderSide(
                       color: BentoTheme.accentBlue, width: 4)),
-              color: BentoTheme.accentBlue.withValues(alpha: 0.05),
+              color: BentoTheme.accentBlue.withValues(alpha: 0.08),
             ),
-            tableBody: const TextStyle(
-                fontSize: 14, color: BentoTheme.textPrimary),
+            tableBody: TextStyle(
+                fontSize: 14, color: BentoTheme.cream),
             listBullet: const TextStyle(
                 fontSize: 15, color: BentoTheme.accentBlue),
           ),
@@ -1415,7 +1557,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -1437,20 +1579,26 @@ class _NotesTabState extends ConsumerState<NotesTab>
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: BentoTheme.borderMuted,
+                        color: BentoTheme.creamAlpha(0.2),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    '⚙️ Propiedades de la Nota',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: BentoTheme.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.tune_rounded, size: 20, color: BentoTheme.cream),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Propiedades de la nota',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: BentoTheme.cream,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   Expanded(
@@ -1458,12 +1606,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                       shrinkWrap: true,
                       children: [
                         // Prioridad
-                        const Text(
+                        Text(
                           'Prioridad',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
-                            color: BentoTheme.textSecondary,
+                            color: BentoTheme.creamSecondary,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -1481,11 +1629,11 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                   padding: const EdgeInsets.symmetric(vertical: 10),
                                   decoration: BoxDecoration(
                                     color: selected
-                                        ? p.color.withValues(alpha: 0.12)
-                                        : BentoTheme.bgLight,
+                                        ? p.color.withValues(alpha: 0.16)
+                                        : BentoTheme.darkCardAlt,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: selected ? p.color : BentoTheme.borderMuted,
+                                      color: selected ? p.color : BentoTheme.creamAlpha(0.20),
                                       width: 1.5,
                                     ),
                                   ),
@@ -1494,14 +1642,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                     children: [
                                       Icon(p.icon,
                                           size: 16,
-                                          color: selected ? p.color : BentoTheme.textSecondary),
+                                          color: selected ? p.color : BentoTheme.creamSecondary),
                                       const SizedBox(height: 4),
                                       Text(
                                         p.label,
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w800,
-                                          color: selected ? p.color : BentoTheme.textSecondary,
+                                          color: selected ? p.color : BentoTheme.creamSecondary,
                                         ),
                                       ),
                                     ],
@@ -1514,12 +1662,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                         const SizedBox(height: 24),
 
                         // Recordatorio
-                        const Text(
+                        Text(
                           'Recordatorio',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
-                            color: BentoTheme.textSecondary,
+                            color: BentoTheme.creamSecondary,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -1539,13 +1687,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: _editRemindAt != null
-                                  ? BentoTheme.accentBlue.withValues(alpha: 0.1)
-                                  : BentoTheme.bgLight,
+                                  ? BentoTheme.accentBlue.withValues(alpha: 0.14)
+                                  : BentoTheme.darkCardAlt,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: _editRemindAt != null
                                     ? BentoTheme.accentBlue
-                                    : BentoTheme.borderMuted,
+                                    : BentoTheme.creamAlpha(0.20),
                                 width: 1.5,
                               ),
                             ),
@@ -1554,7 +1702,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                 Icon(Icons.notifications_active_outlined,
                                     color: _editRemindAt != null
                                         ? BentoTheme.accentBlue
-                                        : BentoTheme.textSecondary),
+                                        : BentoTheme.creamSecondary),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -1566,7 +1714,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                       fontSize: 13,
                                       color: _editRemindAt != null
                                           ? BentoTheme.accentBlue
-                                          : BentoTheme.textPrimary,
+                                          : BentoTheme.cream,
                                     ),
                                   ),
                                 ),
@@ -1574,8 +1722,8 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                   const Icon(Icons.edit_calendar,
                                       size: 16, color: BentoTheme.accentBlue)
                                 else
-                                  const Icon(Icons.chevron_right,
-                                      size: 16, color: BentoTheme.textSecondary),
+                                  Icon(Icons.chevron_right,
+                                      size: 16, color: BentoTheme.creamSecondary),
                               ],
                             ),
                           ),
@@ -1592,13 +1740,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: _editSelfDestruct
-                                    ? BentoTheme.accentOrange.withValues(alpha: 0.1)
-                                    : BentoTheme.bgLight,
+                                    ? BentoTheme.accentOrange.withValues(alpha: 0.14)
+                                    : BentoTheme.darkCardAlt,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                   color: _editSelfDestruct
                                       ? BentoTheme.accentOrange
-                                      : BentoTheme.borderMuted,
+                                      : BentoTheme.creamAlpha(0.20),
                                   width: 1.5,
                                 ),
                               ),
@@ -1607,19 +1755,19 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                   Icon(Icons.local_fire_department_outlined,
                                       color: _editSelfDestruct
                                           ? BentoTheme.accentOrange
-                                          : BentoTheme.textSecondary),
+                                          : BentoTheme.creamSecondary),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       _editSelfDestruct
-                                          ? '💣 Se autodestruye al vencer'
+                                          ? 'Se autodestruye al vencer'
                                           : 'Autodestruirse al vencer',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 13,
                                         color: _editSelfDestruct
                                             ? BentoTheme.accentOrange
-                                            : BentoTheme.textPrimary,
+                                            : BentoTheme.cream,
                                       ),
                                     ),
                                   ),
@@ -1643,12 +1791,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
+                            Text(
                               'Conectar con otras notas',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
-                                color: BentoTheme.textSecondary,
+                                color: BentoTheme.creamSecondary,
                               ),
                             ),
                             Text(
@@ -1666,13 +1814,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: BentoTheme.bgLight,
+                              color: BentoTheme.darkCardAlt,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: BentoTheme.borderMuted),
+                              border: Border.all(color: BentoTheme.creamAlpha(0.18)),
                             ),
-                            child: const Text(
+                            child: Text(
                               'No hay otras notas para conectar.',
-                              style: TextStyle(fontSize: 12, color: BentoTheme.textSecondary),
+                              style: TextStyle(fontSize: 12, color: BentoTheme.creamSecondary),
                             ),
                           )
                         else
@@ -1701,13 +1849,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       color: linked
-                                          ? BentoTheme.accentPurple.withValues(alpha: 0.08)
-                                          : BentoTheme.bgLight,
+                                          ? BentoTheme.accentPurple.withValues(alpha: 0.14)
+                                          : BentoTheme.darkCardAlt,
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
                                         color: linked
                                             ? BentoTheme.accentPurple
-                                            : BentoTheme.borderMuted,
+                                            : BentoTheme.creamAlpha(0.20),
                                         width: 1.5,
                                       ),
                                     ),
@@ -1717,13 +1865,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                       children: [
                                         Icon(linked ? Icons.link : Icons.link_off,
                                             size: 18,
-                                            color: linked ? BentoTheme.accentPurple : BentoTheme.textSecondary),
+                                            color: linked ? BentoTheme.accentPurple : BentoTheme.creamSecondary),
                                         Text(
                                           note.title.isEmpty ? 'Sin título' : note.title,
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w800,
-                                            color: linked ? BentoTheme.accentPurple : BentoTheme.textPrimary,
+                                            color: linked ? BentoTheme.accentPurple : BentoTheme.cream,
                                           ),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
@@ -1741,10 +1889,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: BentoTheme.accentPurple.withValues(alpha: 0.05),
+                            color: BentoTheme.accentPurple.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: BentoTheme.accentPurple.withValues(alpha: 0.2),
+                              color: BentoTheme.accentPurple.withValues(alpha: 0.3),
                               width: 1.5,
                             ),
                           ),
@@ -1800,15 +1948,15 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: BentoTheme.cardBg,
+                                    color: BentoTheme.darkCard,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: BentoTheme.borderMuted),
+                                    border: Border.all(color: BentoTheme.creamAlpha(0.18)),
                                   ),
                                   child: Text(
                                     _aiSuggestions!,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 11,
-                                      color: BentoTheme.textPrimary,
+                                      color: BentoTheme.cream,
                                       height: 1.45,
                                     ),
                                   ),
@@ -1868,15 +2016,17 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 children: [
                   IconButton(
                     onPressed: _goToVaults,
-                    icon: const Icon(Icons.arrow_back_ios_new,
-                        size: 18, color: BentoTheme.textPrimary),
+                    icon: Icon(Icons.arrow_back_ios_new,
+                        size: 18, color: BentoTheme.cream),
                   ),
-                  const Text(
-                    '🕸️ Grafo de Conocimiento',
-                    style: TextStyle(
+                  Icon(Icons.hub_outlined, size: 18, color: BentoTheme.cream),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Grafo de conocimiento',
+                    style: GoogleFonts.montserrat(
                       fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: BentoTheme.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      color: BentoTheme.cream,
                     ),
                   ),
                 ],
@@ -1889,9 +2039,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
             margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              color: BentoTheme.cardBg,
+              color: BentoTheme.darkCard,
               border:
-                  Border.all(color: BentoTheme.primaryDark, width: 2.0),
+                  Border.all(color: BentoTheme.creamAlpha(0.20), width: 1.5),
             ),
             child: InteractiveViewer(
               boundaryMargin: const EdgeInsets.all(100),
@@ -1919,7 +2069,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
   void _showVaultOptionsSheet(NoteVault vault) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -1932,7 +2082,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: BentoTheme.borderMuted,
+                color: BentoTheme.creamAlpha(0.2),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1940,14 +2090,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Text(vault.icon, style: const TextStyle(fontSize: 24)),
-                  const SizedBox(width: 8),
+                  _vaultIconBadge(vault, size: 32),
+                  const SizedBox(width: 10),
                   Text(
                     vault.name,
-                    style: const TextStyle(
+                    style: GoogleFonts.montserrat(
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: BentoTheme.textPrimary),
+                        fontWeight: FontWeight.w800,
+                        color: BentoTheme.cream),
                   ),
                 ],
               ),
@@ -1955,10 +2105,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
             ListTile(
               leading: const Icon(Icons.edit_outlined,
                   color: BentoTheme.accentBlue),
-              title: const Text('Editar bóveda',
+              title: Text('Editar bóveda',
                   style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: BentoTheme.textPrimary)),
+                      color: BentoTheme.cream)),
               onTap: () {
                 Navigator.pop(ctx);
                 _showVaultDialog(vault: vault);
@@ -1988,18 +2138,41 @@ class _NotesTabState extends ConsumerState<NotesTab>
         TextEditingController(text: vault?.name ?? '');
     final descCtrl =
         TextEditingController(text: vault?.description ?? '');
-    String selectedEmoji = vault?.icon ?? '📁';
+    String selectedIconKey = vault?.icon ?? 'folder';
     String selectedColor = vault?.color ?? '#758BFD';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx2, setModal) {
+          InputDecoration darkInputDecoration({required String label, required String hint}) {
+            return InputDecoration(
+              labelText: label,
+              hintText: hint,
+              labelStyle: TextStyle(color: BentoTheme.creamSecondary),
+              hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+              filled: true,
+              fillColor: BentoTheme.darkCardAlt,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: BentoTheme.creamAlpha(0.20)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: BentoTheme.creamAlpha(0.20)),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(14)),
+                borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+              ),
+            );
+          }
+
           return Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(ctx2).viewInsets.bottom,
@@ -2012,76 +2185,94 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    vault == null ? '✨ Nueva Bóveda' : '✏️ Editar Bóveda',
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: BentoTheme.textPrimary),
+                  Row(
+                    children: [
+                      Icon(
+                        vault == null ? Icons.create_new_folder_outlined : Icons.edit_outlined,
+                        size: 20,
+                        color: BentoTheme.cream,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        vault == null ? 'Nueva bóveda' : 'Editar bóveda',
+                        style: GoogleFonts.montserrat(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: BentoTheme.cream),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: nameCtrl,
                     autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre de la bóveda',
-                      hintText: 'ej: Personal, Ideas, Trabajo...',
-                    ),
+                    style: TextStyle(color: BentoTheme.cream),
+                    decoration: darkInputDecoration(
+                        label: 'Nombre de la bóveda',
+                        hint: 'ej: Personal, Ideas, Trabajo...'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: descCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Descripción (opcional)',
-                      hintText: 'Breve descripción...',
-                    ),
+                    style: TextStyle(color: BentoTheme.cream),
+                    decoration: darkInputDecoration(
+                        label: 'Descripción (opcional)',
+                        hint: 'Breve descripción...'),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Ícono',
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: BentoTheme.textSecondary),
+                        color: BentoTheme.creamSecondary),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: vaultEmojiOptions.map((emoji) {
-                      final sel = selectedEmoji == emoji;
+                    children: vaultIconKeyOptions.map((key) {
+                      final sel = selectedIconKey == key;
+                      Color previewColor;
+                      try {
+                        previewColor = Color(int.parse(
+                            'FF${selectedColor.replaceAll('#', '')}',
+                            radix: 16));
+                      } catch (_) {
+                        previewColor = BentoTheme.accentBlue;
+                      }
                       return GestureDetector(
                         onTap: () =>
-                            setModal(() => selectedEmoji = emoji),
+                            setModal(() => selectedIconKey = key),
                         child: Container(
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
                             color: sel
-                                ? BentoTheme.primaryDark.withValues(alpha: 0.1)
-                                : BentoTheme.bgLight,
+                                ? previewColor.withValues(alpha: 0.18)
+                                : BentoTheme.darkCardAlt,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                                 color: sel
-                                    ? BentoTheme.primaryDark
-                                    : BentoTheme.borderMuted,
+                                    ? previewColor
+                                    : BentoTheme.creamAlpha(0.20),
                                 width: sel ? 2 : 1),
                           ),
                           child: Center(
-                              child: Text(emoji,
-                                  style:
-                                      const TextStyle(fontSize: 20))),
+                              child: Icon(vaultIconMap[key],
+                                  size: 20,
+                                  color: sel ? previewColor : BentoTheme.creamSecondary)),
                         ),
                       );
                     }).toList(),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Color',
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: BentoTheme.textSecondary),
+                        color: BentoTheme.creamSecondary),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -2132,6 +2323,11 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: BentoTheme.accentLime,
+                        foregroundColor: const Color(0xFF0C0C0D),
+                        elevation: 0,
+                      ),
                       onPressed: () async {
                         final name = nameCtrl.text.trim();
                         if (name.isEmpty) return;
@@ -2141,7 +2337,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               .read(vaultsProvider.notifier)
                               .createVault(
                                 name,
-                                icon: selectedEmoji,
+                                icon: selectedIconKey,
                                 color: selectedColor,
                                 description: descCtrl.text.trim().isEmpty
                                     ? null
@@ -2153,7 +2349,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               .updateVault(
                                 vault.id,
                                 name: name,
-                                icon: selectedEmoji,
+                                icon: selectedIconKey,
                                 color: selectedColor,
                                 description: descCtrl.text.trim().isEmpty
                                     ? null
@@ -2180,18 +2376,19 @@ class _NotesTabState extends ConsumerState<NotesTab>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: BentoTheme.cardBg,
+        backgroundColor: BentoTheme.darkCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Eliminar "${vault.name}"?',
-            style: const TextStyle(
-                fontWeight: FontWeight.w900, color: BentoTheme.textPrimary)),
-        content: const Text(
+            style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800, color: BentoTheme.cream)),
+        content: Text(
           'Las notas dentro permanecerán como "Sin clasificar". Esta acción no se puede deshacer.',
-          style: TextStyle(color: BentoTheme.textSecondary, fontSize: 13),
+          style: TextStyle(color: BentoTheme.creamSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
+            style: TextButton.styleFrom(foregroundColor: BentoTheme.creamAlpha(0.7)),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
@@ -2210,7 +2407,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
   // ─── Helpers ──────────────────────────────────────
 
-  Widget _miniChip(String text, Color color) {
+  Widget _miniChip(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
@@ -2218,10 +2415,17 @@ class _NotesTabState extends ConsumerState<NotesTab>
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-            fontSize: 10, color: color, fontWeight: FontWeight.w700),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+                fontSize: 10, color: color, fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }
@@ -2302,12 +2506,12 @@ class GraphPainter extends CustomPainter {
           : note.priority.color;
 
       final fillPaint = Paint()
-        ..color = isCenter ? BentoTheme.primaryDark : BentoTheme.cardBg
+        ..color = isCenter ? BentoTheme.accentLime : BentoTheme.darkCardAlt
         ..style = PaintingStyle.fill;
       canvas.drawCircle(pos, nodeRadius, fillPaint);
 
       final borderPaint = Paint()
-        ..color = isCenter ? BentoTheme.primaryDark : priorityColor
+        ..color = isCenter ? BentoTheme.accentLime : priorityColor
         ..strokeWidth = 2.0
         ..style = PaintingStyle.stroke;
       canvas.drawCircle(pos, nodeRadius, borderPaint);
@@ -2317,7 +2521,7 @@ class GraphPainter extends CustomPainter {
             ? '${note.title.substring(0, 7)}..'
             : note.title,
         style: TextStyle(
-          color: isCenter ? Colors.white : BentoTheme.textPrimary,
+          color: isCenter ? const Color(0xFF0C0C0D) : BentoTheme.cream,
           fontSize: 9,
           fontWeight: FontWeight.bold,
         ),

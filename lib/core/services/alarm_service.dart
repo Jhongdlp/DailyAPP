@@ -54,6 +54,10 @@ class AlarmService {
       loopAudio: true,
       vibrate: true,
       warningNotificationOnKill: true,
+      // El usuario puede intentar apagar la alarma cerrando la app desde
+      // "recientes" mientras suena. Sin esto, el servicio nativo la detiene
+      // en onTaskRemoved (comportamiento por defecto del paquete `alarm`).
+      androidStopAlarmOnTermination: false,
       volumeSettings: VolumeSettings.fixed(
         volume: 1.0,
         volumeEnforced: true,

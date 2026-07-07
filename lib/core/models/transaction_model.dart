@@ -57,14 +57,14 @@ class FinanceCategories {
     FinanceCategory(id: 'health', label: 'Salud', icon: Icons.favorite_outline, color: BentoTheme.errorRed),
     FinanceCategory(id: 'entertainment', label: 'Ocio', icon: Icons.sports_esports_outlined, color: BentoTheme.accentPurple),
     FinanceCategory(id: 'shopping', label: 'Compras', icon: Icons.shopping_bag_outlined, color: BentoTheme.accentBlue),
-    FinanceCategory(id: 'education', label: 'Educación', icon: Icons.school_outlined, color: BentoTheme.primaryDark),
+    FinanceCategory(id: 'education', label: 'Educación', icon: Icons.school_outlined, color: BentoTheme.accentPurple),
     FinanceCategory(id: 'subscriptions', label: 'Suscripciones', icon: Icons.autorenew_outlined, color: BentoTheme.accentBlue),
     // Ingresos
     FinanceCategory(id: 'salary', label: 'Salario', icon: Icons.work_outline, color: BentoTheme.successGreen, forIncome: true),
     FinanceCategory(id: 'freelance', label: 'Freelance', icon: Icons.laptop_outlined, color: BentoTheme.successGreen, forIncome: true),
     FinanceCategory(id: 'investment', label: 'Inversión', icon: Icons.trending_up_outlined, color: BentoTheme.successGreen, forIncome: true),
     // Genérica
-    FinanceCategory(id: 'other', label: 'Otro', icon: Icons.category_outlined, color: BentoTheme.textSecondary),
+    FinanceCategory(id: 'other', label: 'Otro', icon: Icons.category_outlined, color: Color(0x8CF5F3EE)),
   ];
 
   static FinanceCategory byId(String id) =>

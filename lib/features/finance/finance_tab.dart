@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/models/account_model.dart';
 import '../../core/models/transaction_model.dart';
 import '../../core/providers/finance_provider.dart';
 import '../../core/theme/bento_theme.dart';
+import '../habits/widgets/habit_blob_header.dart';
 import 'account_form.dart';
 import 'transaction_form.dart';
 
@@ -32,6 +34,69 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: BentoTheme.creamAlpha(0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: BentoTheme.creamAlpha(0.14)),
+          ),
+          child: Icon(icon, size: 17, color: onPressed == null ? BentoTheme.creamAlpha(0.3) : BentoTheme.cream),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return SizedBox(
+      height: 92,
+      child: Stack(
+        children: [
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.successGreen)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Dinero',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 42,
+                    height: 0.92,
+                    letterSpacing: -1.4,
+                    color: BentoTheme.cream,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: _buildHeaderIconButton(
+                    icon: Icons.add_card_outlined,
+                    tooltip: 'Nueva cuenta',
+                    onPressed: () => showAccountForm(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -83,285 +148,307 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
     final sortedCategories = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    return Stack(
-      children: [
-        RefreshIndicator(
-          color: BentoTheme.primaryDark,
-          onRefresh: () async {
-            ref.invalidate(accountsProvider);
-            ref.invalidate(transactionsProvider);
-          },
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
+          stops: [0.0, 0.6],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '💰 Mi Dinero',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: BentoTheme.textPrimary,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => showAccountForm(context),
-                    icon: const Icon(Icons.add_card_outlined, color: BentoTheme.primaryDark),
-                    tooltip: 'Nueva cuenta',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-
-              // Tarjeta de saldo total + resumen del mes
-              BentoCard(
-                borderColor: BentoTheme.primaryDark,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Saldo Total',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: BentoTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      usdFormat.format(totalBalance),
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: BentoTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        _MonthStat(
-                          label: 'Entró este mes',
-                          amount: summary.income,
-                          color: BentoTheme.successGreen,
-                          icon: Icons.arrow_downward_rounded,
-                        ),
-                        const SizedBox(width: 12),
-                        _MonthStat(
-                          label: 'Salió este mes',
-                          amount: summary.expense,
-                          color: BentoTheme.errorRed,
-                          icon: Icons.arrow_upward_rounded,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Cuentas
-              if (accounts.isNotEmpty) ...[
-                SizedBox(
-                  height: 110,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: accounts.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 12),
-                    itemBuilder: (context, i) {
-                      final account = accounts[i];
-                      final balance = balances[account.id] ?? 0;
-                      final isSelected = _selectedAccountId == account.id;
-                      final isDimmed = _selectedAccountId != null && _selectedAccountId != account.id;
-                      return _AccountCard(
-                        account: account,
-                        balance: balance,
-                        isSelected: isSelected,
-                        isDimmed: isDimmed,
-                        onTap: () {
-                          setState(() {
-                            if (_selectedAccountId == account.id) {
-                              _selectedAccountId = null;
-                            } else {
-                              _selectedAccountId = account.id;
-                            }
-                          });
-                        },
-                        onLongPress: () => showAccountForm(context, account: account),
-                      );
-                    },
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 6, bottom: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              _buildHeader(context),
+              Expanded(
+                child: RefreshIndicator(
+                  color: BentoTheme.accentLime,
+                  backgroundColor: BentoTheme.darkCard,
+                  onRefresh: () async {
+                    ref.invalidate(accountsProvider);
+                    ref.invalidate(transactionsProvider);
+                  },
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
                     children: [
-                      Icon(Icons.info_outline_rounded, size: 12, color: BentoTheme.textSecondary),
-                      SizedBox(width: 4),
-                      Text(
-                        'Toca una cuenta para filtrar · Mantén presionado para editar',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: BentoTheme.textSecondary,
+                      const SizedBox(height: 4),
+
+                      // Tarjeta de saldo total + resumen del mes
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: BentoTheme.darkCard,
+                          border: Border.all(color: BentoTheme.creamAlpha(0.08)),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Saldo Total',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 11,
+                                letterSpacing: 1.5,
+                                fontWeight: FontWeight.w600,
+                                color: BentoTheme.creamAlpha(0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              usdFormat.format(totalBalance),
+                              style: GoogleFonts.montserrat(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.7,
+                                color: BentoTheme.cream,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                _MonthStat(
+                                  label: 'Entró este mes',
+                                  amount: summary.income,
+                                  color: BentoTheme.successGreen,
+                                  icon: Icons.arrow_downward_rounded,
+                                ),
+                                const SizedBox(width: 12),
+                                _MonthStat(
+                                  label: 'Salió este mes',
+                                  amount: summary.expense,
+                                  color: BentoTheme.errorRed,
+                                  icon: Icons.arrow_upward_rounded,
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Cuentas
+                      if (accounts.isNotEmpty) ...[
+                        SizedBox(
+                          height: 110,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: accounts.length,
+                            separatorBuilder: (_, _) => const SizedBox(width: 12),
+                            itemBuilder: (context, i) {
+                              final account = accounts[i];
+                              final balance = balances[account.id] ?? 0;
+                              final isSelected = _selectedAccountId == account.id;
+                              final isDimmed = _selectedAccountId != null && _selectedAccountId != account.id;
+                              return _AccountCard(
+                                account: account,
+                                balance: balance,
+                                isSelected: isSelected,
+                                isDimmed: isDimmed,
+                                onTap: () {
+                                  setState(() {
+                                    if (_selectedAccountId == account.id) {
+                                      _selectedAccountId = null;
+                                    } else {
+                                      _selectedAccountId = account.id;
+                                    }
+                                  });
+                                },
+                                onLongPress: () => showAccountForm(context, account: account),
+                              );
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6, bottom: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.info_outline_rounded, size: 12, color: BentoTheme.creamAlpha(0.45)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Toca una cuenta para filtrar · Mantén presionado para editar',
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: BentoTheme.creamAlpha(0.45),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Distribución de gastos (este mes)
+                      if (totalMonthExpenses > 0) ...[
+                        _buildCategoryBreakdown(sortedCategories, totalMonthExpenses),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Cabecera de movimientos y Búsqueda
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _selectedAccountId == null
+                                ? 'Movimientos'
+                                : 'Movimientos (${accounts.firstWhere((a) => a.id == _selectedAccountId, orElse: () => accounts.first).name})',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: BentoTheme.cream,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(_isSearching ? Icons.close_rounded : Icons.search_rounded,
+                                color: BentoTheme.creamAlpha(0.7)),
+                            onPressed: () {
+                              setState(() {
+                                if (_isSearching) {
+                                  _searchController.clear();
+                                  _searchQuery = '';
+                                }
+                                _isSearching = !_isSearching;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+
+                      if (_isSearching) ...[
+                        TextField(
+                          controller: _searchController,
+                          style: const TextStyle(color: BentoTheme.cream),
+                          onChanged: (val) => setState(() => _searchQuery = val),
+                          decoration: InputDecoration(
+                            prefixIcon: Icon(Icons.search_rounded, color: BentoTheme.creamAlpha(0.5)),
+                            hintText: 'Buscar por descripción o categoría...',
+                            hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+                            filled: true,
+                            fillColor: BentoTheme.darkCardAlt,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+                            ),
+                            focusedBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(16)),
+                              borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+                            ),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: Icon(Icons.clear_rounded, color: BentoTheme.creamAlpha(0.55)),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                    },
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Chips de filtro por tipo
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildTypeChip(
+                              'Todos',
+                              _selectedType == null,
+                              BentoTheme.accentLime,
+                              () => setState(() => _selectedType = null),
+                            ),
+                            const SizedBox(width: 8),
+                            ...TransactionType.values.map((type) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _buildTypeChip(
+                                  type.label,
+                                  _selectedType == type,
+                                  type.color,
+                                  () => setState(() => _selectedType = type),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (accountsAsync.isLoading || txsAsync.isLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(40),
+                          child: Center(
+                            child: CircularProgressIndicator(color: BentoTheme.accentLime),
+                          ),
+                        )
+                      else if (accounts.isEmpty)
+                        _EmptyState(
+                          icon: Icons.account_balance_wallet_outlined,
+                          message: 'Crea tu primera cuenta para empezar\na gestionar tu dinero.',
+                          buttonLabel: 'Crear Cuenta',
+                          onPressed: () => showAccountForm(context),
+                        )
+                      else if (txs.isEmpty)
+                        _EmptyState(
+                          icon: Icons.receipt_long_outlined,
+                          message: 'Aún no tienes movimientos.\nRegistra tu primer ingreso o gasto.',
+                          buttonLabel: 'Registrar Movimiento',
+                          onPressed: () => showTransactionForm(context),
+                        )
+                      else if (filteredTxs.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(40),
+                          child: Center(
+                            child: Text(
+                              'No se encontraron movimientos con los filtros aplicados.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.montserrat(
+                                color: BentoTheme.creamAlpha(0.55),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        ..._buildGroupedTransactions(context, ref, filteredTxs, accounts),
+
+                      const SizedBox(height: 80), // espacio para el FAB
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-              ],
-
-              // Distribución de gastos (este mes)
-              if (totalMonthExpenses > 0) ...[
-                _buildCategoryBreakdown(sortedCategories, totalMonthExpenses),
-                const SizedBox(height: 16),
-              ],
-
-              // Cabecera de movimientos y Búsqueda
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _selectedAccountId == null
-                        ? 'Movimientos'
-                        : 'Movimientos (${accounts.firstWhere((a) => a.id == _selectedAccountId, orElse: () => accounts.first).name})',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: BentoTheme.textPrimary,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(_isSearching ? Icons.close_rounded : Icons.search_rounded,
-                        color: BentoTheme.primaryDark),
-                    onPressed: () {
-                      setState(() {
-                        if (_isSearching) {
-                          _searchController.clear();
-                          _searchQuery = '';
-                        }
-                        _isSearching = !_isSearching;
-                      });
-                    },
-                  ),
-                ],
               ),
-              const SizedBox(height: 4),
-
-              if (_isSearching) ...[
-                TextField(
-                  controller: _searchController,
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search_rounded, color: BentoTheme.textSecondary),
-                    hintText: 'Buscar por descripción o categoría...',
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              // Chips de filtro por tipo
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildTypeChip(
-                      'Todos',
-                      _selectedType == null,
-                      BentoTheme.primaryDark,
-                      () => setState(() => _selectedType = null),
-                    ),
-                    const SizedBox(width: 8),
-                    ...TransactionType.values.map((type) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _buildTypeChip(
-                          type.label,
-                          _selectedType == type,
-                          type.color,
-                          () => setState(() => _selectedType = type),
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              if (accountsAsync.isLoading || txsAsync.isLoading)
-                const Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(
-                    child: CircularProgressIndicator(color: BentoTheme.primaryDark),
-                  ),
-                )
-              else if (accounts.isEmpty)
-                _EmptyState(
-                  icon: Icons.account_balance_wallet_outlined,
-                  message: 'Crea tu primera cuenta para empezar\na gestionar tu dinero.',
-                  buttonLabel: 'Crear Cuenta',
-                  onPressed: () => showAccountForm(context),
-                )
-              else if (txs.isEmpty)
-                _EmptyState(
-                  icon: Icons.receipt_long_outlined,
-                  message: 'Aún no tienes movimientos.\nRegistra tu primer ingreso o gasto.',
-                  buttonLabel: 'Registrar Movimiento',
-                  onPressed: () => showTransactionForm(context),
-                )
-              else if (filteredTxs.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(
-                    child: Text(
-                      'No se encontraron movimientos con los filtros aplicados.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: BentoTheme.textSecondary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                ..._buildGroupedTransactions(context, ref, filteredTxs, accounts),
-
-              const SizedBox(height: 80), // espacio para el FAB
             ],
           ),
-        ),
 
-        // FAB para agregar movimiento
-        Positioned(
-          bottom: 16,
-          right: 4,
-          child: FloatingActionButton(
-            heroTag: 'finance_fab',
-            onPressed: () => showTransactionForm(context),
-            backgroundColor: BentoTheme.primaryDark,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: const BorderSide(color: BentoTheme.primaryDark, width: 2),
+          // FAB para agregar movimiento
+          Positioned(
+            bottom: 16,
+            right: 4,
+            child: FloatingActionButton(
+              heroTag: 'finance_fab',
+              onPressed: () => showTransactionForm(context),
+              backgroundColor: BentoTheme.accentLime,
+              foregroundColor: const Color(0xFF0C0C0D),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(Icons.add),
             ),
-            child: const Icon(Icons.add),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -372,19 +459,19 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withOpacity(0.12) : Colors.transparent,
+          color: isSelected ? activeColor.withValues(alpha: 0.16) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? activeColor : BentoTheme.borderMuted,
+            color: isSelected ? activeColor : BentoTheme.creamAlpha(0.14),
             width: 2,
           ),
         ),
         child: Text(
           label,
-          style: TextStyle(
+          style: GoogleFonts.montserrat(
             fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: isSelected ? activeColor : BentoTheme.textSecondary,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? activeColor : BentoTheme.creamAlpha(0.55),
           ),
         ),
       ),
@@ -392,22 +479,26 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
   }
 
   Widget _buildCategoryBreakdown(List<MapEntry<String, double>> sortedCategories, double totalExpenses) {
-    return BentoCard(
-      borderColor: BentoTheme.primaryDark.withOpacity(0.3),
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: BentoTheme.darkCard,
+        border: Border.all(color: BentoTheme.creamAlpha(0.1)),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.pie_chart_outline_rounded, size: 16, color: BentoTheme.primaryDark),
-              SizedBox(width: 6),
+              const Icon(Icons.pie_chart_outline_rounded, size: 16, color: BentoTheme.accentLime),
+              const SizedBox(width: 6),
               Text(
                 'Gastos por Categoría (Este Mes)',
-                style: TextStyle(
+                style: GoogleFonts.montserrat(
                   fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: BentoTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  color: BentoTheme.cream,
                 ),
               ),
             ],
@@ -431,20 +522,20 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                           const SizedBox(width: 6),
                           Text(
                             cat.label,
-                            style: const TextStyle(
+                            style: GoogleFonts.montserrat(
                               fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: BentoTheme.textPrimary,
+                              fontWeight: FontWeight.w700,
+                              color: BentoTheme.cream,
                             ),
                           ),
                         ],
                       ),
                       Text(
                         '${usdFormat.format(amount)} (${(pct * 100).toStringAsFixed(0)}%)',
-                        style: const TextStyle(
+                        style: GoogleFonts.montserrat(
                           fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: BentoTheme.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          color: BentoTheme.creamAlpha(0.55),
                         ),
                       ),
                     ],
@@ -455,14 +546,14 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                     child: LinearProgressIndicator(
                       value: pct,
                       minHeight: 6,
-                      backgroundColor: BentoTheme.borderMuted,
+                      backgroundColor: BentoTheme.creamAlpha(0.1),
                       valueColor: AlwaysStoppedAnimation<Color>(cat.color),
                     ),
                   ),
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -485,10 +576,10 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
           padding: const EdgeInsets.only(top: 12, bottom: 6),
           child: Text(
             _friendlyDate(tx.occurredAt),
-            style: const TextStyle(
+            style: GoogleFonts.montserrat(
               fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: BentoTheme.textSecondary,
+              fontWeight: FontWeight.w700,
+              color: BentoTheme.creamAlpha(0.55),
             ),
           ),
         ));
@@ -530,9 +621,9 @@ class _MonthStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.4), width: 1.5),
+          border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,11 +678,17 @@ class _AccountCard extends ConsumerWidget {
       child: GestureDetector(
         onTap: onTap,
         onLongPress: onLongPress,
-        child: BentoCard(
+        child: Container(
           width: 160,
           padding: const EdgeInsets.all(14),
-          borderColor: isSelected ? account.type.color : BentoTheme.borderMuted,
-          borderWidth: isSelected ? 2.5 : 1.5,
+          decoration: BoxDecoration(
+            color: BentoTheme.darkCardAlt,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected ? account.type.color : BentoTheme.creamAlpha(0.1),
+              width: isSelected ? 2 : 1.5,
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -604,10 +701,10 @@ class _AccountCard extends ConsumerWidget {
                     child: Text(
                       account.name,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: GoogleFonts.montserrat(
                         fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: BentoTheme.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        color: BentoTheme.cream,
                       ),
                     ),
                   ),
@@ -619,10 +716,10 @@ class _AccountCard extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       usdFormat.format(balance),
-                      style: TextStyle(
+                      style: GoogleFonts.montserrat(
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: balance < 0 ? BentoTheme.errorRed : BentoTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        color: balance < 0 ? BentoTheme.errorRed : BentoTheme.cream,
                       ),
                     ),
                   ),
@@ -672,88 +769,95 @@ class _TransactionTile extends ConsumerWidget {
         ? usdFormat.format(tx.amount)
         : '${tx.type == TransactionType.income ? '+' : '−'}${usdFormat.format(tx.amount)}';
 
-    return BentoCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    return GestureDetector(
       onTap: () => showTransactionForm(context, transaction: tx),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withOpacity(0.4), width: 1.5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: BentoTheme.darkCardAlt,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: BentoTheme.creamAlpha(0.07)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
+              ),
+              child: Icon(icon, size: 20, color: color),
             ),
-            child: Icon(icon, size: 20, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: BentoTheme.textPrimary,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: BentoTheme.cream,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: BentoTheme.textSecondary,
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: BentoTheme.creamAlpha(0.5),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            amountText,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: BentoTheme.cardBg,
-                  surfaceTintColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: const BorderSide(color: BentoTheme.primaryDark, width: 2),
+            const SizedBox(width: 8),
+            Text(
+              amountText,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color),
+            ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: BentoTheme.darkCard,
+                    surfaceTintColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: BentoTheme.creamAlpha(0.14), width: 1.5),
+                    ),
+                    title: Text('¿Eliminar movimiento?',
+                        style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w700)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: TextButton.styleFrom(foregroundColor: BentoTheme.creamAlpha(0.7)),
+                        child: const Text('Cancelar'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Eliminar',
+                            style: TextStyle(color: BentoTheme.errorRed, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
-                  title: const Text('¿Eliminar movimiento?',
-                      style: TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.bold)),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancelar',
-                          style: TextStyle(color: BentoTheme.textSecondary, fontWeight: FontWeight.bold)),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Eliminar',
-                          style: TextStyle(color: BentoTheme.errorRed, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                ref.read(transactionsProvider.notifier).deleteTransaction(tx.id);
-              }
-            },
-            child: const Icon(Icons.close_rounded, size: 18, color: BentoTheme.textSecondary),
-          ),
-        ],
+                );
+                if (confirmed == true) {
+                  ref.read(transactionsProvider.notifier).deleteTransaction(tx.id);
+                }
+              },
+              child: Icon(Icons.close_rounded, size: 18, color: BentoTheme.creamAlpha(0.5)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -778,19 +882,26 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(icon, size: 48, color: BentoTheme.textSecondary.withOpacity(0.5)),
+          Icon(icon, size: 48, color: BentoTheme.creamAlpha(0.3)),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: BentoTheme.textSecondary,
+            style: GoogleFonts.montserrat(
+              color: BentoTheme.creamAlpha(0.55),
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
           ),
           const SizedBox(height: 16),
-          OutlinedButton(onPressed: onPressed, child: Text(buttonLabel)),
+          OutlinedButton(
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BentoTheme.accentLime,
+              side: const BorderSide(color: BentoTheme.accentLime, width: 2),
+            ),
+            child: Text(buttonLabel),
+          ),
         ],
       ),
     );

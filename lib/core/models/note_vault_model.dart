@@ -14,7 +14,7 @@ class NoteVault {
   const NoteVault({
     required this.id,
     required this.name,
-    this.icon = '📁',
+    this.icon = 'folder',
     this.color = '#758BFD',
     this.description,
     this.noteCount = 0,
@@ -29,6 +29,10 @@ class NoteVault {
       return const Color(0xFF758BFD);
     }
   }
+
+  /// Ícono Material asociado a la clave guardada en [icon], o null si
+  /// [icon] es un emoji heredado (bóvedas creadas antes del rediseño).
+  IconData? get iconData => vaultIconMap[icon];
 
   NoteVault copyWith({
     String? id,
@@ -72,12 +76,41 @@ class NoteVault {
       };
 }
 
-/// Opciones predefinidas de emojis para bóvedas
-const vaultEmojiOptions = [
-  '📁', '📚', '💡', '🧠', '💼', '🏠', '🎯', '🔬', '🎨', '📝',
-  '🌱', '💰', '🏋️', '🎵', '📷', '🌍', '🔧', '📊', '🚀', '❤️',
-  '⚡', '🌟', '🎮', '🔮', '📰', '🧪', '🌈', '🦋', '🏆', '🎓',
-];
+/// Íconos Material curados para bóvedas, estilo Notion (clave corta → IconData).
+/// La clave es lo que se guarda en `NoteVault.icon`.
+const Map<String, IconData> vaultIconMap = {
+  'folder': Icons.folder_rounded,
+  'book': Icons.menu_book_rounded,
+  'idea': Icons.lightbulb_rounded,
+  'brain': Icons.psychology_rounded,
+  'briefcase': Icons.work_rounded,
+  'home': Icons.home_rounded,
+  'target': Icons.track_changes_rounded,
+  'science': Icons.science_rounded,
+  'palette': Icons.palette_rounded,
+  'note': Icons.sticky_note_2_rounded,
+  'eco': Icons.eco_rounded,
+  'money': Icons.savings_rounded,
+  'fitness': Icons.fitness_center_rounded,
+  'music': Icons.music_note_rounded,
+  'camera': Icons.camera_alt_rounded,
+  'travel': Icons.flight_takeoff_rounded,
+  'build': Icons.build_rounded,
+  'chart': Icons.bar_chart_rounded,
+  'rocket': Icons.rocket_launch_rounded,
+  'favorite': Icons.favorite_rounded,
+  'star': Icons.star_rounded,
+  'games': Icons.sports_esports_rounded,
+  'code': Icons.code_rounded,
+  'news': Icons.article_rounded,
+  'school': Icons.school_rounded,
+  'puzzle': Icons.extension_rounded,
+  'shield': Icons.shield_rounded,
+  'calendar': Icons.calendar_month_rounded,
+};
+
+/// Claves disponibles para el selector de íconos de bóveda.
+final List<String> vaultIconKeyOptions = vaultIconMap.keys.toList();
 
 /// Opciones predefinidas de colores para bóvedas
 const vaultColorOptions = [

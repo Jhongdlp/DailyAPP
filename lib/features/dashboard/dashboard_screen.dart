@@ -8,8 +8,8 @@ import '../habits/habits_tab.dart';
 import '../notes/notes_tab.dart';
 import '../chat/chat_tab.dart';
 import '../finance/finance_tab.dart';
-import '../setup/setup_screen.dart';
 import '../auth/auth_screen.dart';
+import '../../core/providers/vault_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -35,9 +35,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       backgroundColor: BentoTheme.darkBg,
       child: Stack(
         children: [
-          // Pantalla principal del Tab Actual — fondo claro de respaldo para las
-          // pestañas aún no rediseñadas (Notas, Alarma, Dinero, Copiloto); Hábitos
-          // pinta su propio fondo oscuro de borde a borde encima de este.
+          // Pantalla principal del Tab Actual — todas las pestañas (Hábitos, Notas,
+          // Alarma, Dinero y Copiloto) pintan su propio fondo oscuro de borde a
+          // borde; este contenedor claro queda como respaldo detrás de ellas.
           Positioned.fill(
             top: 12,
             child: Padding(
@@ -71,7 +71,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Expanded(child: _buildTabItem(icon: Icons.psychology_outlined, index: 1, label: 'Cerebro')),
                   Expanded(child: _buildTabItem(icon: Icons.alarm_outlined, index: 2, label: 'Alarma')),
                   Expanded(child: _buildTabItem(icon: Icons.account_balance_wallet_outlined, index: 3, label: 'Dinero')),
-                  Expanded(child: _buildTabItem(icon: Icons.chat_bubble_outline, index: 4, label: 'Copiloto')),
                   Expanded(child: _buildConfigItem()),
                 ],
               ),
@@ -99,16 +98,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: Icon(Icons.settings_outlined, color: BentoTheme.creamAlpha(0.85)),
+                leading: const Icon(Icons.chat_bubble_outline, color: BentoTheme.accentLime),
                 title: Text(
-                  'Ajustes',
+                  'Copiloto',
                   style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
                 ),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SetupScreen()),
-                  );
+                  setState(() => _currentIndex = 4);
                 },
               ),
               ListTile(
@@ -120,6 +117,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await Supabase.instance.client.auth.signOut();
+                  ref.invalidate(vaultProvider);
                   if (context.mounted) {
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(builder: (_) => const AuthScreen()),

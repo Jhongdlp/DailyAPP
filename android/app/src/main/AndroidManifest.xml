@@ -33,6 +33,9 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Requerido por el paquete `alarm` para la notificación de aviso
+             cuando la app es cerrada mientras hay una alarma programada -->
+        <service android:name="com.gdelataillade.alarm.services.NotificationOnKillService" />
         <!-- flutter_local_notifications receivers -->
         <receiver
             android:exported="false"

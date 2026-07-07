@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/network/local_ai_client.dart';
+import '../habits/widgets/habit_blob_header.dart';
 import '../notes/notes_tab.dart';
 import '../../core/providers/habits_provider.dart';
 
@@ -141,121 +143,160 @@ class _ChatTabState extends ConsumerState<ChatTab> {
     }
   }
 
+  Widget _buildHeader(BuildContext context) {
+    return SizedBox(
+      height: 92,
+      child: Stack(
+        children: [
+          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBlue)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: Text(
+                'Copiloto',
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 42,
+                  height: 0.92,
+                  letterSpacing: -1.4,
+                  color: BentoTheme.cream,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Header de Chat
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            children: [
-              const Icon(Icons.psychology, color: BentoTheme.primaryDark),
-              const SizedBox(width: 8),
-              Text(
-                '🧠 Conversación con Qwen Local',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: BentoTheme.textPrimary,
-                    ),
-              ),
-            ],
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
+          stops: [0.0, 0.6],
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(context),
 
-        // Área de Mensajes
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(20),
-            itemCount: _messages.length,
-            itemBuilder: (context, index) {
-              final msg = _messages[index];
-              return Align(
-                alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: FractionallySizedBox(
-                    widthFactor: 0.85,
-                    child: BentoCard(
-                      backgroundColor: msg.isUser ? const Color(0xFFEFF1FE) : BentoTheme.cardBg,
-                      borderColor: msg.isUser ? BentoTheme.accentBlue : BentoTheme.primaryDark,
-                      borderWidth: 1.5,
-                      borderRadius: 16,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            msg.isUser ? 'Tú' : 'Asistente AI',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              color: msg.isUser ? BentoTheme.accentBlue : BentoTheme.primaryDark,
+          // Área de Mensajes
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                final accent = msg.isUser ? BentoTheme.accentLime : BentoTheme.accentBlue;
+                return Align(
+                  alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: FractionallySizedBox(
+                      widthFactor: 0.85,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: BentoTheme.darkCardAlt,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: accent.withValues(alpha: 0.45), width: 1.5),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              msg.isUser ? 'Tú' : 'Asistente AI',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: accent,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            msg.text,
-                            style: const TextStyle(
-                              fontSize: 14, 
-                              color: BentoTheme.textPrimary, 
-                              fontWeight: FontWeight.w500,
-                              height: 1.4,
+                            const SizedBox(height: 6),
+                            Text(
+                              msg.text,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: BentoTheme.cream,
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentLime),
+              ),
+            ),
+
+          // Input de texto
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    onSubmitted: (_) => _sendMessage(),
+                    style: const TextStyle(color: BentoTheme.cream, fontWeight: FontWeight.w500),
+                    decoration: InputDecoration(
+                      hintText: 'Pregúntame sobre tus notas y hábitos...',
+                      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.35)),
+                      filled: true,
+                      fillColor: BentoTheme.darkCardAlt,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+                      ),
+                      focusedBorder: const OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(16)),
+                        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
                       ),
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0),
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.primaryDark),
+                const SizedBox(width: 12),
+                // Botón enviar
+                IconButton.filled(
+                  onPressed: _loading ? null : _sendMessage,
+                  style: IconButton.styleFrom(
+                    backgroundColor: BentoTheme.accentLime,
+                    padding: const EdgeInsets.all(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.send, color: Color(0xFF0C0C0D)),
+                ),
+              ],
             ),
           ),
-
-        // Input de texto
-        Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _textController,
-                  onSubmitted: (_) => _sendMessage(),
-                  style: const TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.w500),
-                  decoration: const InputDecoration(
-                    hintText: 'Pregúntame sobre tus notas y hábitos...',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Botón enviar
-              IconButton.filled(
-                onPressed: _loading ? null : _sendMessage,
-                style: IconButton.styleFrom(
-                  backgroundColor: BentoTheme.primaryDark,
-                  padding: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                icon: const Icon(Icons.send, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

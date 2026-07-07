@@ -96,7 +96,7 @@ class _HabitHeatmapState extends State<HabitHeatmap> {
                           height: _kCell + _kGap,
                           child: Text(
                             l,
-                            style: const TextStyle(fontSize: 9, color: BentoTheme.textSecondary, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: 9, color: BentoTheme.creamAlpha(0.4), fontWeight: FontWeight.bold),
                           ),
                         ))
                     .toList(),
@@ -114,7 +114,7 @@ class _HabitHeatmapState extends State<HabitHeatmap> {
                         width: _kCell,
                         child: Text(
                           monthLabels[i],
-                          style: const TextStyle(fontSize: 9, color: BentoTheme.textSecondary, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontSize: 9, color: BentoTheme.creamAlpha(0.4), fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -154,9 +154,9 @@ class _HeatCell extends StatelessWidget {
     if (completed) {
       cellColor = base;
     } else if (active) {
-      cellColor = base.withOpacity(0.14);
+      cellColor = base.withValues(alpha: 0.22);
     } else {
-      cellColor = BentoTheme.borderMuted;
+      cellColor = BentoTheme.creamAlpha(0.08);
     }
 
     return Tooltip(

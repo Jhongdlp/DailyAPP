@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/alarm_model.dart';
 import '../../core/providers/alarms_provider.dart';
 import '../../core/theme/bento_theme.dart';
@@ -29,11 +30,15 @@ class AlarmCard extends ConsumerWidget {
         return await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text('Eliminar alarma'),
-                content: Text('¿Eliminar "${alarm.label}"?'),
+                backgroundColor: BentoTheme.darkCard,
+                title: Text('Eliminar alarma',
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: BentoTheme.cream)),
+                content: Text('¿Eliminar "${alarm.label}"?',
+                    style: TextStyle(color: BentoTheme.creamAlpha(0.7))),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
+                      style: TextButton.styleFrom(foregroundColor: BentoTheme.creamAlpha(0.7)),
                       child: const Text('Cancelar')),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, true),
@@ -56,9 +61,13 @@ class AlarmCard extends ConsumerWidget {
       },
       child: GestureDetector(
         onTap: onTap,
-        child: BentoCard(
-          borderColor: BentoTheme.borderMuted,
-          borderWidth: 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            color: BentoTheme.darkCardAlt,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BentoTheme.creamAlpha(0.08)),
+          ),
           child: Row(
             children: [
               Expanded(
@@ -70,14 +79,14 @@ class AlarmCard extends ConsumerWidget {
                       children: [
                         Text(
                           alarm.time12,
-                          style: TextStyle(
-                            fontSize: 44,
-                            fontWeight: FontWeight.w900,
+                          style: GoogleFonts.montserrat(
+                            fontSize: 40,
+                            fontWeight: FontWeight.w700,
                             height: 1,
+                            letterSpacing: -0.5,
                             color: alarm.enabled
-                                ? BentoTheme.textPrimary
-                                : BentoTheme.textSecondary,
-                            letterSpacing: 1,
+                                ? BentoTheme.cream
+                                : BentoTheme.creamAlpha(0.35),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -85,12 +94,12 @@ class AlarmCard extends ConsumerWidget {
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text(
                             alarm.amPm,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
                               color: alarm.enabled
                                   ? BentoTheme.accentOrange
-                                  : BentoTheme.textSecondary,
+                                  : BentoTheme.creamAlpha(0.35),
                             ),
                           ),
                         ),
@@ -99,27 +108,27 @@ class AlarmCard extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(
                       alarm.label,
-                      style: TextStyle(
+                      style: GoogleFonts.montserrat(
                         fontSize: 13,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
                         color: alarm.enabled
-                            ? BentoTheme.textPrimary
-                            : BentoTheme.textSecondary,
+                            ? BentoTheme.cream
+                            : BentoTheme.creamAlpha(0.4),
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       alarm.daysLabel,
-                      style: const TextStyle(
-                          fontSize: 12, color: BentoTheme.textSecondary),
+                      style: GoogleFonts.montserrat(
+                          fontSize: 12, color: BentoTheme.creamAlpha(0.45)),
                     ),
                     if (alarm.enabled && alarm.untilLabel != null) ...[
                       const SizedBox(height: 2),
                       Text(
                         alarm.untilLabel!,
-                        style: const TextStyle(
+                        style: GoogleFonts.montserrat(
                           fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                           color: BentoTheme.accentOrange,
                         ),
                       ),
@@ -127,14 +136,14 @@ class AlarmCard extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.camera_alt_outlined,
-                            size: 12, color: BentoTheme.textSecondary),
+                        Icon(Icons.camera_alt_outlined,
+                            size: 12, color: BentoTheme.creamAlpha(0.45)),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
                             alarm.targetObject,
-                            style: const TextStyle(
-                                fontSize: 12, color: BentoTheme.textSecondary),
+                            style: GoogleFonts.montserrat(
+                                fontSize: 12, color: BentoTheme.creamAlpha(0.45)),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -146,8 +155,11 @@ class AlarmCard extends ConsumerWidget {
               const SizedBox(width: 8),
               Switch(
                 value: alarm.enabled,
-                activeThumbColor: BentoTheme.primaryDark,
-                activeTrackColor: BentoTheme.primaryDark.withValues(alpha: 0.2),
+                activeThumbColor: BentoTheme.accentLime,
+                activeTrackColor: BentoTheme.accentLime.withValues(alpha: 0.3),
+                inactiveThumbColor: BentoTheme.creamAlpha(0.6),
+                inactiveTrackColor: BentoTheme.creamAlpha(0.15),
+                trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
                 onChanged: (val) async {
                   try {
                     await ref

@@ -120,24 +120,28 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: BentoTheme.primaryDark,
-        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+        backgroundColor: BentoTheme.darkBg,
+        body: Center(child: CircularProgressIndicator(color: BentoTheme.cream)),
       );
     }
 
     final alarm = _alarm;
     if (alarm == null) {
       return Scaffold(
-        backgroundColor: BentoTheme.primaryDark,
+        backgroundColor: BentoTheme.darkBg,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Alarma no encontrada',
-                  style: TextStyle(color: Colors.white, fontSize: 18)),
+              Text('Alarma no encontrada',
+                  style: TextStyle(color: BentoTheme.cream, fontSize: 18)),
               const SizedBox(height: 16),
               ElevatedButton(
                   onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: BentoTheme.accentLime,
+                    foregroundColor: const Color(0xFF0C0C0D),
+                  ),
                   child: const Text('Cerrar')),
             ],
           ),
@@ -152,7 +156,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
       canPop: false,
       child: Scaffold(
         backgroundColor:
-            isSuccess ? BentoTheme.successGreen : BentoTheme.primaryDark,
+            isSuccess ? BentoTheme.successGreen : BentoTheme.darkBg,
         body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -167,7 +171,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                 style: const TextStyle(
                   fontSize: 80,
                   fontWeight: FontWeight.w900,
-                  color: Colors.white,
+                  color: BentoTheme.cream,
                   letterSpacing: 2,
                 ),
               ),
@@ -175,9 +179,9 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
               Text(
                 alarm.label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 20,
-                    color: Colors.white70,
+                    color: BentoTheme.creamAlpha(0.7),
                     fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 48),
@@ -218,24 +222,25 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: BentoTheme.creamAlpha(0.1),
+                    border: Border.all(color: BentoTheme.creamAlpha(0.14)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.camera_alt, color: Colors.white, size: 28),
+                      const Icon(Icons.camera_alt, color: BentoTheme.accentOrange, size: 28),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Para desactivar, fotografía:',
+                            Text('Para desactivar, fotografía:',
                                 style: TextStyle(
-                                    color: Colors.white70, fontSize: 13)),
+                                    color: BentoTheme.creamAlpha(0.7), fontSize: 13)),
                             const SizedBox(height: 2),
                             Text(
                               alarm.targetObject,
                               style: const TextStyle(
-                                  color: Colors.white,
+                                  color: BentoTheme.cream,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900),
                             ),
@@ -268,21 +273,22 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                 const SizedBox(height: 24),
 
                 if (_verifying)
-                  const Column(
+                  Column(
                     children: [
-                      CircularProgressIndicator(color: Colors.white),
-                      SizedBox(height: 12),
+                      const CircularProgressIndicator(color: BentoTheme.accentLime),
+                      const SizedBox(height: 12),
                       Text('Verificando con IA...',
                           style:
-                              TextStyle(color: Colors.white70, fontSize: 14)),
+                              TextStyle(color: BentoTheme.creamAlpha(0.7), fontSize: 14)),
                     ],
                   )
                 else
                   ElevatedButton.icon(
                     onPressed: _takePhoto,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: BentoTheme.primaryDark,
+                      backgroundColor: BentoTheme.accentLime,
+                      foregroundColor: const Color(0xFF0C0C0D),
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),

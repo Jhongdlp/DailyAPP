@@ -19,7 +19,13 @@ class AlarmsNotifier extends AsyncNotifier<List<AlarmModel>> {
         .order('created_at');
 
     final alarms = (data as List).map((e) => AlarmModel.fromJson(e)).toList();
-    await AlarmService.rescheduleAll(alarms);
+    try {
+      await AlarmService.rescheduleAll(alarms);
+    } catch (_) {
+      // Reprogramar alarmas es un efecto secundario local; si el plugin nativo
+      // aún no está listo justo tras el arranque en frío, no debe tumbar la
+      // carga de la lista (que ya llegó bien desde Supabase).
+    }
     return alarms;
   }
 

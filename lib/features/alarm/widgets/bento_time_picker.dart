@@ -79,7 +79,7 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
                 style: const TextStyle(
                   fontSize: 42,
                   fontWeight: FontWeight.w900,
-                  color: BentoTheme.textPrimary,
+                  color: BentoTheme.cream,
                   letterSpacing: 1,
                 ),
               ),
@@ -105,10 +105,10 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
         width: 60,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: active ? BentoTheme.primaryDark : Colors.transparent,
+          color: active ? BentoTheme.accentLime : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: active ? BentoTheme.primaryDark : BentoTheme.borderMuted,
+            color: active ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.18),
             width: 2,
           ),
         ),
@@ -118,7 +118,7 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w900,
-              color: active ? Colors.white : BentoTheme.textSecondary,
+              color: active ? const Color(0xFF0C0C0D) : BentoTheme.creamAlpha(0.55),
             ),
           ),
         ),
@@ -138,7 +138,7 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
             height: _itemExtent,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: BentoTheme.bgLight,
+              color: BentoTheme.darkCardAlt,
               borderRadius: BorderRadius.circular(16),
             ),
           ),
@@ -161,7 +161,7 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
                   style: TextStyle(
                     fontSize: 42,
                     fontWeight: FontWeight.w900,
-                    color: BentoTheme.textPrimary,
+                    color: BentoTheme.cream,
                   ),
                 ),
               ),

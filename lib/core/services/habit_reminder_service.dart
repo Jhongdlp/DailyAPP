@@ -128,6 +128,31 @@ class HabitReminderService {
     for (final habit in habits) {
       await scheduleReminder(habit);
     }
+    await pruneOrphaned(habits);
+  }
+
+  /// Cancela notificaciones de hábitos que quedaron programadas en el SO pero
+  /// ya no corresponden a ningún hábito activo (borrado, archivado, o
+  /// programado por una versión anterior de la app). Sin esto, notificaciones
+  /// de hábitos eliminados pueden seguir llegando indefinidamente porque
+  /// cancelReminder() sólo sabe recalcular ids a partir de un habitId vigente.
+  static Future<void> pruneOrphaned(List<Habit> currentHabits) async {
+    final validIds = currentHabits
+        .where((h) => h.hasReminder && !h.archived && h.daysOfWeek.isNotEmpty)
+        .map((h) => h.id)
+        .toSet();
+
+    final pending = await _plugin.pendingNotificationRequests();
+    final futures = <Future<void>>[];
+    for (final request in pending) {
+      final payload = request.payload;
+      if (payload == null || !payload.startsWith(payloadPrefix)) continue;
+      final habitId = payload.substring(payloadPrefix.length);
+      if (!validIds.contains(habitId)) {
+        futures.add(_plugin.cancel(request.id));
+      }
+    }
+    await Future.wait(futures);
   }
 
   static tz.TZDateTime _nextOccurrence(int weekday, int hour, int minute) {

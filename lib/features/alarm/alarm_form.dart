@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/alarm_model.dart';
 import '../../core/providers/alarms_provider.dart';
 import '../../core/theme/bento_theme.dart';
@@ -133,11 +134,14 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
     final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Eliminar alarma'),
-            content: const Text('¿Estás seguro?'),
+            backgroundColor: BentoTheme.darkCard,
+            title: Text('Eliminar alarma',
+                style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: BentoTheme.cream)),
+            content: Text('¿Estás seguro?', style: TextStyle(color: BentoTheme.creamAlpha(0.7))),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
+                  style: TextButton.styleFrom(foregroundColor: BentoTheme.creamAlpha(0.7)),
                   child: const Text('Cancelar')),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
@@ -164,23 +168,23 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(text,
-            style: const TextStyle(
+            style: GoogleFonts.montserrat(
                 fontSize: 15,
-                fontWeight: FontWeight.w900,
-                color: BentoTheme.textPrimary)),
+                fontWeight: FontWeight.w800,
+                color: BentoTheme.cream)),
         if (subtitle != null) ...[
           const SizedBox(height: 4),
           Text(subtitle,
-              style: const TextStyle(
-                  fontSize: 12, color: BentoTheme.textSecondary)),
+              style: GoogleFonts.montserrat(
+                  fontSize: 12, color: BentoTheme.creamAlpha(0.55))),
         ],
       ],
     );
   }
 
-  Widget _divider() => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
-        child: Divider(height: 1, thickness: 1, color: BentoTheme.borderMuted),
+  Widget _divider() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Divider(height: 1, thickness: 1, color: BentoTheme.creamAlpha(0.12)),
       );
 
   Widget _chip(String label, {required bool active, required VoidCallback onTap}) {
@@ -191,14 +195,15 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: active ? BentoTheme.primaryDark : BentoTheme.borderMuted,
+          color: active ? BentoTheme.accentLime : BentoTheme.darkCardAlt,
+          border: active ? null : Border.all(color: BentoTheme.creamAlpha(0.14)),
         ),
         child: Text(
           label,
-          style: TextStyle(
+          style: GoogleFonts.montserrat(
             fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: active ? Colors.white : BentoTheme.textSecondary,
+            fontWeight: FontWeight.w700,
+            color: active ? const Color(0xFF0C0C0D) : BentoTheme.creamAlpha(0.55),
           ),
         ),
       ),
@@ -208,21 +213,44 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
   bool _sameDays(Set<int> preset) =>
       _days.length == preset.length && _days.containsAll(preset);
 
+  InputDecoration _darkInputDecoration({required String hint, required IconData icon, Widget? suffixIcon}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+      prefixIcon: Icon(icon, color: BentoTheme.creamAlpha(0.55)),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: BentoTheme.darkCardAlt,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderSide: BorderSide(color: BentoTheme.accentLime, width: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: BentoTheme.bgLight,
+      backgroundColor: BentoTheme.darkBg,
       appBar: AppBar(
-        backgroundColor: BentoTheme.bgLight,
+        backgroundColor: BentoTheme.darkBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: BentoTheme.textPrimary),
+          icon: const Icon(Icons.close, color: BentoTheme.cream),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           widget.alarm == null ? 'Nueva Alarma' : 'Editar Alarma',
-          style: const TextStyle(
-              color: BentoTheme.textPrimary, fontWeight: FontWeight.w900),
+          style: GoogleFonts.montserrat(
+              color: BentoTheme.cream, fontWeight: FontWeight.w800),
         ),
         actions: [
           if (widget.alarm != null)
@@ -238,9 +266,13 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Hora — único elemento con caja, es el foco principal
-            BentoCard(
+            Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              borderColor: BentoTheme.primaryDark,
+              decoration: BoxDecoration(
+                color: BentoTheme.darkCard,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: BentoTheme.accentLime, width: 1.5),
+              ),
               child: Column(
                 children: [
                   BentoTimePicker(
@@ -256,9 +288,9 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
                       const SizedBox(width: 6),
                       Text(
                         _untilPreview,
-                        style: const TextStyle(
+                        style: GoogleFonts.montserrat(
                           fontSize: 13,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                           color: BentoTheme.accentOrange,
                         ),
                       ),
@@ -279,11 +311,11 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
             const SizedBox(height: 12),
             TextField(
               controller: _objectCtrl,
+              style: const TextStyle(color: BentoTheme.cream),
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                hintText: 'Ej: Taza de café',
-                prefixIcon: Icon(Icons.camera_alt_outlined,
-                    color: BentoTheme.textSecondary),
+              decoration: _darkInputDecoration(
+                hint: 'Ej: Taza de café',
+                icon: Icons.camera_alt_outlined,
               ),
             ),
             const SizedBox(height: 12),
@@ -340,15 +372,17 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: active
-                          ? BentoTheme.primaryDark
-                          : BentoTheme.borderMuted,
+                          ? BentoTheme.accentLime
+                          : BentoTheme.darkCardAlt,
+                      border: active ? null : Border.all(color: BentoTheme.creamAlpha(0.14)),
                     ),
                     child: Center(
                       child: Text(
                         _dayLabels[i],
                         style: TextStyle(
-                          color:
-                              active ? Colors.white : BentoTheme.textSecondary,
+                          color: active
+                              ? const Color(0xFF0C0C0D)
+                              : BentoTheme.creamAlpha(0.55),
                           fontWeight: FontWeight.w900,
                           fontSize: 14,
                         ),
@@ -366,16 +400,16 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
             const SizedBox(height: 12),
             TextField(
               controller: _labelCtrl,
+              style: const TextStyle(color: BentoTheme.cream),
               textCapitalization: TextCapitalization.sentences,
               onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Ej: Despertar mañana',
-                prefixIcon: const Icon(Icons.label_outline,
-                    color: BentoTheme.textSecondary),
+              decoration: _darkInputDecoration(
+                hint: 'Ej: Despertar mañana',
+                icon: Icons.label_outline,
                 suffixIcon: _labelCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear,
-                            size: 18, color: BentoTheme.textSecondary),
+                        icon: Icon(Icons.clear,
+                            size: 18, color: BentoTheme.creamAlpha(0.55)),
                         onPressed: () => setState(() => _labelCtrl.clear()),
                       )
                     : null,
@@ -397,14 +431,17 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 12, 20, 16),
         child: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: BentoTheme.borderMuted)),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: BentoTheme.creamAlpha(0.12))),
           ),
           child: Padding(
             padding: const EdgeInsets.only(top: 12),
             child: ElevatedButton.icon(
               onPressed: _saving ? null : _save,
               style: ElevatedButton.styleFrom(
+                backgroundColor: BentoTheme.accentLime,
+                foregroundColor: const Color(0xFF0C0C0D),
+                elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 18),
               ),
               icon: _saving
@@ -412,12 +449,11 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                          strokeWidth: 2, color: Color(0xFF0C0C0D)))
                   : const Icon(Icons.check),
               label: Text(
                 widget.alarm == null ? 'Crear alarma' : 'Guardar cambios',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                style: GoogleFonts.montserrat(fontSize: 16, fontWeight: FontWeight.w800),
               ),
             ),
           ),

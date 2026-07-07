@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/bento_theme.dart';
 
 enum BlockType {
@@ -455,7 +456,7 @@ class _NotionEditorState extends State<NotionEditor> {
   void _showAddBlockMenu() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -469,22 +470,22 @@ class _NotionEditorState extends State<NotionEditor> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: BentoTheme.borderMuted,
+                  color: BentoTheme.creamAlpha(0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
                   'Añadir elemento Notion',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: BentoTheme.textPrimary,
+                    color: BentoTheme.cream,
                   ),
                 ),
               ),
-              const Divider(color: BentoTheme.borderMuted, height: 1),
+              Divider(color: BentoTheme.creamAlpha(0.18), height: 1),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -519,8 +520,8 @@ class _NotionEditorState extends State<NotionEditor> {
         ),
         child: Icon(icon, color: widget.accentColor, size: 20),
       ),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: BentoTheme.textPrimary)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: BentoTheme.textSecondary)),
+      title: Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: BentoTheme.cream)),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: BentoTheme.creamSecondary)),
       onTap: () {
         Navigator.pop(ctx);
         _insertBlock(type);
@@ -535,7 +536,7 @@ class _NotionEditorState extends State<NotionEditor> {
     
     showModalBottomSheet(
       context: context,
-      backgroundColor: BentoTheme.cardBg,
+      backgroundColor: BentoTheme.darkCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -549,22 +550,22 @@ class _NotionEditorState extends State<NotionEditor> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: BentoTheme.borderMuted,
+                  color: BentoTheme.creamAlpha(0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
                   'Convertir bloque actual a...',
-                  style: TextStyle(
+                  style: GoogleFonts.montserrat(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: BentoTheme.textPrimary,
+                    color: BentoTheme.cream,
                   ),
                 ),
               ),
-              const Divider(color: BentoTheme.borderMuted, height: 1),
+              Divider(color: BentoTheme.creamAlpha(0.18), height: 1),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -594,16 +595,16 @@ class _NotionEditorState extends State<NotionEditor> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isSelected ? widget.accentColor.withOpacity(0.15) : BentoTheme.bgLight,
+          color: isSelected ? widget.accentColor.withOpacity(0.15) : BentoTheme.darkCardAlt,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: isSelected ? widget.accentColor : BentoTheme.textSecondary, size: 20),
+        child: Icon(icon, color: isSelected ? widget.accentColor : BentoTheme.creamSecondary, size: 20),
       ),
       title: Text(
         label,
         style: TextStyle(
           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-          color: isSelected ? widget.accentColor : BentoTheme.textPrimary,
+          color: isSelected ? widget.accentColor : BentoTheme.cream,
           fontSize: 14,
         ),
       ),
@@ -627,19 +628,19 @@ class _NotionEditorState extends State<NotionEditor> {
     switch (block.type) {
       case BlockType.text:
         return _buildTextField(block, index,
-            style: const TextStyle(fontSize: 15, color: BentoTheme.textPrimary, height: 1.5),
+            style: TextStyle(fontSize: 15, color: BentoTheme.cream, height: 1.5),
             hint: 'Escribe algo...');
       case BlockType.heading1:
         return _buildTextField(block, index,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: BentoTheme.textPrimary),
+            style: GoogleFonts.montserrat(fontSize: 22, fontWeight: FontWeight.w900, color: BentoTheme.cream),
             hint: 'Título 1');
       case BlockType.heading2:
         return _buildTextField(block, index,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: BentoTheme.textPrimary),
+            style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.w800, color: BentoTheme.cream),
             hint: 'Título 2');
       case BlockType.heading3:
         return _buildTextField(block, index,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: BentoTheme.textPrimary),
+            style: GoogleFonts.montserrat(fontSize: 15, fontWeight: FontWeight.w700, color: BentoTheme.cream),
             hint: 'Título 3');
       case BlockType.quote:
         return Container(
@@ -648,7 +649,7 @@ class _NotionEditorState extends State<NotionEditor> {
           ),
           padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
           child: _buildTextField(block, index,
-              style: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: BentoTheme.textSecondary, height: 1.5),
+              style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: BentoTheme.creamAlpha(0.6), height: 1.5),
               hint: 'Cita'),
         );
       case BlockType.bulletList:
@@ -660,15 +661,15 @@ class _NotionEditorState extends State<NotionEditor> {
               child: Container(
                 width: 6,
                 height: 6,
-                decoration: const BoxDecoration(
-                  color: BentoTheme.textPrimary,
+                decoration: BoxDecoration(
+                  color: BentoTheme.cream,
                   shape: BoxShape.circle,
                 ),
               ),
             ),
             Expanded(
               child: _buildTextField(block, index,
-                  style: const TextStyle(fontSize: 15, color: BentoTheme.textPrimary, height: 1.5),
+                  style: TextStyle(fontSize: 15, color: BentoTheme.cream, height: 1.5),
                   hint: 'Elemento de lista'),
             ),
           ],
@@ -689,12 +690,12 @@ class _NotionEditorState extends State<NotionEditor> {
               padding: const EdgeInsets.only(top: 4, right: 8, left: 4),
               child: Text(
                 '$itemNumber.',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: BentoTheme.textPrimary),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: BentoTheme.cream),
               ),
             ),
             Expanded(
               child: _buildTextField(block, index,
-                  style: const TextStyle(fontSize: 15, color: BentoTheme.textPrimary, height: 1.5),
+                  style: TextStyle(fontSize: 15, color: BentoTheme.cream, height: 1.5),
                   hint: 'Elemento de lista'),
             ),
           ],
@@ -725,7 +726,7 @@ class _NotionEditorState extends State<NotionEditor> {
               child: _buildTextField(block, index,
                   style: TextStyle(
                     fontSize: 15,
-                    color: block.isChecked ? BentoTheme.textSecondary : BentoTheme.textPrimary,
+                    color: block.isChecked ? BentoTheme.creamAlpha(0.5) : BentoTheme.cream,
                     decoration: block.isChecked ? TextDecoration.lineThrough : null,
                     height: 1.5,
                   ),
@@ -736,9 +737,9 @@ class _NotionEditorState extends State<NotionEditor> {
       case BlockType.code:
         return Container(
           decoration: BoxDecoration(
-            color: BentoTheme.primaryDark.withOpacity(0.04),
+            color: BentoTheme.darkCardAlt,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: BentoTheme.borderMuted, width: 1.5),
+            border: Border.all(color: BentoTheme.creamAlpha(0.18), width: 1.5),
           ),
           padding: const EdgeInsets.all(10),
           child: Column(
@@ -747,19 +748,26 @@ class _NotionEditorState extends State<NotionEditor> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '💻 CÓDIGO',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: BentoTheme.textSecondary.withOpacity(0.8),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.code_rounded, size: 12, color: BentoTheme.creamTertiary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'CÓDIGO',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: BentoTheme.creamTertiary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               _buildTextField(block, index,
-                  style: const TextStyle(fontSize: 13.5, fontFamily: 'monospace', color: BentoTheme.textPrimary),
+                  style: TextStyle(fontSize: 13.5, fontFamily: 'monospace', color: BentoTheme.cream),
                   hint: 'Escribe tu código aquí...'),
             ],
           ),
@@ -823,9 +831,9 @@ class _NotionEditorState extends State<NotionEditor> {
       child: Container(
         margin: const EdgeInsets.only(top: 8, bottom: 8),
         decoration: BoxDecoration(
-          color: BentoTheme.cardBg,
+          color: BentoTheme.darkCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: BentoTheme.borderMuted, width: 2),
+          border: Border.all(color: BentoTheme.creamAlpha(0.20), width: 2),
         ),
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -838,15 +846,15 @@ class _NotionEditorState extends State<NotionEditor> {
                   children: [
                     Icon(Icons.grid_on, size: 16, color: widget.accentColor),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       'TABLA',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: BentoTheme.textPrimary),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: BentoTheme.cream),
                     ),
                   ],
                 ),
                 Text(
                   '${rowsCount}x$colsCount',
-                  style: const TextStyle(fontSize: 11, color: BentoTheme.textSecondary),
+                  style: TextStyle(fontSize: 11, color: BentoTheme.creamSecondary),
                 ),
               ],
             ),
@@ -856,7 +864,7 @@ class _NotionEditorState extends State<NotionEditor> {
               child: Table(
                 defaultColumnWidth: const FixedColumnWidth(100),
                 border: TableBorder.all(
-                  color: BentoTheme.borderMuted,
+                  color: BentoTheme.creamAlpha(0.20),
                   width: 1.5,
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -866,7 +874,7 @@ class _NotionEditorState extends State<NotionEditor> {
 
                   return TableRow(
                     decoration: BoxDecoration(
-                      color: isHeader ? widget.accentColor.withOpacity(0.08) : null,
+                      color: isHeader ? widget.accentColor.withOpacity(0.12) : null,
                     ),
                     children: List.generate(colsCount, (cIndex) {
                       final ctrl = rowCtrls[cIndex];
@@ -877,7 +885,7 @@ class _NotionEditorState extends State<NotionEditor> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-                            color: BentoTheme.textPrimary,
+                            color: BentoTheme.cream,
                           ),
                           maxLines: 1,
                           decoration: const InputDecoration(
@@ -926,16 +934,16 @@ class _NotionEditorState extends State<NotionEditor> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
-          color: BentoTheme.bgLight,
+          color: BentoTheme.darkCardAlt,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: BentoTheme.borderMuted),
+          border: Border.all(color: BentoTheme.creamAlpha(0.20)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 10, color: BentoTheme.textPrimary),
+            Icon(icon, size: 10, color: BentoTheme.cream),
             const SizedBox(width: 2),
-            Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: BentoTheme.textPrimary)),
+            Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: BentoTheme.cream)),
           ],
         ),
       ),
@@ -992,9 +1000,9 @@ class _NotionEditorState extends State<NotionEditor> {
 
   Widget _buildBottomBar() {
     return Container(
-      decoration: const BoxDecoration(
-        color: BentoTheme.cardBg,
-        border: Border(top: BorderSide(color: BentoTheme.borderMuted, width: 1.5)),
+      decoration: BoxDecoration(
+        color: BentoTheme.darkCard,
+        border: Border(top: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5)),
       ),
       padding: EdgeInsets.only(
         left: 12,
@@ -1016,7 +1024,7 @@ class _NotionEditorState extends State<NotionEditor> {
   }
 
   Widget _bottomBarBtn(IconData icon, String label, VoidCallback onTap, {Color? color}) {
-    final finalColor = color ?? BentoTheme.textPrimary;
+    final finalColor = color ?? BentoTheme.cream;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -1050,13 +1058,14 @@ class _NotionEditorState extends State<NotionEditor> {
               // Título de la Nota
               TextField(
                 controller: widget.titleController,
-                style: const TextStyle(
+                style: GoogleFonts.montserrat(
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
-                  color: BentoTheme.textPrimary,
+                  color: BentoTheme.cream,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Sin título',
+                  hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -1067,7 +1076,7 @@ class _NotionEditorState extends State<NotionEditor> {
               const SizedBox(height: 8),
               Container(
                 height: 1.5,
-                color: BentoTheme.borderMuted,
+                color: BentoTheme.creamAlpha(0.18),
               ),
               const SizedBox(height: 16),
               // Lista de bloques editables
@@ -1105,7 +1114,7 @@ class _NotionEditorState extends State<NotionEditor> {
                               size: 16,
                               color: isFocused
                                   ? widget.accentColor
-                                  : BentoTheme.textSecondary.withOpacity(0.3),
+                                  : BentoTheme.creamAlpha(0.25),
                             ),
                           ),
                         ),
