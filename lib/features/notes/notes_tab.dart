@@ -8,10 +8,8 @@ import '../../core/models/note_model.dart';
 import '../../core/models/note_vault_model.dart';
 import '../../core/providers/notes_provider.dart';
 import '../../core/providers/vaults_provider.dart';
-import '../../core/providers/settings_provider.dart';
 import '../../core/providers/vault_provider.dart';
-import '../../core/network/local_ai_client.dart';
-import '../../core/utils/error_snackbar.dart';
+import '../../core/services/knowledge_service.dart';
 import 'notion_editor.dart';
 import 'knowledge_graph_view.dart';
 import '../vault/screens/vault_lock_screen.dart';
@@ -61,7 +59,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
   DateTime? _editRemindAt;
   bool _editSelfDestruct = false;
   bool _suggesting = false;
-  String? _aiSuggestions;
+  List<RelatedNote> _relatedSuggestions = const [];
+
+  // Grafo de conocimiento
+  List<SemanticEdge> _semanticEdges = const [];
 
   // Búsqueda
   final _searchController = TextEditingController();
@@ -230,7 +231,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
       _editPriority = note.priority;
       _editRemindAt = note.remindAt;
       _editSelfDestruct = note.selfDestruct;
-      _aiSuggestions = null;
+      _relatedSuggestions = const [];
       _editorPreviewMode = false;
     });
   }
@@ -709,52 +710,34 @@ class _NotesTabState extends ConsumerState<NotesTab>
     return result;
   }
 
-  // ─── AI suggestions ───────────────────────────────
+  // ─── Conexiones sugeridas por embeddings ──────────
 
-  Future<void> _suggestConnectionsWithAI() async {
-    final title = _titleController.text.trim();
-    final content = _contentController.text.trim();
-    if (title.isEmpty) return;
+  /// Carga notas relacionadas semánticamente a la nota en edición.
+  /// Usa el embedding ya almacenado de la nota; si aún no existe (nota nueva
+  /// o servidor de IA caído al guardarla), embebe el texto actual como
+  /// consulta de búsqueda semántica.
+  Future<void> _loadRelatedSuggestions() async {
+    final service = ref.read(knowledgeServiceProvider);
+    final noteId = _editingNote?.id;
 
-    setState(() {
-      _suggesting = true;
-      _aiSuggestions = null;
-    });
-
-    final notes =
-        ref.read(notesProvider).where((n) => n.id != _editingNote?.id).toList();
-    final settings = ref.read(settingsProvider);
-
-    final buffer = StringBuffer();
-    buffer.writeln(
-        'Nota Actual:\nTítulo: "$title"\nContenido: "$content"\n\nOtras Notas Existentes:');
-    for (var n in notes) {
-      buffer.writeln(
-          '- ID: ${n.id}, Título: "${n.title}", Resumen: "${n.content.take(60)}..."');
+    var results = <RelatedNote>[];
+    if (noteId != null) {
+      results = await service.relatedTo(noteId);
     }
-    buffer.writeln(
-        '\nAnaliza semánticamente si la Nota Actual se relaciona con alguna de las Notas Existentes. Responde listando los Títulos relacionados y explica brevemente por qué.');
-
-    try {
-      final client = LocalAIClient(
-        baseUrl: settings.localAiUrl,
-        textModelName: settings.textModel,
-      );
-
-      final response = await client.askText(
-        buffer.toString(),
-        systemPrompt:
-            'Eres un analista de conocimiento y tu tarea es encontrar conexiones lógicas en un Segundo Cerebro. Sé conciso y responde en español.',
-      );
-
-      if (mounted) setState(() => _aiSuggestions = response);
-    } catch (e) {
-      if (mounted) {
-        showErrorSnackBar(context, message: 'Error al conectar con IA Local: $e');
+    if (results.isEmpty) {
+      final text =
+          '${_titleController.text.trim()}\n\n${_contentController.text.trim()}'
+              .trim();
+      if (text.isNotEmpty) {
+        results = await service.semanticSearch(
+          text,
+          threshold: KnowledgeService.relatedThreshold,
+          count: 8,
+          excludeId: noteId,
+        );
       }
-    } finally {
-      if (mounted) setState(() => _suggesting = false);
     }
+    _relatedSuggestions = results.where((r) => r.id != noteId).toList();
   }
 
   // ─── BUILD ────────────────────────────────────────
@@ -1149,7 +1132,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     _buildHeaderActionPill(
                       icon: Icons.hub_outlined,
                       label: 'Grafo',
-                      onPressed: () => setState(() => _view = _NotesView.graph),
+                      onPressed: _openGraph,
                     ),
                     const SizedBox(width: 10),
                     _buildHeaderActionPill(
@@ -1802,6 +1785,20 @@ class _NotesTabState extends ConsumerState<NotesTab>
   }
 
   void _showEditorOptionsSheet(BuildContext context, List<Note> allNotes) {
+    // Cargar sugerencias semánticas en segundo plano al abrir el sheet
+    StateSetter? modalSetState;
+    _suggesting = true;
+    _relatedSuggestions = const [];
+    _loadRelatedSuggestions().whenComplete(() {
+      _suggesting = false;
+      if (mounted) setState(() {});
+      try {
+        modalSetState?.call(() {});
+      } catch (_) {
+        // El sheet ya se cerró
+      }
+    });
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1812,6 +1809,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx2, setModalState) {
+            modalSetState = setModalState;
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               constraints: BoxConstraints(
@@ -2133,7 +2131,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                           ),
                         const SizedBox(height: 24),
 
-                        // IA Suggestions
+                        // Conexiones sugeridas por similitud semántica (embeddings)
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -2153,7 +2151,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                       color: BentoTheme.accentPurple, size: 20),
                                   const SizedBox(width: 8),
                                   const Text(
-                                    'Copiloto de Conexiones IA',
+                                    'Conexiones sugeridas',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w800,
@@ -2174,10 +2172,8 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                     TextButton(
                                       onPressed: () async {
                                         setModalState(() => _suggesting = true);
-                                        await _suggestConnectionsWithAI();
-                                        setModalState(() {
-                                          _suggesting = false;
-                                        });
+                                        await _loadRelatedSuggestions();
+                                        setModalState(() => _suggesting = false);
                                       },
                                       style: TextButton.styleFrom(
                                         padding: EdgeInsets.zero,
@@ -2185,31 +2181,102 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
                                       child: const Text(
-                                        'Analizar',
+                                        'Actualizar',
                                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                       ),
                                     ),
                                 ],
                               ),
-                              if (_aiSuggestions != null) ...[
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: BentoTheme.darkCard,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: BentoTheme.creamAlpha(0.18)),
+                              const SizedBox(height: 10),
+                              if (!_suggesting && _relatedSuggestions.isEmpty)
+                                Text(
+                                  'Sin notas relacionadas por ahora. Las conexiones se descubren automáticamente a medida que guardas notas con contenido.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: BentoTheme.creamSecondary,
+                                    height: 1.45,
                                   ),
-                                  child: Text(
-                                    _aiSuggestions!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: BentoTheme.cream,
-                                      height: 1.45,
-                                    ),
-                                  ),
+                                )
+                              else
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _relatedSuggestions.map((s) {
+                                    final linked = _selectedLinks.contains(s.id);
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          if (linked) {
+                                            _selectedLinks.remove(s.id);
+                                          } else {
+                                            _selectedLinks.add(s.id);
+                                          }
+                                        });
+                                        setModalState(() {});
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 7),
+                                        decoration: BoxDecoration(
+                                          color: linked
+                                              ? BentoTheme.accentPurple
+                                                  .withValues(alpha: 0.18)
+                                              : BentoTheme.darkCard,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: linked
+                                                ? BentoTheme.accentPurple
+                                                : BentoTheme.creamAlpha(0.22),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              linked
+                                                  ? Icons.link
+                                                  : Icons.add_link_rounded,
+                                              size: 15,
+                                              color: linked
+                                                  ? BentoTheme.accentPurple
+                                                  : BentoTheme.creamSecondary,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            ConstrainedBox(
+                                              constraints:
+                                                  const BoxConstraints(maxWidth: 140),
+                                              child: Text(
+                                                s.title.isEmpty
+                                                    ? 'Sin título'
+                                                    : s.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: linked
+                                                      ? BentoTheme.accentPurple
+                                                      : BentoTheme.cream,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              '${(s.similarity * 100).round()}%',
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: BentoTheme.accentPurple
+                                                    .withValues(alpha: 0.85),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
-                              ],
                             ],
                           ),
                         ),
@@ -2249,6 +2316,23 @@ class _NotesTabState extends ConsumerState<NotesTab>
   // ─────────────────────────────────────────────────────
   //  PANTALLA 4: GRAFO
   // ─────────────────────────────────────────────────────
+
+  /// Abre el grafo y carga las aristas semánticas: primero el caché local
+  /// (render instantáneo) y luego el servidor (datos frescos).
+  void _openGraph() {
+    setState(() => _view = _NotesView.graph);
+    final service = ref.read(knowledgeServiceProvider);
+    service.cachedEdges().then((cached) {
+      if (mounted && cached.isNotEmpty && _semanticEdges.isEmpty) {
+        setState(() => _semanticEdges = cached);
+      }
+    });
+    service.fetchEdges().then((fresh) {
+      if (mounted) setState(() => _semanticEdges = fresh);
+    }).catchError((_) {
+      // Sin conexión: el grafo funciona con caché + enlaces manuales
+    });
+  }
 
   Widget _buildGraphScreen() {
     final notes = ref.watch(notesProvider);
@@ -2295,7 +2379,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
             child: KnowledgeGraphView(
               notes: notes,
               vaults: ref.watch(vaultsProvider),
+              semanticEdges: _semanticEdges,
               onOpenNote: _openEditor,
+              onLinkNotes: (id1, id2) =>
+                  ref.read(notesProvider.notifier).linkNotes(id1, id2),
+              onSemanticSearch: (query) =>
+                  ref.read(knowledgeServiceProvider).semanticSearch(query),
             ),
           ),
         ),

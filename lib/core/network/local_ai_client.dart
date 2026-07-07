@@ -126,6 +126,65 @@ class LocalAIClient {
     }
   }
 
+  /// Envía una consulta de texto y retorna la respuesta como stream de tokens
+  /// (API de Ollama con stream:true, formato NDJSON — una línea JSON por chunk).
+  /// Si el streaming falla antes de emitir algo, cae al modo no-streaming
+  /// ([askText]) y emite la respuesta completa de una vez.
+  Stream<String> askTextStream(String prompt, {String? systemPrompt}) async* {
+    var emitted = false;
+    try {
+      await for (final token in _streamOllama(prompt, systemPrompt: systemPrompt)) {
+        emitted = true;
+        yield token;
+      }
+    } catch (e) {
+      if (emitted) rethrow;
+      // Fallback: respuesta completa sin streaming (incluye fallback OpenAI)
+      yield await askText(prompt, systemPrompt: systemPrompt);
+    }
+  }
+
+  Stream<String> _streamOllama(String prompt, {String? systemPrompt}) async* {
+    final client = http.Client();
+    try {
+      final request = http.Request('POST', Uri.parse('$baseUrl/api/chat'))
+        ..headers['Content-Type'] = 'application/json'
+        ..body = jsonEncode({
+          'model': textModelName,
+          'messages': [
+            if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': prompt}
+          ],
+          'stream': true,
+          'keep_alive': '30m',
+          'options': {'num_predict': 600},
+        });
+
+      final response = await client.send(request).timeout(
+            const Duration(seconds: 30),
+            onTimeout: () =>
+                throw Exception('El servidor de IA no respondió (30s).'),
+          );
+
+      if (response.statusCode != 200) {
+        throw Exception('Servidor retornó código: ${response.statusCode}');
+      }
+
+      final lines = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+      await for (final line in lines) {
+        if (line.trim().isEmpty) continue;
+        final data = jsonDecode(line);
+        final content = data['message']?['content'];
+        if (content is String && content.isNotEmpty) yield content;
+        if (data['done'] == true) break;
+      }
+    } finally {
+      client.close();
+    }
+  }
+
   /// Genera el embedding de un texto con el modelo de embeddings local (bge-m3).
   /// Retorna un vector de 1024 dimensiones.
   Future<List<double>> embed(String text) async {
