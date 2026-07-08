@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+
 import '../../core/theme/bento_theme.dart';
 import '../../core/models/habit_model.dart';
 import '../../core/providers/habits_provider.dart';
@@ -36,9 +36,31 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   bool _analyzing = false;
   String? _aiFeedback;
 
-  List<DateTime> _getLast7Days() {
+  List<DateTime> _getCurrentWeekDays() {
     final today = _dateOnly(DateTime.now());
-    return List.generate(7, (index) => today.subtract(Duration(days: 6 - index)));
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    return List.generate(7, (index) => monday.add(Duration(days: index)));
+  }
+
+  String _getWeekdayLetter(DateTime day) {
+    switch (day.weekday) {
+      case 1:
+        return 'L';
+      case 2:
+        return 'M';
+      case 3:
+        return 'M';
+      case 4:
+        return 'J';
+      case 5:
+        return 'V';
+      case 6:
+        return 'S';
+      case 7:
+        return 'D';
+      default:
+        return '';
+    }
   }
 
   Future<void> _analyzeHabitsWithAI(List<Habit> habits) async {
@@ -77,7 +99,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   @override
   Widget build(BuildContext context) {
     final habits = ref.watch(habitsProvider);
-    final days = _getLast7Days();
+    final days = _getCurrentWeekDays();
     final today = _dateOnly(DateTime.now());
 
     final activeToday = habits.where((h) => h.isActiveOn(today)).toList();
@@ -537,7 +559,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         child: Column(
                           children: [
                             Text(
-                              DateFormat('E').format(day).substring(0, 1).toUpperCase(),
+                              _getWeekdayLetter(day),
                               style: GoogleFonts.montserrat(
                                 fontSize: 10,
                                 letterSpacing: 0.8,
@@ -668,7 +690,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     child: Column(
                       children: [
                         Text(
-                          DateFormat('E').format(day).substring(0, 1).toUpperCase(),
+                          _getWeekdayLetter(day),
                           style: GoogleFonts.montserrat(
                             fontSize: 9,
                             letterSpacing: 0.8,

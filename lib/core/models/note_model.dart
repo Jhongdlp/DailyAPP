@@ -29,6 +29,12 @@ class Note {
   final DateTime? createdAt;
   final String? vaultId;   // ID de la bóveda a la que pertenece (null = Sin clasificar)
 
+  // Campos para recordatorio por rango de días
+  final DateTime? reminderStartDate;
+  final DateTime? reminderEndDate;
+  final int? reminderHour;
+  final int? reminderMinute;
+
   Note({
     required this.id,
     required this.title,
@@ -39,13 +45,44 @@ class Note {
     this.selfDestruct = false,
     this.createdAt,
     this.vaultId,
+    this.reminderStartDate,
+    this.reminderEndDate,
+    this.reminderHour,
+    this.reminderMinute,
   });
 
-  bool get isReminderPending =>
-      remindAt != null && remindAt!.isAfter(DateTime.now());
+  static final RegExp _reminderRegExp = RegExp(r'<!--reminder_range:([^|]+)\|([^|]+)\|(\d+)\|(\d+)-->');
+
+  bool get hasRangeReminder =>
+      reminderStartDate != null && reminderEndDate != null && reminderHour != null && reminderMinute != null;
+
+  bool get isReminderPending {
+    final now = DateTime.now();
+    if (remindAt != null && remindAt!.isAfter(now)) return true;
+    if (hasRangeReminder) {
+      final lastScheduledTime = DateTime(
+        reminderEndDate!.year,
+        reminderEndDate!.month,
+        reminderEndDate!.day,
+        reminderHour!,
+        reminderMinute!,
+      );
+      if (lastScheduledTime.isAfter(now)) return true;
+    }
+    return false;
+  }
 
   bool get isExpired =>
       selfDestruct && remindAt != null && remindAt!.isBefore(DateTime.now());
+
+  String get _serializedContent {
+    if (hasRangeReminder) {
+      final startStr = reminderStartDate!.toIso8601String();
+      final endStr = reminderEndDate!.toIso8601String();
+      return '$content\n\n<!--reminder_range:$startStr|$endStr|$reminderHour|$reminderMinute-->';
+    }
+    return content;
+  }
 
   Note copyWith({
     String? id,
@@ -59,6 +96,11 @@ class Note {
     DateTime? createdAt,
     String? vaultId,
     bool clearVaultId = false,
+    DateTime? reminderStartDate,
+    DateTime? reminderEndDate,
+    int? reminderHour,
+    int? reminderMinute,
+    bool clearRangeReminder = false,
   }) {
     return Note(
       id: id ?? this.id,
@@ -70,14 +112,35 @@ class Note {
       selfDestruct: selfDestruct ?? this.selfDestruct,
       createdAt: createdAt ?? this.createdAt,
       vaultId: clearVaultId ? null : (vaultId ?? this.vaultId),
+      reminderStartDate: clearRangeReminder ? null : (reminderStartDate ?? this.reminderStartDate),
+      reminderEndDate: clearRangeReminder ? null : (reminderEndDate ?? this.reminderEndDate),
+      reminderHour: clearRangeReminder ? null : (reminderHour ?? this.reminderHour),
+      reminderMinute: clearRangeReminder ? null : (reminderMinute ?? this.reminderMinute),
     );
   }
 
   factory Note.fromJson(Map<String, dynamic> json) {
+    final rawContent = json['content'] as String? ?? '';
+    
+    DateTime? startDate;
+    DateTime? endDate;
+    int? hour;
+    int? minute;
+    String cleanContent = rawContent;
+
+    final match = _reminderRegExp.firstMatch(rawContent);
+    if (match != null) {
+      startDate = DateTime.tryParse(match.group(1)!);
+      endDate = DateTime.tryParse(match.group(2)!);
+      hour = int.tryParse(match.group(3)!);
+      minute = int.tryParse(match.group(4)!);
+      cleanContent = rawContent.replaceAll(_reminderRegExp, '').trim();
+    }
+
     return Note(
       id: json['id'] as String,
       title: json['title'] as String,
-      content: json['content'] as String? ?? '',
+      content: cleanContent,
       linkedNoteIds: List<String>.from(json['linked_note_ids'] as List? ?? []),
       priority: NotePriority.fromValue(json['priority'] as int?),
       remindAt: json['remind_at'] != null
@@ -88,13 +151,17 @@ class Note {
           ? DateTime.parse(json['created_at'] as String).toLocal()
           : null,
       vaultId: json['vault_id'] as String?,
+      reminderStartDate: startDate,
+      reminderEndDate: endDate,
+      reminderHour: hour,
+      reminderMinute: minute,
     );
   }
 
   Map<String, dynamic> toInsertJson(String userId, List<String> validLinkIds) => {
         'user_id': userId,
         'title': title,
-        'content': content,
+        'content': _serializedContent,
         'linked_note_ids': validLinkIds,
         'priority': priority.value,
         'remind_at': remindAt?.toUtc().toIso8601String(),
@@ -105,7 +172,7 @@ class Note {
   Map<String, dynamic> toCacheJson() => {
         'id': id,
         'title': title,
-        'content': content,
+        'content': _serializedContent,
         'linked_note_ids': linkedNoteIds,
         'priority': priority.value,
         'remind_at': remindAt?.toIso8601String(),
@@ -116,3 +183,4 @@ class Note {
 
   factory Note.fromCacheJson(Map<String, dynamic> json) => Note.fromJson(json);
 }
+

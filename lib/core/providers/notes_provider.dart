@@ -164,6 +164,10 @@ class NotesNotifier extends Notifier<List<Note>> {
     DateTime? remindAt,
     bool selfDestruct = false,
     String? vaultId,
+    DateTime? reminderStartDate,
+    DateTime? reminderEndDate,
+    int? reminderHour,
+    int? reminderMinute,
   }) async {
     final draft = Note(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -175,6 +179,10 @@ class NotesNotifier extends Notifier<List<Note>> {
       selfDestruct: selfDestruct,
       createdAt: DateTime.now(),
       vaultId: vaultId,
+      reminderStartDate: reminderStartDate,
+      reminderEndDate: reminderEndDate,
+      reminderHour: reminderHour,
+      reminderMinute: reminderMinute,
     );
 
     Note saved = draft;
@@ -214,6 +222,11 @@ class NotesNotifier extends Notifier<List<Note>> {
     bool? selfDestruct,
     String? vaultId,
     bool clearVaultId = false,
+    DateTime? reminderStartDate,
+    DateTime? reminderEndDate,
+    int? reminderHour,
+    int? reminderMinute,
+    bool clearRangeReminder = false,
   }) async {
     final noteIndex = state.indexWhere((n) => n.id == id);
     if (noteIndex == -1) return;
@@ -228,6 +241,11 @@ class NotesNotifier extends Notifier<List<Note>> {
       selfDestruct: selfDestruct,
       vaultId: vaultId,
       clearVaultId: clearVaultId,
+      reminderStartDate: reminderStartDate,
+      reminderEndDate: reminderEndDate,
+      reminderHour: reminderHour,
+      reminderMinute: reminderMinute,
+      clearRangeReminder: clearRangeReminder,
     );
 
     state = _sorted([
@@ -247,7 +265,7 @@ class NotesNotifier extends Notifier<List<Note>> {
         final validUuids = linkedNoteIds.where(_uuidRegex.hasMatch).toList();
         await Supabase.instance.client.from('notes').update({
           'title': title,
-          'content': content,
+          'content': updatedNote._serializedContent,
           'linked_note_ids': validUuids,
           'priority': updatedNote.priority.value,
           'remind_at': updatedNote.remindAt?.toUtc().toIso8601String(),

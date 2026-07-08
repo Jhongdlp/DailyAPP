@@ -114,6 +114,79 @@ class BentoTheme {
       ),
     );
   }
+
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      primaryColor: primaryDark,
+      scaffoldBackgroundColor: darkBg,
+      canvasColor: darkBg,
+      cardColor: darkCard,
+      dialogTheme: const DialogTheme(
+        backgroundColor: darkCard,
+        surfaceTintColor: Colors.transparent,
+      ),
+      colorScheme: const ColorScheme.dark(
+        primary: primaryDark,
+        secondary: accentBlue,
+        surface: darkCard,
+        error: errorRed,
+      ),
+      textTheme: GoogleFonts.outfitTextTheme(
+        ThemeData.dark().textTheme.copyWith(
+          titleLarge: const TextStyle(fontWeight: FontWeight.bold, color: cream),
+          titleMedium: const TextStyle(fontWeight: FontWeight.w600, color: cream),
+          titleSmall: const TextStyle(fontWeight: FontWeight.w600, color: cream),
+          bodyLarge: const TextStyle(color: cream),
+          bodyMedium: TextStyle(color: creamSecondary),
+          bodySmall: TextStyle(color: creamSecondary),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkCardAlt,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: creamAlpha(0.20), width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: creamAlpha(0.20), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: accentLime, width: 2),
+        ),
+        labelStyle: TextStyle(color: creamSecondary),
+        hintStyle: TextStyle(color: creamTertiary),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryDark,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cream,
+          side: BorderSide(color: creamAlpha(0.20), width: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+    );
+  }
 }
 
 /// Contenedor Bento para estructurar la UI en bloques limpios y planos

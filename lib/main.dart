@@ -249,17 +249,18 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
     if (_initializing) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: BentoTheme.lightTheme,
+        theme: BentoTheme.darkTheme,
         navigatorKey: navigatorKey,
         home: const BentoBackground(
+          backgroundColor: BentoTheme.darkBg,
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.widgets_outlined,
-                    size: 64, color: BentoTheme.primaryDark),
+                    size: 64, color: BentoTheme.cream),
                 SizedBox(height: 16),
-                CircularProgressIndicator(color: BentoTheme.primaryDark),
+                CircularProgressIndicator(color: BentoTheme.cream),
               ],
             ),
           ),
@@ -273,7 +274,7 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
     return MaterialApp(
       title: 'SistemDaily',
       debugShowCheckedModeBanner: false,
-      theme: BentoTheme.lightTheme,
+      theme: BentoTheme.darkTheme,
       navigatorKey: navigatorKey,
       home: homeWidget,
     );

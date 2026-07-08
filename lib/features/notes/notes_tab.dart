@@ -58,6 +58,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
   NotePriority _editPriority = NotePriority.normal;
   DateTime? _editRemindAt;
   bool _editSelfDestruct = false;
+  DateTime? _editReminderStartDate;
+  DateTime? _editReminderEndDate;
+  int? _editReminderHour;
+  int? _editReminderMinute;
   bool _suggesting = false;
   List<RelatedNote> _relatedSuggestions = const [];
 
@@ -231,6 +235,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
       _editPriority = note.priority;
       _editRemindAt = note.remindAt;
       _editSelfDestruct = note.selfDestruct;
+      _editReminderStartDate = note.reminderStartDate;
+      _editReminderEndDate = note.reminderEndDate;
+      _editReminderHour = note.reminderHour;
+      _editReminderMinute = note.reminderMinute;
       _relatedSuggestions = const [];
       _editorPreviewMode = false;
     });
@@ -534,6 +542,11 @@ class _NotesTabState extends ConsumerState<NotesTab>
           clearRemindAt: _editRemindAt == null,
           selfDestruct: _editSelfDestruct && _editRemindAt != null,
           vaultId: _editingNote!.vaultId,
+          reminderStartDate: _editReminderStartDate,
+          reminderEndDate: _editReminderEndDate,
+          reminderHour: _editReminderHour,
+          reminderMinute: _editReminderMinute,
+          clearRangeReminder: _editReminderStartDate == null,
         );
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -708,6 +721,105 @@ class _NotesTabState extends ConsumerState<NotesTab>
       },
     );
     return result;
+  }
+
+  Future<void> _pickRangeReminder(StateSetter setModalState) async {
+    final now = DateTime.now();
+    
+    final initialRange = _editReminderStartDate != null && _editReminderEndDate != null
+        ? DateTimeRange(start: _editReminderStartDate!, end: _editReminderEndDate!)
+        : null;
+
+    final pickedRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 365)),
+      initialDateRange: initialRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: BentoTheme.accentBrain,
+              onPrimary: Color(0xFF0C0C0D),
+              surface: BentoTheme.darkBg,
+              onSurface: BentoTheme.cream,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedRange == null || !pickedRange.start.isBefore(pickedRange.end.add(const Duration(days: 1))) || !mounted) return;
+
+    final initialTime = _editReminderHour != null && _editReminderMinute != null
+        ? TimeOfDay(hour: _editReminderHour!, minute: _editReminderMinute!)
+        : TimeOfDay.fromDateTime(now);
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: BentoTheme.accentBrain,
+              onPrimary: Color(0xFF0C0C0D),
+              surface: BentoTheme.darkBg,
+              onSurface: BentoTheme.cream,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedTime == null) return;
+
+    setState(() {
+      _editReminderStartDate = pickedRange.start;
+      _editReminderEndDate = pickedRange.end;
+      _editReminderHour = pickedTime.hour;
+      _editReminderMinute = pickedTime.minute;
+      _editRemindAt = null; // Quitar recordatorio único si se pone rango
+    });
+
+    setModalState(() {
+      _editReminderStartDate = pickedRange.start;
+      _editReminderEndDate = pickedRange.end;
+      _editReminderHour = pickedTime.hour;
+      _editReminderMinute = pickedTime.minute;
+      _editRemindAt = null;
+    });
+  }
+
+  void _clearRangeReminder(StateSetter setModalState) {
+    setState(() {
+      _editReminderStartDate = null;
+      _editReminderEndDate = null;
+      _editReminderHour = null;
+      _editReminderMinute = null;
+    });
+    setModalState(() {
+      _editReminderStartDate = null;
+      _editReminderEndDate = null;
+      _editReminderHour = null;
+      _editReminderMinute = null;
+    });
+  }
+
+  String _formatRangeReminder() {
+    if (_editReminderStartDate == null ||
+        _editReminderEndDate == null ||
+        _editReminderHour == null ||
+        _editReminderMinute == null) {
+      return 'Agregar recordatorio por rango';
+    }
+    final startFmt = '${_editReminderStartDate!.day}/${_editReminderStartDate!.month}';
+    final endFmt = '${_editReminderEndDate!.day}/${_editReminderEndDate!.month}';
+    final hourFmt = _editReminderHour!.toString().padLeft(2, '0');
+    final minuteFmt = _editReminderMinute!.toString().padLeft(2, '0');
+    return 'Del $startFmt al $endFmt a las $hourFmt:$minuteFmt';
   }
 
   // ─── Conexiones sugeridas por embeddings ──────────
@@ -2031,6 +2143,72 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             ),
                           ),
                         ],
+                        const SizedBox(height: 24),
+
+                        // Recordatorio por rango de fechas
+                        Text(
+                          'Recordatorio por rango de fechas',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: BentoTheme.creamSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () => _pickRangeReminder(setModalState),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: _editReminderStartDate != null
+                                  ? BentoTheme.accentBrain.withValues(alpha: 0.14)
+                                  : BentoTheme.darkCardAlt,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _editReminderStartDate != null
+                                    ? BentoTheme.accentBrain
+                                    : BentoTheme.creamAlpha(0.20),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.date_range_outlined,
+                                    color: _editReminderStartDate != null
+                                        ? BentoTheme.accentBrain
+                                        : BentoTheme.creamSecondary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _formatRangeReminder(),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                      color: _editReminderStartDate != null
+                                          ? BentoTheme.accentBrain
+                                          : BentoTheme.cream,
+                                    ),
+                                  ),
+                                ),
+                                if (_editReminderStartDate != null)
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      _clearRangeReminder(setModalState);
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 4),
+                                      child: Icon(Icons.close,
+                                          size: 16, color: BentoTheme.errorRed),
+                                    ),
+                                  )
+                                else
+                                  Icon(Icons.chevron_right,
+                                      size: 16, color: BentoTheme.creamSecondary),
+                              ],
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 24),
 
                         // Conexiones manuales
