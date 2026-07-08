@@ -75,7 +75,7 @@ class Note {
   bool get isExpired =>
       selfDestruct && remindAt != null && remindAt!.isBefore(DateTime.now());
 
-  String get _serializedContent {
+  String get serializedContent {
     if (hasRangeReminder) {
       final startStr = reminderStartDate!.toIso8601String();
       final endStr = reminderEndDate!.toIso8601String();
@@ -161,7 +161,7 @@ class Note {
   Map<String, dynamic> toInsertJson(String userId, List<String> validLinkIds) => {
         'user_id': userId,
         'title': title,
-        'content': _serializedContent,
+        'content': serializedContent,
         'linked_note_ids': validLinkIds,
         'priority': priority.value,
         'remind_at': remindAt?.toUtc().toIso8601String(),
@@ -172,7 +172,7 @@ class Note {
   Map<String, dynamic> toCacheJson() => {
         'id': id,
         'title': title,
-        'content': _serializedContent,
+        'content': serializedContent,
         'linked_note_ids': linkedNoteIds,
         'priority': priority.value,
         'remind_at': remindAt?.toIso8601String(),

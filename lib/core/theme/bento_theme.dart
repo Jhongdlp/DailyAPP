@@ -123,7 +123,7 @@ class BentoTheme {
       scaffoldBackgroundColor: darkBg,
       canvasColor: darkBg,
       cardColor: darkCard,
-      dialogTheme: const DialogTheme(
+      dialogTheme: const DialogThemeData(
         backgroundColor: darkCard,
         surfaceTintColor: Colors.transparent,
       ),

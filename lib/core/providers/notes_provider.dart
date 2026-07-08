@@ -265,7 +265,7 @@ class NotesNotifier extends Notifier<List<Note>> {
         final validUuids = linkedNoteIds.where(_uuidRegex.hasMatch).toList();
         await Supabase.instance.client.from('notes').update({
           'title': title,
-          'content': updatedNote._serializedContent,
+          'content': updatedNote.serializedContent,
           'linked_note_ids': validUuids,
           'priority': updatedNote.priority.value,
           'remind_at': updatedNote.remindAt?.toUtc().toIso8601String(),
