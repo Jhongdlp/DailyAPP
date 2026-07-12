@@ -73,6 +73,7 @@ class HabitReminderService {
         category: AndroidNotificationCategory.reminder,
         playSound: true,
         enableVibration: true,
+        icon: AlarmService.notificationIcon,
         actions: actions,
       ),
     );

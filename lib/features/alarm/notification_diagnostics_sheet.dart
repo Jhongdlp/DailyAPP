@@ -86,6 +86,23 @@ class _NotificationDiagnosticsSheetState
                 ),
               )
             else ...[
+              if (d.initError != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: BentoTheme.errorRed.withValues(alpha: 0.85),
+                  ),
+                  child: Text(
+                    'El plugin de notificaciones no se inicializó. Ninguna '
+                    'notificación puede mostrarse:\n\n${d.initError}',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               _CheckRow(
                 label: 'Notificaciones permitidas',
                 ok: d.notificationsEnabled,

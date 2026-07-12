@@ -42,6 +42,7 @@ class NoteReminderService {
           category: AndroidNotificationCategory.reminder,
           playSound: true,
           enableVibration: true,
+          icon: AlarmService.notificationIcon,
           styleInformation: BigTextStyleInformation(note.content),
         ),
       );

@@ -14,8 +14,18 @@ class AlarmService {
   static const habitsChannelId = 'sistdaily_habits_v1';
   static const testChannelId = 'sistdaily_test_v1';
 
+  /// Nombre del drawable (res/drawable/notification_icon.png) usado como icono
+  /// pequeño. Se pasa explícitamente en cada notificación para no depender de
+  /// que `initialize()` haya conseguido persistir el icono por defecto.
+  static const notificationIcon = 'notification_icon';
+
   /// Última zona horaria resuelta, para el panel de diagnóstico.
   static String timezoneName = 'desconocida';
+
+  /// Error de `initialize()`, si lo hubo. Un fallo aquí deja TODAS las
+  /// notificaciones muertas, así que se expone en el diagnóstico en vez de
+  /// quedarse en un debugPrint que nadie ve.
+  static String? initError;
 
   static AndroidFlutterLocalNotificationsPlugin? get _androidImpl => _plugin
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -47,14 +57,22 @@ class AlarmService {
     }
 
     try {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      // OJO: debe ser un drawable, sin prefijo `@mipmap/`. El plugin resuelve
+      // el icono con getIdentifier(name, "drawable", pkg), que sólo mira en
+      // res/drawable. Con '@mipmap/ic_launcher' la validación fallaba, initialize()
+      // devolvía INVALID_ICON y no guardaba el icono por defecto; luego cada
+      // notificación petaba con un NPE dentro de setSmallIcon y no se mostraba
+      // NINGUNA notificación en toda la app.
+      const androidSettings = AndroidInitializationSettings(notificationIcon);
       const initSettings = InitializationSettings(android: androidSettings);
 
       await _plugin.initialize(
         initSettings,
         onDidReceiveNotificationResponse: onNotificationTap,
       );
+      initError = null;
     } catch (e) {
+      initError = '$e';
       debugPrint('AlarmService: plugin.initialize falló: $e');
     }
 
@@ -266,6 +284,7 @@ class AlarmService {
     }
 
     return NotificationDiagnostics(
+      initError: initError,
       notificationsEnabled: await areNotificationsEnabled(),
       exactAlarmsAllowed: await canScheduleExactAlarms(),
       timezone: timezoneName,
@@ -285,6 +304,7 @@ class AlarmService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+      icon: notificationIcon,
     ),
   );
 
@@ -364,6 +384,7 @@ class AlarmService {
 }
 
 class NotificationDiagnostics {
+  final String? initError;
   final bool notificationsEnabled;
   final bool exactAlarmsAllowed;
   final String timezone;
@@ -373,6 +394,7 @@ class NotificationDiagnostics {
   final int scheduledAlarms;
 
   const NotificationDiagnostics({
+    required this.initError,
     required this.notificationsEnabled,
     required this.exactAlarmsAllowed,
     required this.timezone,
