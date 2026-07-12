@@ -47,6 +47,77 @@ class LockTaskService {
     }
   }
 
+  /// Muestra (o deja de mostrar) la app por encima de la pantalla de bloqueo.
+  /// Se activa mientras suena una alarma para poder tomar la foto sin
+  /// desbloquear el teléfono, y se desactiva al salir.
+  static Future<bool> showOverLockscreen(bool show) async {
+    if (!_isAndroid) return false;
+    try {
+      final ok = await _channel
+          .invokeMethod<bool>('showOverLockscreen', {'show': show});
+      return ok ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('LockTaskService.showOverLockscreen error: ${e.message}');
+      return false;
+    }
+  }
+
+  static Future<bool> hasCameraPermission() async {
+    if (!_isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('hasCameraPermission') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Pide el permiso de cámara. Debe llamarse ANTES de fijar la pantalla:
+  /// en modo lock task Android no muestra los diálogos de permisos.
+  static Future<bool> requestCameraPermission() async {
+    if (!_isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('requestCameraPermission') ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('LockTaskService.requestCameraPermission error: ${e.message}');
+      return false;
+    }
+  }
+
+  static Future<bool> isIgnoringBatteryOptimizations() async {
+    if (!_isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ?? true;
+    } on PlatformException {
+      return true;
+    }
+  }
+
+  /// Abre el diálogo del sistema para excluir la app del ahorro de batería.
+  /// Sin esto, muchas ROMs matan los recordatorios programados.
+  static Future<bool> requestIgnoreBatteryOptimizations() async {
+    if (!_isAndroid) return false;
+    try {
+      final ok = await _channel
+          .invokeMethod<bool>('requestIgnoreBatteryOptimizations');
+      return ok ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('LockTaskService.requestIgnoreBatteryOptimizations error: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Abre la ficha de la app en los ajustes del sistema (para reactivar
+  /// permisos denegados de forma permanente, como la cámara).
+  static Future<bool> openAppSettings() async {
+    if (!_isAndroid) return false;
+    try {
+      return await _channel.invokeMethod<bool>('openAppSettings') ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('LockTaskService.openAppSettings error: ${e.message}');
+      return false;
+    }
+  }
+
   /// Abre la pantalla de ajustes de notificaciones de la app en el sistema.
   static Future<bool> openNotificationSettings() async {
     if (!_isAndroid) return false;

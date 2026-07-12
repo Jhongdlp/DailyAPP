@@ -144,16 +144,25 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
-    if (state == AppLifecycleState.inactive) {
-      controller.dispose();
-      _controller = null;
-    } else if (state == AppLifecycleState.resumed) {
-      if (_cameras.isNotEmpty) {
-        setState(() => _initializing = true);
-        _initController(_cameras[_cameraIndex]);
-      }
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        final controller = _controller;
+        if (controller == null) return;
+        _controller = null;
+        // El setState es imprescindible: sin él, el árbol sigue conteniendo un
+        // CameraPreview que apunta a un controller ya liberado y la app revienta
+        // en el siguiente frame (justo lo que pasaba al aparecer el prompt de
+        // huella o el diálogo de permisos sobre la pantalla de la alarma).
+        if (mounted) setState(() => _initializing = true);
+        controller.dispose();
+      case AppLifecycleState.resumed:
+        if (_controller == null && _cameras.isNotEmpty && _error == null) {
+          if (mounted) setState(() => _initializing = true);
+          _initController(_cameras[_cameraIndex]);
+        }
     }
   }
 

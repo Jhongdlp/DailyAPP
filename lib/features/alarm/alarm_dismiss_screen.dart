@@ -30,19 +30,37 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   bool? _result;
   File? _photo;
   int _attempts = 0;
+  bool _cameraDenied = false;
 
   @override
   void initState() {
     super.initState();
+    // Pinta la alarma encima del bloqueo para poder fotografiar sin desbloquear.
+    LockTaskService.showOverLockscreen(true);
     _loadAlarm();
+    _prepareCameraThenLock();
+  }
+
+  /// El permiso de cámara debe pedirse ANTES de fijar la pantalla: Android no
+  /// muestra diálogos de permisos en modo lock task, así que si fijábamos
+  /// primero (como hacía el código anterior) el diálogo nunca aparecía y la
+  /// cámara se quedaba muerta con la pantalla bloqueada encima.
+  Future<void> _prepareCameraThenLock() async {
+    final granted = await LockTaskService.requestCameraPermission();
+    if (!mounted) return;
+    if (!granted) {
+      setState(() => _cameraDenied = true);
+      return; // Sin cámara no fijamos: dejaríamos al usuario atrapado.
+    }
     // Fija la pantalla: desactiva Home y Recientes mientras la alarma suena.
-    LockTaskService.enable();
+    await LockTaskService.enable();
   }
 
   @override
   void dispose() {
     // Salvaguarda: libera la pantalla si el widget se destruye por cualquier vía.
     LockTaskService.disable();
+    LockTaskService.showOverLockscreen(false);
     super.dispose();
   }
 
@@ -71,6 +89,10 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   }
 
   Future<void> _takePhoto() async {
+    if (_cameraDenied) {
+      await _prepareCameraThenLock();
+      if (!mounted || _cameraDenied) return;
+    }
     final picked = await Navigator.of(context).push<File>(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -107,6 +129,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
         await Future.delayed(const Duration(seconds: 2));
         // Solo aquí (foto validada) liberamos la pantalla y salimos.
         await LockTaskService.disable();
+        await LockTaskService.showOverLockscreen(false);
         if (mounted) Navigator.pop(context);
       }
     } catch (e) {
@@ -268,6 +291,40 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                     ],
                   ),
                 ),
+
+                if (_cameraDenied) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: BentoTheme.errorRed.withValues(alpha: 0.85),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Sin permiso de cámara no puedo validar la foto.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: LockTaskService.openAppSettings,
+                          child: const Text(
+                            'Abrir ajustes',
+                            style: TextStyle(
+                                color: Colors.white,
+                                decoration: TextDecoration.underline,
+                                fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 if (isFail) ...[
                   const SizedBox(height: 12),

@@ -6,6 +6,7 @@ import '../../core/theme/bento_theme.dart';
 import '../habits/widgets/habit_blob_header.dart';
 import 'alarm_card.dart';
 import 'alarm_form.dart';
+import 'notification_diagnostics_sheet.dart';
 
 class AlarmTab extends ConsumerWidget {
   const AlarmTab({super.key});
@@ -58,26 +59,39 @@ class AlarmTab extends ConsumerWidget {
               ),
             ],
           ),
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AlarmForm()),
-            ),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-              decoration: BoxDecoration(color: BentoTheme.accentAlarm, borderRadius: BorderRadius.circular(100)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.add, size: 13, color: Color(0xFF0C0C0D)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Nueva',
-                    style: GoogleFonts.montserrat(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF0C0C0D)),
-                  ),
-                ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => NotificationDiagnosticsSheet.show(context),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Icon(Icons.health_and_safety_outlined,
+                      size: 20, color: BentoTheme.creamAlpha(0.55)),
+                ),
               ),
-            ),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AlarmForm()),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+                  decoration: BoxDecoration(color: BentoTheme.accentAlarm, borderRadius: BorderRadius.circular(100)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add, size: 13, color: Color(0xFF0C0C0D)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Nueva',
+                        style: GoogleFonts.montserrat(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF0C0C0D)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

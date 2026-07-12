@@ -53,6 +53,9 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
     final alarmId = response.payload;
     if (alarmId == null) return;
 
+    // La notificación de prueba del diagnóstico no abre nada.
+    if (alarmId.startsWith('test:')) return;
+
     // Los recordatorios de notas/hábitos usan un prefijo propio
     if (alarmId.startsWith(NoteReminderService.payloadPrefix) ||
         alarmId.startsWith(HabitReminderService.payloadPrefix)) {
@@ -169,10 +172,19 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
       if (launchDetails?.didNotificationLaunchApp == true) {
         final alarmId = launchDetails?.notificationResponse?.payload;
         if (alarmId != null &&
+            !alarmId.startsWith('test:') &&
             !alarmId.startsWith(NoteReminderService.payloadPrefix) &&
             !alarmId.startsWith(HabitReminderService.payloadPrefix)) {
           _pendingAlarmId = alarmId;
         }
+      }
+
+      // El manifiesto declara showWhenLocked/turnScreenOn para que el
+      // full-screen intent de la alarma se pinte sobre el bloqueo en arranque
+      // en frío. Si no hay ninguna alarma sonando, lo revertimos: la app no
+      // debería quedar accesible desde la pantalla de bloqueo.
+      if (_pendingAlarmId == null) {
+        await LockTaskService.showOverLockscreen(false);
       }
     } catch (e) {
       // No bloquear inicio si falla la inicialización

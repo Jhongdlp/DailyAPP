@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../models/habit_model.dart';
+import 'alarm_service.dart';
 
 /// Notificaciones diarias repetidas para recordar hábitos con meta (ej. "Tomar 2L de agua a mediodía").
 /// Reutiliza el plugin ya inicializado por AlarmService en main.dart.
 class HabitReminderService {
   static final _plugin = FlutterLocalNotificationsPlugin();
 
-  static const _channelId = 'sistdaily_habits_v1';
+  static const channelId = AlarmService.habitsChannelId;
   static const _channelName = 'Recordatorios de Hábitos';
 
   /// Prefijo del payload para distinguir hábitos de alarmas/notas al tocar la notificación.
@@ -64,7 +65,7 @@ class HabitReminderService {
 
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
-        _channelId,
+        channelId,
         _channelName,
         channelDescription: 'Recordatorios diarios para cumplir tus hábitos',
         importance: Importance.high,
@@ -86,31 +87,27 @@ class HabitReminderService {
         final minute = int.parse(parts[1]);
 
         for (final day in habit.daysOfWeek) {
-          futures.add(_plugin.zonedSchedule(
-            _notifId(habit.id, day, timeIdx),
-            '${habit.icon} ${habit.name}',
-            body,
-            _nextOccurrence(day, hour, minute),
-            details,
-            uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          futures.add(AlarmService.zonedScheduleWithFallback(
+            id: _notifId(habit.id, day, timeIdx),
+            title: '${habit.icon} ${habit.name}',
+            body: body,
+            when: _nextOccurrence(day, hour, minute),
+            details: details,
             payload: '$payloadPrefix${habit.id}',
+            matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
           ));
         }
       }
     } else if (habit.reminderHour != null && habit.reminderMinute != null) {
       for (final day in habit.daysOfWeek) {
-        futures.add(_plugin.zonedSchedule(
-          _legacyNotifId(habit.id, day),
-          '${habit.icon} ${habit.name}',
-          body,
-          _nextOccurrence(day, habit.reminderHour!, habit.reminderMinute!),
-          details,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        futures.add(AlarmService.zonedScheduleWithFallback(
+          id: _legacyNotifId(habit.id, day),
+          title: '${habit.icon} ${habit.name}',
+          body: body,
+          when: _nextOccurrence(day, habit.reminderHour!, habit.reminderMinute!),
+          details: details,
           payload: '$payloadPrefix${habit.id}',
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
         ));
       }
     }
