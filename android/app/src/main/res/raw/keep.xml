@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  El icono de las notificaciones sólo se referencia por nombre en tiempo de
+  ejecución (flutter_local_notifications lo resuelve con getIdentifier), nunca
+  desde XML. El resource shrinker de R8 lo daba por no usado y lo eliminaba del
+  APK de release, así que en release NINGUNA notificación podía mostrarse:
+  el plugin fallaba con `invalid_icon`. En debug no se notaba porque no hay
+  shrinker.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/notification_icon" />
