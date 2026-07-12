@@ -547,3 +547,76 @@ create policy "Usuarios pueden eliminar su propio respaldo de bóveda"
   to authenticated
   using ((select auth.uid()) = user_id);
 
+
+
+-- 9. CHAT: conversaciones persistentes con memoria
+-- El copiloto financiero mantiene el historial completo de cada conversación y
+-- el usuario puede tener varias conversaciones en paralelo.
+create table if not exists public.chat_conversations (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  title text not null default 'Nueva conversación',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists chat_conversations_user_updated_idx
+  on public.chat_conversations (user_id, updated_at desc);
+
+alter table public.chat_conversations enable row level security;
+
+create policy "Usuarios pueden ver sus propias conversaciones"
+  on public.chat_conversations for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden crear sus propias conversaciones"
+  on public.chat_conversations for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden actualizar sus propias conversaciones"
+  on public.chat_conversations for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden eliminar sus propias conversaciones"
+  on public.chat_conversations for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create table if not exists public.chat_messages (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  conversation_id uuid references public.chat_conversations on delete cascade not null,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null default '',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists chat_messages_conversation_idx
+  on public.chat_messages (conversation_id, created_at);
+
+alter table public.chat_messages enable row level security;
+
+create policy "Usuarios pueden ver sus propios mensajes"
+  on public.chat_messages for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden crear sus propios mensajes"
+  on public.chat_messages for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden actualizar sus propios mensajes"
+  on public.chat_messages for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden eliminar sus propios mensajes"
+  on public.chat_messages for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);

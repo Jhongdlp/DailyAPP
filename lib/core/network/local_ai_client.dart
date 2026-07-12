@@ -40,8 +40,14 @@ class LocalAIClient {
     }
   }
 
-  /// Envía una consulta de texto al modelo Qwen Local
-  Future<String> askText(String prompt, {String? systemPrompt}) async {
+  /// Envía una consulta de texto al modelo Qwen Local.
+  /// [history] son los turnos previos de la conversación (`role`/`content`),
+  /// que se envían antes del mensaje actual para dar memoria al modelo.
+  Future<String> askText(
+    String prompt, {
+    String? systemPrompt,
+    List<Map<String, String>> history = const [],
+  }) async {
     try {
       // Intentar primero con el API de Ollama
       final url = Uri.parse('$baseUrl/api/chat');
@@ -52,6 +58,7 @@ class LocalAIClient {
           'model': textModelName,
           'messages': [
             if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
+            ...history,
             {'role': 'user', 'content': prompt}
           ],
           'stream': false,
@@ -75,12 +82,12 @@ class LocalAIClient {
         return data['message']['content'].toString().trim();
       } else {
         // Si no es Ollama, intentamos API compatible con OpenAI
-        return _askOpenAI(prompt, systemPrompt: systemPrompt);
+        return _askOpenAI(prompt, systemPrompt: systemPrompt, history: history);
       }
     } catch (e) {
       // Fallback a OpenAI API style por si falla la estructura Ollama
       try {
-        return await _askOpenAI(prompt, systemPrompt: systemPrompt);
+        return await _askOpenAI(prompt, systemPrompt: systemPrompt, history: history);
       } catch (err) {
         throw Exception('Error al conectar con el servidor local de IA: $err');
       }
@@ -130,21 +137,30 @@ class LocalAIClient {
   /// (API de Ollama con stream:true, formato NDJSON — una línea JSON por chunk).
   /// Si el streaming falla antes de emitir algo, cae al modo no-streaming
   /// ([askText]) y emite la respuesta completa de una vez.
-  Stream<String> askTextStream(String prompt, {String? systemPrompt}) async* {
+  Stream<String> askTextStream(
+    String prompt, {
+    String? systemPrompt,
+    List<Map<String, String>> history = const [],
+  }) async* {
     var emitted = false;
     try {
-      await for (final token in _streamOllama(prompt, systemPrompt: systemPrompt)) {
+      await for (final token
+          in _streamOllama(prompt, systemPrompt: systemPrompt, history: history)) {
         emitted = true;
         yield token;
       }
     } catch (e) {
       if (emitted) rethrow;
       // Fallback: respuesta completa sin streaming (incluye fallback OpenAI)
-      yield await askText(prompt, systemPrompt: systemPrompt);
+      yield await askText(prompt, systemPrompt: systemPrompt, history: history);
     }
   }
 
-  Stream<String> _streamOllama(String prompt, {String? systemPrompt}) async* {
+  Stream<String> _streamOllama(
+    String prompt, {
+    String? systemPrompt,
+    List<Map<String, String>> history = const [],
+  }) async* {
     final client = http.Client();
     try {
       final request = http.Request('POST', Uri.parse('$baseUrl/api/chat'))
@@ -153,6 +169,7 @@ class LocalAIClient {
           'model': textModelName,
           'messages': [
             if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
+            ...history,
             {'role': 'user', 'content': prompt}
           ],
           'stream': true,
@@ -253,7 +270,11 @@ class LocalAIClient {
   }
 
   /// Método auxiliar para servidores tipo OpenAI (LM Studio, LocalAI, vLLM)
-  Future<String> _askOpenAI(String prompt, {String? systemPrompt}) async {
+  Future<String> _askOpenAI(
+    String prompt, {
+    String? systemPrompt,
+    List<Map<String, String>> history = const [],
+  }) async {
     final url = Uri.parse('$baseUrl/v1/chat/completions');
     final response = await http.post(
       url,
@@ -262,6 +283,7 @@ class LocalAIClient {
         'model': textModelName,
         'messages': [
           if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
+          ...history,
           {'role': 'user', 'content': prompt}
         ],
         'max_tokens': 500,
