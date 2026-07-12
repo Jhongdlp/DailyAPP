@@ -32,6 +32,7 @@ class _NotificationDiagnosticsSheetState
     extends State<NotificationDiagnosticsSheet> {
   NotificationDiagnostics? _diagnostics;
   bool _batteryExempt = true;
+  String? _testResult;
 
   @override
   void initState() {
@@ -49,18 +50,11 @@ class _NotificationDiagnosticsSheetState
     });
   }
 
-  Future<void> _sendTest() async {
-    await AlarmService.scheduleTestNotification();
+  Future<void> _runTest(Future<String> Function() test, String label) async {
+    setState(() => _testResult = '$label: ejecutando…');
+    final result = await test();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: BentoTheme.accentAlarm,
-        content: Text(
-          'Notificación de prueba en 15 s. Bloquea el teléfono para comprobarlo.',
-          style: TextStyle(color: Color(0xFF0C0C0D), fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
+    setState(() => _testResult = '$label → $result');
   }
 
   @override
@@ -121,15 +115,17 @@ class _NotificationDiagnosticsSheetState
               ),
               const SizedBox(height: 14),
               _InfoRow('Zona horaria', d.timezone),
-              _InfoRow('Recordatorios de notas en cola', '${d.pendingNotes}'),
-              _InfoRow('Recordatorios de hábitos en cola', '${d.pendingHabits}'),
+              _InfoRow('Notas en cola', '${d.pendingNotes}'),
+              _InfoRow('Hábitos en cola', '${d.pendingHabits}'),
+              _InfoRow('Otras en cola', '${d.pendingOther}'),
               _InfoRow('Alarmas programadas', '${d.scheduledAlarms}'),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _refresh,
+                      onPressed: () => _runTest(
+                          AlarmService.testImmediateNotification, 'Inmediata'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: BentoTheme.cream,
                         side: BorderSide(color: BentoTheme.creamAlpha(0.24)),
@@ -137,13 +133,14 @@ class _NotificationDiagnosticsSheetState
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: const Text('Refrescar'),
+                      child: const Text('Probar ahora'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _sendTest,
+                      onPressed: () => _runTest(
+                          AlarmService.testScheduledNotification, 'Programada'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: BentoTheme.accentAlarm,
                         foregroundColor: const Color(0xFF0C0C0D),
@@ -152,11 +149,37 @@ class _NotificationDiagnosticsSheetState
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: const Text('Probar',
+                      child: const Text('Probar en 15 s',
                           style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ),
                 ],
+              ),
+              if (_testResult != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: BentoTheme.creamAlpha(0.08),
+                    border: Border.all(color: BentoTheme.creamAlpha(0.16)),
+                  ),
+                  child: SelectableText(
+                    _testResult!,
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 11,
+                      color: BentoTheme.cream,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: _refresh,
+                style: TextButton.styleFrom(
+                    foregroundColor: BentoTheme.creamAlpha(0.55)),
+                child: const Text('Refrescar'),
               ),
             ],
           ],

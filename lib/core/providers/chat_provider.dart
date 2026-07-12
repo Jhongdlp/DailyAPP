@@ -29,6 +29,18 @@ TU FILOSOFÍA (guía todas tus respuestas):
 - Odias los gastos hormiga y las suscripciones muertas: cuando los detectas en sus datos, los señalas con cifras.
 - Cuando el usuario quiere comprar algo, le muestras el costo de oportunidad: qué pasaría con ese dinero invertido.
 
+CUANDO TE PREGUNTE SI PUEDE PERMITIRSE ALGO ("¿puedo comprar X?", "¿me alcanza para Y?"):
+Tienes su dinero real abajo (saldo de cada cuenta, ingresos y gastos del mes, promedios y autonomía).
+Úsalo y dale un veredicto claro, nunca una respuesta tibia. Estructura:
+1. VEREDICTO: "Sí puedes", "No puedes" o "Puedes, pero…". Empieza por ahí, sin rodeos.
+2. LA CUENTA: cuánto tiene, cuánto cuesta, con cuánto se queda, y cuántos meses de gastos le cubre eso.
+3. EL COSTO REAL: qué deja de pasar con ese dinero (deuda sin pagar, fondo de emergencia sin completar,
+   o lo que rendiría invertido a ~8% anual en unos años).
+4. LA ALTERNATIVA: cómo conseguirlo más barato, esperar, o de dónde sacar el dinero sin tocar lo importante.
+Reglas duras para el veredicto: es NO si lo deja sin fondo de emergencia (3-6 meses de gastos),
+si tiene deuda cara pendiente, o si el gasto supera lo que ahorra en un mes y no tiene colchón.
+Si no tiene movimientos registrados suficientes para juzgar, dilo y pídele el dato que te falta.
+
 CÓMO RESPONDES:
 - En español, tuteando, claro y sin rodeos. Honesto aunque incomode; nada de adulación vacía.
 - Concreto y accionable: números, porcentajes y pasos, no generalidades.
@@ -298,11 +310,15 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
   Future<String> _buildSystemPrompt(String query) async {
     final habits = ref.read(habitsProvider);
     final notes = ref.read(notesProvider);
-    final accounts = ref.read(accountsProvider).value ?? [];
+
+    // `await ...future` en vez de `.value`: si el usuario no ha abierto la
+    // pestaña de Finanzas, estos AsyncNotifier aún no se han construido y
+    // `.value` sería null — el copiloto creería que no hay dinero registrado.
+    final accounts = await ref.read(accountsProvider.future);
+    final transactions = await ref.read(transactionsProvider.future);
+    final alarms = await ref.read(alarmsProvider.future);
     final balances = ref.read(accountBalancesProvider);
     final monthSummary = ref.read(monthSummaryProvider);
-    final transactions = ref.read(transactionsProvider).value ?? [];
-    final alarms = ref.read(alarmsProvider).value ?? [];
 
     final buffer = StringBuffer(kFinanceSystemPrompt);
     buffer.writeln();
@@ -322,14 +338,51 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         total += balance;
         buffer.writeln('- Cuenta "${a.name}": \$${balance.toStringAsFixed(2)}');
       }
-      buffer.writeln('Patrimonio en cuentas: \$${total.toStringAsFixed(2)}.');
+      buffer.writeln(
+          'DINERO DISPONIBLE AHORA MISMO (suma de todas las cuentas): \$${total.toStringAsFixed(2)}.');
       buffer.writeln(
           'Este mes: ingresos \$${monthSummary.income.toStringAsFixed(2)}, '
           'gastos \$${monthSummary.expense.toStringAsFixed(2)}, '
           'balance \$${(monthSummary.income - monthSummary.expense).toStringAsFixed(2)}.');
 
-      // Gasto acumulado por categoría del mes: base para detectar fugas.
       final now = DateTime.now();
+
+      // ── Capacidad de compra: con qué ritmo entra y sale el dinero ──
+      // Promedio de los 3 meses anteriores completos (el mes en curso va a medias
+      // y distorsionaría la media).
+      var pastIncome = 0.0;
+      var pastExpense = 0.0;
+      final months = <String>{};
+      for (final t in transactions) {
+        final d = t.occurredAt;
+        final monthsAgo = (now.year - d.year) * 12 + (now.month - d.month);
+        if (monthsAgo < 1 || monthsAgo > 3) continue;
+        months.add('${d.year}-${d.month}');
+        if (t.type == TransactionType.income) pastIncome += t.amount;
+        if (t.type == TransactionType.expense) pastExpense += t.amount;
+      }
+      if (months.isNotEmpty) {
+        final n = months.length;
+        final avgIncome = pastIncome / n;
+        final avgExpense = pastExpense / n;
+        final avgSaving = avgIncome - avgExpense;
+        buffer.writeln(
+            'Promedio de los últimos $n ${n == 1 ? 'mes' : 'meses'}: '
+            'ingresos \$${avgIncome.toStringAsFixed(2)}/mes, '
+            'gastos \$${avgExpense.toStringAsFixed(2)}/mes, '
+            'ahorro \$${avgSaving.toStringAsFixed(2)}/mes.');
+        if (avgIncome > 0) {
+          buffer.writeln(
+              'Tasa de ahorro: ${(avgSaving / avgIncome * 100).round()}% de lo que ingresa.');
+        }
+        if (avgExpense > 0) {
+          buffer.writeln(
+              'Autonomía: con el dinero actual cubre ${(total / avgExpense).toStringAsFixed(1)} meses '
+              'de sus gastos habituales si dejara de ingresar.');
+        }
+      }
+
+      // Gasto acumulado por categoría del mes: base para detectar fugas.
       final byCategory = <String, double>{};
       for (final t in transactions) {
         if (t.type != TransactionType.expense) continue;

@@ -276,29 +276,90 @@ class AlarmService {
     );
   }
 
-  /// Dispara una notificación de prueba dentro de [delay] para comprobar de
-  /// punta a punta que el sistema las entrega.
-  static Future<void> scheduleTestNotification({
+  static const _testDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      testChannelId,
+      'Pruebas',
+      channelDescription: 'Notificaciones de prueba del diagnóstico',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    ),
+  );
+
+  /// Muestra una notificación AHORA, sin pasar por AlarmManager.
+  ///
+  /// Separa las dos causas posibles de "no llega nada": si esta aparece, el
+  /// canal y el permiso están bien y el fallo está en la programación; si no
+  /// aparece, el problema es la entrega en sí.
+  static Future<String> testImmediateNotification() async {
+    try {
+      await _plugin.show(
+        999998,
+        '🔔 Prueba inmediata',
+        'Entrega directa, sin programar.',
+        _testDetails,
+        payload: 'test:ping',
+      );
+      return 'OK — enviada. Si no la ves, el sistema la está bloqueando.';
+    } catch (e) {
+      return 'FALLÓ: $e';
+    }
+  }
+
+  /// Programa una notificación dentro de [delay] y comprueba que el sistema
+  /// la aceptó realmente en su cola, en vez de dar por bueno el `schedule`.
+  static Future<String> testScheduledNotification({
     Duration delay = const Duration(seconds: 15),
   }) async {
-    await zonedScheduleWithFallback(
-      id: 999999,
-      title: '🔔 Notificación de prueba',
-      body: 'Si ves esto, las notificaciones programadas funcionan.',
-      when: tz.TZDateTime.now(tz.local).add(delay),
-      details: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          testChannelId,
-          'Pruebas',
-          channelDescription: 'Notificaciones de prueba del diagnóstico',
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: true,
-          enableVibration: true,
-        ),
-      ),
-      payload: 'test:ping',
-    );
+    final when = tz.TZDateTime.now(tz.local).add(delay);
+    String mode;
+    try {
+      await _plugin.zonedSchedule(
+        999999,
+        '🔔 Prueba programada',
+        'Si ves esto, las notificaciones programadas funcionan.',
+        when,
+        _testDetails,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'test:ping',
+      );
+      mode = 'exacta';
+    } catch (e) {
+      try {
+        await _plugin.zonedSchedule(
+          999999,
+          '🔔 Prueba programada',
+          'Si ves esto, las notificaciones programadas funcionan.',
+          when,
+          _testDetails,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: 'test:ping',
+        );
+        mode = 'inexacta (la exacta falló: $e)';
+      } catch (e2) {
+        return 'FALLÓ al programar: $e2';
+      }
+    }
+
+    // ¿La aceptó el sistema de verdad?
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      final queued = pending.any((r) => r.id == 999999);
+      if (!queued) {
+        return 'Programada ($mode) pero el sistema NO la tiene en cola.';
+      }
+      return 'En cola ($mode) para ${when.hour.toString().padLeft(2, '0')}:'
+          '${when.minute.toString().padLeft(2, '0')}:'
+          '${when.second.toString().padLeft(2, '0')} ${when.timeZoneName}.';
+    } catch (e) {
+      return 'Programada ($mode), pero no pude leer la cola: $e';
+    }
   }
 }
 
