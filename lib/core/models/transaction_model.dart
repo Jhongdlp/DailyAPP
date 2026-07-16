@@ -48,23 +48,26 @@ class FinanceCategory {
 }
 
 class FinanceCategories {
-  static const List<FinanceCategory> all = [
+  /// No puede ser `const`: los colores de acento son getters que dependen del
+  /// modo claro/oscuro, así que la lista se arma en cada lectura.
+  static List<FinanceCategory> get all => [
     // Gastos
     FinanceCategory(id: 'food', label: 'Comida', icon: Icons.restaurant_outlined, color: BentoTheme.accentOrange),
     FinanceCategory(id: 'transport', label: 'Transporte', icon: Icons.directions_bus_outlined, color: BentoTheme.accentBlue),
     FinanceCategory(id: 'home', label: 'Hogar', icon: Icons.home_outlined, color: BentoTheme.accentPurple),
     FinanceCategory(id: 'services', label: 'Servicios', icon: Icons.bolt_outlined, color: BentoTheme.accentOrange),
-    FinanceCategory(id: 'health', label: 'Salud', icon: Icons.favorite_outline, color: BentoTheme.errorRed),
+    const FinanceCategory(id: 'health', label: 'Salud', icon: Icons.favorite_outline, color: BentoTheme.errorRed),
     FinanceCategory(id: 'entertainment', label: 'Ocio', icon: Icons.sports_esports_outlined, color: BentoTheme.accentPurple),
     FinanceCategory(id: 'shopping', label: 'Compras', icon: Icons.shopping_bag_outlined, color: BentoTheme.accentBlue),
     FinanceCategory(id: 'education', label: 'Educación', icon: Icons.school_outlined, color: BentoTheme.accentPurple),
     FinanceCategory(id: 'subscriptions', label: 'Suscripciones', icon: Icons.autorenew_outlined, color: BentoTheme.accentBlue),
     // Ingresos
-    FinanceCategory(id: 'salary', label: 'Salario', icon: Icons.work_outline, color: BentoTheme.successGreen, forIncome: true),
-    FinanceCategory(id: 'freelance', label: 'Freelance', icon: Icons.laptop_outlined, color: BentoTheme.successGreen, forIncome: true),
-    FinanceCategory(id: 'investment', label: 'Inversión', icon: Icons.trending_up_outlined, color: BentoTheme.successGreen, forIncome: true),
+    const FinanceCategory(id: 'salary', label: 'Salario', icon: Icons.work_outline, color: BentoTheme.successGreen, forIncome: true),
+    const FinanceCategory(id: 'freelance', label: 'Freelance', icon: Icons.laptop_outlined, color: BentoTheme.successGreen, forIncome: true),
+    const FinanceCategory(id: 'investment', label: 'Inversión', icon: Icons.trending_up_outlined, color: BentoTheme.successGreen, forIncome: true),
     // Genérica
-    FinanceCategory(id: 'other', label: 'Otro', icon: Icons.category_outlined, color: Color(0x8CF5F3EE)),
+    // Neutro: la categoría genérica no toma acento.
+    FinanceCategory(id: 'other', label: 'Otro', icon: Icons.category_outlined, color: BentoTheme.neuText.withValues(alpha: 0.55)),
   ];
 
   static FinanceCategory byId(String id) =>

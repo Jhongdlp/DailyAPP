@@ -79,9 +79,9 @@ class _NotificationDiagnosticsSheetState
             ),
             const SizedBox(height: 18),
             if (d == null)
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: CircularProgressIndicator(color: BentoTheme.accentAlarm),
                 ),
               )

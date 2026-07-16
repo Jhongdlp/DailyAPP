@@ -328,7 +328,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: BentoTheme.accentBrain, width: 2),
+                        borderSide: BorderSide(color: BentoTheme.accentBrain, width: 2),
                       ),
                     ),
                   ),
@@ -666,7 +666,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     color: BentoTheme.accentPurple.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.edit_calendar,
+                  child: Icon(Icons.edit_calendar,
                       color: BentoTheme.accentPurple, size: 18),
                 ),
                 title: Text('Elegir fecha y hora...',
@@ -738,9 +738,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: BentoTheme.accentBrain,
-              onPrimary: Color(0xFF0C0C0D),
+              onPrimary: const Color(0xFF0C0C0D),
               surface: BentoTheme.darkBg,
               onSurface: BentoTheme.cream,
             ),
@@ -762,9 +762,9 @@ class _NotesTabState extends ConsumerState<NotesTab>
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: BentoTheme.accentBrain,
-              onPrimary: Color(0xFF0C0C0D),
+              onPrimary: const Color(0xFF0C0C0D),
               surface: BentoTheme.darkBg,
               onSurface: BentoTheme.cream,
             ),
@@ -1232,7 +1232,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
       height: 126,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBrain)),
+          Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBrain)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
             child: Column(
@@ -1866,7 +1866,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 color: BentoTheme.creamSecondary,
                 fontStyle: FontStyle.italic),
             blockquoteDecoration: BoxDecoration(
-              border: const Border(
+              border: Border(
                   left: BorderSide(
                       color: BentoTheme.accentBrain, width: 4)),
               color: BentoTheme.accentBrain.withValues(alpha: 0.08),
@@ -1888,7 +1888,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
               color: BentoTheme.creamAlpha(0.02),
             ),
             tableCellsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            listBullet: const TextStyle(
+            listBullet: TextStyle(
                 fontSize: 15, color: BentoTheme.accentBrain),
           ),
         ),
@@ -2077,7 +2077,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                   ),
                                 ),
                                 if (_editRemindAt != null)
-                                  const Icon(Icons.edit_calendar,
+                                  Icon(Icons.edit_calendar,
                                       size: 16, color: BentoTheme.accentBrain)
                                 else
                                   Icon(Icons.chevron_right,
@@ -2225,7 +2225,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             ),
                             Text(
                               '${_selectedLinks.length} conectadas',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: BentoTheme.accentPurple,
@@ -2325,10 +2325,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.auto_awesome_outlined,
+                                  Icon(Icons.auto_awesome_outlined,
                                       color: BentoTheme.accentPurple, size: 20),
                                   const SizedBox(width: 8),
-                                  const Text(
+                                  Text(
                                     'Conexiones sugeridas',
                                     style: TextStyle(
                                       fontSize: 13,
@@ -2338,7 +2338,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                   ),
                                   const Spacer(),
                                   if (_suggesting)
-                                    const SizedBox(
+                                    SizedBox(
                                       width: 14,
                                       height: 14,
                                       child: CircularProgressIndicator(
@@ -2615,7 +2615,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.edit_outlined,
+              leading: Icon(Icons.edit_outlined,
                   color: BentoTheme.accentBrain),
               title: Text('Editar bóveda',
                   style: TextStyle(
@@ -2678,8 +2678,8 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(color: BentoTheme.creamAlpha(0.20)),
               ),
-              focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(14)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: const BorderRadius.all(Radius.circular(14)),
                 borderSide: BorderSide(color: BentoTheme.accentBrain, width: 2),
               ),
             );

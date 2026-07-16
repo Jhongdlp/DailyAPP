@@ -203,7 +203,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
     }
     final controller = _controller;
     if (_initializing || controller == null || !controller.value.isInitialized) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(color: BentoTheme.accentAlarm),
       );
     }
@@ -224,13 +224,13 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.no_photography_outlined,
+          Icon(Icons.no_photography_outlined,
               color: BentoTheme.accentOrange, size: 64),
           const SizedBox(height: 20),
           Text(
             _error ?? 'Error de cámara',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
                 color: BentoTheme.cream, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 28),
@@ -293,7 +293,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.camera_alt,
+                  Icon(Icons.camera_alt,
                       color: BentoTheme.accentOrange, size: 20),
                   const SizedBox(width: 10),
                   Flexible(
@@ -308,7 +308,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
                           const TextSpan(text: 'Fotografía: '),
                           TextSpan(
                             text: widget.targetObject,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: BentoTheme.cream,
                                 fontWeight: FontWeight.w900),
                           ),
@@ -411,7 +411,7 @@ class _ShutterButton extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(6),
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: BentoTheme.accentAlarm,
               ),

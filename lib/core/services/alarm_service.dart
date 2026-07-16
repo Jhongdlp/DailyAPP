@@ -249,7 +249,7 @@ class AlarmService {
       // "recientes" mientras suena. Sin esto, el servicio nativo la detiene
       // en onTaskRemoved (comportamiento por defecto del paquete `alarm`).
       androidStopAlarmOnTermination: false,
-      volumeSettings: VolumeSettings.fixed(
+      volumeSettings: const VolumeSettings.fixed(
         volume: 1.0,
         volumeEnforced: true,
       ),

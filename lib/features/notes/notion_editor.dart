@@ -36,10 +36,10 @@ class EditorBlock {
     FocusNode? focusNode,
     this.isChecked = false,
     List<List<TextEditingController>>? cellControllers,
-  })  : this.id = id ?? UniqueKey().toString(),
-        this.controller = controller ?? TextEditingController(),
-        this.focusNode = focusNode ?? FocusNode(),
-        this.cellControllers = cellControllers ?? [];
+  })  : id = id ?? UniqueKey().toString(),
+        controller = controller ?? TextEditingController(),
+        focusNode = focusNode ?? FocusNode(),
+        cellControllers = cellControllers ?? [];
 }
 
 class _BlockMenuOption {
@@ -783,7 +783,7 @@ class _NotionEditorState extends State<NotionEditor> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Container(
+        return SizedBox(
           height: 480, // Limitar altura para evitar problemas de restricciones infinitas en Linux/escritorio
           child: SafeArea(
             child: Column(
@@ -831,7 +831,7 @@ class _NotionEditorState extends State<NotionEditor> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: widget.accentColor.withOpacity(0.12),
+          color: widget.accentColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: widget.accentColor, size: 20),
@@ -858,7 +858,7 @@ class _NotionEditorState extends State<NotionEditor> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Container(
+        return SizedBox(
           height: 420, // Altura fija segura para evitar restricciones infinitas en Linux/escritorio
           child: SafeArea(
             child: Column(
@@ -914,7 +914,7 @@ class _NotionEditorState extends State<NotionEditor> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isSelected ? widget.accentColor.withOpacity(0.15) : BentoTheme.darkCardAlt,
+          color: isSelected ? widget.accentColor.withValues(alpha: 0.15) : BentoTheme.darkCardAlt,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: isSelected ? widget.accentColor : BentoTheme.creamSecondary, size: 20),
@@ -1112,7 +1112,7 @@ class _NotionEditorState extends State<NotionEditor> {
           alignment: Alignment.center,
           child: Divider(
             color: isFocused
-                ? widget.accentColor.withOpacity(0.6)
+                ? widget.accentColor.withValues(alpha: 0.6)
                 : BentoTheme.creamAlpha(0.20),
             thickness: isFocused ? 2 : 1.5,
           ),
@@ -1280,7 +1280,7 @@ class _NotionEditorState extends State<NotionEditor> {
 
                   return TableRow(
                     decoration: BoxDecoration(
-                      color: isHeader ? widget.accentColor.withOpacity(0.12) : null,
+                      color: isHeader ? widget.accentColor.withValues(alpha: 0.12) : null,
                     ),
                     children: List.generate(colsCount, (cIndex) {
                       final ctrl = rowCtrls[cIndex];
@@ -1500,7 +1500,7 @@ class _NotionEditorState extends State<NotionEditor> {
                     key: ValueKey(block.id),
                     margin: const EdgeInsets.symmetric(vertical: 2),
                     decoration: BoxDecoration(
-                      color: isFocused ? widget.accentColor.withOpacity(0.03) : null,
+                      color: isFocused ? widget.accentColor.withValues(alpha: 0.03) : null,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: CompositedTransformTarget(

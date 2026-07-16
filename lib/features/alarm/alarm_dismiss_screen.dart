@@ -160,7 +160,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: BentoTheme.darkBg,
         body: Center(child: CircularProgressIndicator(color: BentoTheme.cream)),
       );
@@ -209,7 +209,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
               Text(
                 alarm.formattedTime,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 80,
                   fontWeight: FontWeight.w900,
                   color: BentoTheme.cream,
@@ -268,7 +268,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.camera_alt, color: BentoTheme.accentOrange, size: 28),
+                      Icon(Icons.camera_alt, color: BentoTheme.accentOrange, size: 28),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -280,7 +280,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                             const SizedBox(height: 2),
                             Text(
                               alarm.targetObject,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: BentoTheme.cream,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900),
@@ -300,9 +300,9 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                       borderRadius: BorderRadius.circular(12),
                       color: BentoTheme.errorRed.withValues(alpha: 0.85),
                     ),
-                    child: Column(
+                    child: const Column(
                       children: [
-                        const Text(
+                        Text(
                           'Sin permiso de cámara no puedo validar la foto.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -310,10 +310,10 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                               fontWeight: FontWeight.bold,
                               fontSize: 13),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         TextButton(
                           onPressed: LockTaskService.openAppSettings,
-                          child: const Text(
+                          child: Text(
                             'Abrir ajustes',
                             style: TextStyle(
                                 color: Colors.white,
@@ -350,7 +350,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
                 if (_verifying)
                   Column(
                     children: [
-                      const CircularProgressIndicator(color: BentoTheme.accentAlarm),
+                      CircularProgressIndicator(color: BentoTheme.accentAlarm),
                       const SizedBox(height: 12),
                       Text('Verificando con IA...',
                           style:

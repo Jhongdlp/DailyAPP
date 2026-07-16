@@ -168,18 +168,15 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   }) {
     return Tooltip(
       message: tooltip,
-      child: InkWell(
+      child: NeuCard(
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        distance: 3,
+        blur: 6,
+        padding: EdgeInsets.zero,
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: 34,
-          height: 34,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: BentoTheme.creamAlpha(0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: BentoTheme.creamAlpha(0.14)),
-          ),
+        child: Center(
           child: Icon(icon, size: 17, color: onPressed == null ? BentoTheme.creamAlpha(0.3) : BentoTheme.cream),
         ),
       ),
@@ -191,7 +188,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentHabits)),
+          Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentHabits)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Align(
@@ -214,15 +211,16 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   }
 
   Widget _buildStatsGrid(int completedToday, int activeCount, int longestStreak) {
+    // Panel de stats GRABADO en la superficie (hundido): la información se
+    // lee como tallada en el material; lo accionable, en cambio, va extruido.
     return Container(
-      margin: const EdgeInsets.fromLTRB(22, 6, 22, 0),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: BentoTheme.creamAlpha(0.12)),
-          bottom: BorderSide(color: BentoTheme.creamAlpha(0.12)),
-        ),
-      ),
-      child: Row(
+      margin: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+      child: NeuPressed(
+        borderRadius: 18,
+        distance: 3,
+        blur: 7,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
@@ -259,7 +257,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               ),
             ),
           ),
-          Container(width: 1, height: 64, color: BentoTheme.creamAlpha(0.12)),
+          Container(width: 1, height: 64, color: BentoTheme.creamAlpha(0.10)),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(22, 16, 0, 16),
@@ -297,6 +295,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -332,19 +331,19 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               ),
               const SizedBox(width: 8),
               _analyzing
-                  ? Container(
+                  ? NeuCard(
                       width: 34,
                       height: 34,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: BentoTheme.creamAlpha(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: BentoTheme.creamAlpha(0.14)),
-                      ),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.cream),
+                      borderRadius: 10,
+                      distance: 3,
+                      blur: 6,
+                      padding: EdgeInsets.zero,
+                      child: Center(
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.cream),
+                        ),
                       ),
                     )
                   : _buildHeaderIconButton(
@@ -353,22 +352,23 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                       onPressed: habits.isEmpty ? null : () => _analyzeHabitsWithAI(habits),
                     ),
               const SizedBox(width: 10),
-              GestureDetector(
+              NeuCard(
                 onTap: () => showHabitFormDialog(context, ref),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-                  decoration: BoxDecoration(color: BentoTheme.accentHabits, borderRadius: BorderRadius.circular(100)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.add, size: 13, color: Color(0xFF0C0C0D)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Nuevo',
-                        style: GoogleFonts.montserrat(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF0C0C0D)),
-                      ),
-                    ],
-                  ),
+                borderRadius: 100,
+                distance: 3,
+                blur: 6,
+                color: BentoTheme.accentHabits,
+                padding: const EdgeInsets.fromLTRB(11, 7, 13, 7),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.add, size: 13, color: Color(0xFF0C0C0D)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Nuevo',
+                      style: GoogleFonts.montserrat(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF0C0C0D)),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -384,8 +384,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       child: GlassCard(
         padding: const EdgeInsets.all(16),
         borderRadius: 18,
-        backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
-        borderColor: BentoTheme.accentHabits.withValues(alpha: 0.35),
+        backgroundColor: BentoTheme.accentHabits.withValues(alpha: 0.07),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -394,7 +393,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
+                    Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
                     const SizedBox(width: 8),
                     Text(
                       'Coach de IA',
@@ -425,12 +424,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               shrinkWrap: true,
               styleSheet: MarkdownStyleSheet(
                 p: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontWeight: FontWeight.w500, height: 1.4),
-                strong: const TextStyle(fontSize: 13, color: BentoTheme.cream, fontWeight: FontWeight.w900, height: 1.4),
+                strong: TextStyle(fontSize: 13, color: BentoTheme.cream, fontWeight: FontWeight.w900, height: 1.4),
                 em: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontStyle: FontStyle.italic, height: 1.4),
                 listBullet: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), height: 1.4),
-                h1: const TextStyle(fontSize: 16, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
-                h2: const TextStyle(fontSize: 15, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
-                h3: const TextStyle(fontSize: 14, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
+                h1: TextStyle(fontSize: 16, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
+                h2: TextStyle(fontSize: 15, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
+                h3: TextStyle(fontSize: 14, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -454,157 +453,239 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id))),
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
         borderRadius: 22,
-        backgroundColor: BentoTheme.darkCard.withValues(alpha: 0.55),
-        child: Stack(
-            children: [
-              Positioned(
-                left: -18,
-                top: -18,
-                bottom: -16,
-                width: 3,
-                child: Container(color: BentoTheme.accentHabits),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (habit.hasReminder)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Row(
-                        children: [
-                          Icon(Icons.access_time, size: 12, color: BentoTheme.creamAlpha(0.5)),
-                          const SizedBox(width: 5),
-                          Text(
-                            '${habit.reminderHour?.toString().padLeft(2, '0') ?? '--'}:${habit.reminderMinute?.toString().padLeft(2, '0') ?? '--'}',
-                            style: GoogleFonts.montserrat(fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
-                          ),
-                        ],
-                      ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (habit.hasReminder)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, size: 12, color: BentoTheme.creamAlpha(0.5)),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${habit.reminderHour?.toString().padLeft(2, '0') ?? '--'}:${habit.reminderMinute?.toString().padLeft(2, '0') ?? '--'}',
+                      style: GoogleFonts.montserrat(fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
                     ),
-                  Row(
-                    children: [
-                      Text(habit.icon, style: const TextStyle(fontSize: 20)),
-                      const SizedBox(width: 11),
-                      Expanded(
-                        child: Text(
-                          habit.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 24, letterSpacing: -0.5, color: BentoTheme.cream),
+                  ],
+                ),
+              ),
+            Row(
+              children: [
+                // El emoji vive en un pocito hundido: identidad del hábito
+                // engastada en el material, no flotando encima.
+                _sunkenIconWell(habit.icon, size: 42, iconSize: 20, borderRadius: 13),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Text(
+                    habit.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 24, letterSpacing: -0.5, color: BentoTheme.cream),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          fmtProgress,
+                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 34, height: 0.8, letterSpacing: -0.7, color: BentoTheme.cream),
                         ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '/ $fmtGoal $unit',
+                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 17, color: BentoTheme.creamAlpha(0.4)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    _stepperButton(
+                      icon: Icons.remove,
+                      filled: false,
+                      onTap: () => ref.read(habitsProvider.notifier).updateHabitProgress(habit.id, today, -increment),
+                    ),
+                    const SizedBox(width: 12),
+                    _stepperButton(
+                      icon: Icons.add,
+                      filled: true,
+                      onTap: () => ref.read(habitsProvider.notifier).updateHabitProgress(habit.id, today, increment),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _neuProgressBar(ratio, BentoTheme.accentHabits),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: days.map((day) {
+                final isToday = day == today;
+                final isCompleted = habit.isCompletedOn(day);
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, day),
+                  child: Column(
+                    children: [
+                      Text(
+                        _getWeekdayLetter(day),
+                        style: GoogleFonts.montserrat(
+                          fontSize: 10,
+                          letterSpacing: 0.8,
+                          fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
+                          color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _neuDayDot(
+                        completed: isCompleted,
+                        isToday: isToday,
+                        accent: BentoTheme.accentHabits,
+                        size: 26,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                fmtProgress,
-                                style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 34, height: 0.8, letterSpacing: -0.7, color: BentoTheme.cream),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '/ $fmtGoal $unit',
-                                style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 17, color: BentoTheme.creamAlpha(0.4)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          _stepperButton(
-                            icon: Icons.remove,
-                            filled: false,
-                            onTap: () => ref.read(habitsProvider.notifier).updateHabitProgress(habit.id, today, -increment),
-                          ),
-                          const SizedBox(width: 12),
-                          _stepperButton(
-                            icon: Icons.add,
-                            filled: true,
-                            onTap: () => ref.read(habitsProvider.notifier).updateHabitProgress(habit.id, today, increment),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 13),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(100),
-                    child: LinearProgressIndicator(
-                      value: ratio,
-                      minHeight: 6,
-                      backgroundColor: BentoTheme.creamAlpha(0.09),
-                      color: BentoTheme.accentHabits,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: days.map((day) {
-                      final isToday = day == today;
-                      final isCompleted = habit.isCompletedOn(day);
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, day),
-                        child: Column(
-                          children: [
-                            Text(
-                              _getWeekdayLetter(day),
-                              style: GoogleFonts.montserrat(
-                                fontSize: 10,
-                                letterSpacing: 0.8,
-                                color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.4),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              width: 26,
-                              height: 26,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.2),
-                                  width: 1.4,
-                                ),
-                                color: isCompleted ? BentoTheme.accentHabits : Colors.transparent,
-                              ),
-                              child: isCompleted ? const Icon(Icons.check, size: 14, color: Color(0xFF0C0C0D)) : null,
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                );
+              }).toList(),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   Widget _stepperButton({required IconData icon, required bool filled, required VoidCallback onTap}) {
-    return GestureDetector(
+    // Botones físicos: el "+" es la acción primaria (pieza acentuada), el "−"
+    // es la misma pieza en material neutro. Ambos con física de presión.
+    return NeuCard(
       onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      distance: 3,
+      blur: 6,
+      padding: EdgeInsets.zero,
+      color: filled ? BentoTheme.accentHabits : null,
+      child: Center(
+        child: Icon(icon, size: 15, color: filled ? const Color(0xFF0C0C0D) : BentoTheme.cream),
+      ),
+    );
+  }
+
+  /// Pocito hundido cuadrado para engastar el emoji/identidad de un hábito.
+  Widget _sunkenIconWell(String emoji, {required double size, required double iconSize, required double borderRadius}) {
+    return NeuPressed(
+      borderRadius: borderRadius,
+      distance: 2.5,
+      blur: 5,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Center(child: Text(emoji, style: TextStyle(fontSize: iconSize))),
+      ),
+    );
+  }
+
+  /// Pista de progreso física: canal hundido en la superficie con relleno de
+  /// acento cilíndrico (brillo arriba, sombra abajo). Las sombras interiores
+  /// del canal se pintan POR ENCIMA del relleno, así que el líquido se lee
+  /// dentro del hueco.
+  Widget _neuProgressBar(double ratio, Color accent) {
+    return NeuPressed(
+      borderRadius: 100,
+      distance: 2,
+      blur: 4,
+      child: SizedBox(
+        height: 10,
+        width: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(100),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: ratio.clamp(0.0, 1.0),
+              heightFactor: 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.lerp(accent, Colors.white, 0.30)!,
+                      accent,
+                      Color.lerp(accent, Colors.black, 0.22)!,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Toggle de día: vacío = hueco circular en la superficie (con punto de
+  /// acento si es hoy); completado = disco de acento extruido con volumen
+  /// cilíndrico. Estado leído por el tacto: hundido pide acción, extruido
+  /// celebra lo hecho.
+  Widget _neuDayDot({
+    required bool completed,
+    required bool isToday,
+    required Color accent,
+    required double size,
+  }) {
+    if (completed) {
+      return Container(
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: filled ? BentoTheme.accentHabits : Colors.transparent,
-          border: filled ? null : Border.all(color: BentoTheme.creamAlpha(0.18)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.lerp(accent, Colors.white, 0.28)!,
+              accent,
+              Color.lerp(accent, Colors.black, 0.18)!,
+            ],
+          ),
+          boxShadow: BentoTheme.neuRaised(distance: 2, blur: 4),
         ),
-        child: Icon(icon, size: 14, color: filled ? const Color(0xFF0C0C0D) : BentoTheme.cream),
+        child: Icon(Icons.check, size: size * 0.54, color: Colors.white),
+      );
+    }
+    return NeuPressed(
+      borderRadius: size / 2,
+      distance: 2,
+      blur: 3.5,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: isToday
+            ? Center(
+                child: Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
+                ),
+              )
+            : null,
       ),
     );
   }
@@ -621,22 +702,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id))),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
       borderRadius: 16,
-      backgroundColor: BentoTheme.darkCardAlt.withValues(alpha: 0.60),
       child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: BentoTheme.creamAlpha(0.12)),
-                  ),
-                  child: Text(habit.icon, style: const TextStyle(fontSize: 15)),
-                ),
+                _sunkenIconWell(habit.icon, size: 34, iconSize: 15, borderRadius: 10),
                 const SizedBox(width: 13),
                 Expanded(
                   child: Column(
@@ -661,16 +732,13 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 ),
                 const SizedBox(width: 10),
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => ref.read(habitsProvider.notifier).toggleHabit(habit.id, today),
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: isCompleted ? habit.colorValue : BentoTheme.creamAlpha(0.2), width: 1.4),
-                      color: isCompleted ? habit.colorValue : Colors.transparent,
-                    ),
-                    child: isCompleted ? const Icon(Icons.check, size: 15, color: Colors.white) : null,
+                  child: _neuDayDot(
+                    completed: isCompleted,
+                    isToday: true,
+                    accent: habit.colorValue,
+                    size: 26,
                   ),
                 ),
               ],
@@ -699,18 +767,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.2),
-                              width: 1.2,
-                            ),
-                            color: isCompletedDay ? color : Colors.transparent,
-                          ),
-                          child: isCompletedDay ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+                        _neuDayDot(
+                          completed: isCompletedDay,
+                          isToday: isToday,
+                          accent: color,
+                          size: 22,
                         ),
                       ],
                     ),

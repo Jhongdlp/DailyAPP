@@ -85,7 +85,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(
+          Positioned.fill(
               child: HabitBlobHeader(accentColor: BentoTheme.accentChat)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 12, 12),
@@ -127,13 +127,13 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                 IconButton(
                   tooltip: 'Conversaciones',
                   onPressed: _openHistory,
-                  icon: const Icon(Icons.forum_outlined,
+                  icon: Icon(Icons.forum_outlined,
                       color: BentoTheme.cream, size: 22),
                 ),
                 IconButton(
                   tooltip: 'Chat nuevo',
                   onPressed: chat.sending ? null : _newConversation,
-                  icon: const Icon(Icons.add_comment_outlined,
+                  icon: Icon(Icons.add_comment_outlined,
                       color: BentoTheme.cream, size: 22),
                 ),
               ],
@@ -151,7 +151,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.savings_outlined,
+            Icon(Icons.savings_outlined,
                 size: 44, color: BentoTheme.accentChat),
             const SizedBox(height: 16),
             Text(
@@ -212,7 +212,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                 if (msg.isUser)
                   Text(
                     msg.content,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       color: BentoTheme.cream,
                       fontWeight: FontWeight.w500,
@@ -236,17 +236,17 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                   MarkdownBody(
                     data: msg.content,
                     styleSheet: MarkdownStyleSheet(
-                      p: const TextStyle(
+                      p: TextStyle(
                         fontSize: 14,
                         color: BentoTheme.cream,
                         fontWeight: FontWeight.w500,
                         height: 1.4,
                       ),
-                      strong: const TextStyle(
+                      strong: TextStyle(
                         fontWeight: FontWeight.w800,
                         color: BentoTheme.cream,
                       ),
-                      listBullet: const TextStyle(
+                      listBullet: TextStyle(
                         fontSize: 14,
                         color: BentoTheme.cream,
                       ),
@@ -309,8 +309,8 @@ class _ChatTabState extends ConsumerState<ChatTab> {
           ),
 
           if (chat.sending)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.0),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: SizedBox(
                 width: 20,
                 height: 20,
@@ -328,7 +328,7 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                   child: TextField(
                     controller: _textController,
                     onSubmitted: (_) => _sendMessage(),
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: BentoTheme.cream, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: '¿En qué gasto o inversión te ayudo?',
@@ -346,8 +346,8 @@ class _ChatTabState extends ConsumerState<ChatTab> {
                         borderSide:
                             BorderSide(color: BentoTheme.creamAlpha(0.14)),
                       ),
-                      focusedBorder: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(16)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: const BorderRadius.all(Radius.circular(16)),
                         borderSide: BorderSide(
                             color: BentoTheme.accentChat, width: 2),
                       ),
@@ -459,7 +459,7 @@ class _ConversationSheet extends ConsumerWidget {
                           c.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: BentoTheme.cream,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,

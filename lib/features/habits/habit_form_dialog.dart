@@ -57,7 +57,7 @@ InputDecoration _darkFieldDecoration(String hint) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: BentoTheme.accentHabits, width: 1.5),
+      borderSide: BorderSide(color: BentoTheme.accentHabits, width: 1.5),
     ),
   );
 }
@@ -255,9 +255,9 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
         expand: false,
         builder: (context, scrollController) {
           return Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: BentoTheme.darkCard,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
               children: [
@@ -472,7 +472,7 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.add, size: 15, color: BentoTheme.accentHabits),
+                                      Icon(Icons.add, size: 15, color: BentoTheme.accentHabits),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Añadir hora',

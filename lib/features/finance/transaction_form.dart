@@ -116,7 +116,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       prefixText: prefixText,
       labelStyle: TextStyle(color: BentoTheme.creamAlpha(0.55)),
       hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
-      prefixStyle: const TextStyle(color: BentoTheme.cream),
+      prefixStyle: TextStyle(color: BentoTheme.cream),
       filled: true,
       fillColor: BentoTheme.darkCardAlt,
       border: OutlineInputBorder(
@@ -127,8 +127,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide(color: BentoTheme.accentFinance, width: 2),
       ),
     );
@@ -152,9 +152,9 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: BentoTheme.darkCard,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -211,7 +211,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 autofocus: !_isEditing,
-                style: const TextStyle(
+                style: TextStyle(
                   color: BentoTheme.cream,
                   fontWeight: FontWeight.w900,
                   fontSize: 24,
@@ -224,7 +224,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               DropdownButtonFormField<String>(
                 initialValue: _accountId,
                 dropdownColor: BentoTheme.darkCardAlt,
-                style: const TextStyle(color: BentoTheme.cream),
+                style: TextStyle(color: BentoTheme.cream),
                 iconEnabledColor: BentoTheme.creamAlpha(0.55),
                 decoration: _darkInputDecoration(
                   label: _type == TransactionType.transfer ? 'Desde la cuenta' : 'Cuenta',
@@ -236,7 +236,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                             children: [
                               Icon(a.type.icon, size: 18, color: a.type.color),
                               const SizedBox(width: 8),
-                              Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600, color: BentoTheme.cream)),
+                              Text(a.name, style: TextStyle(fontWeight: FontWeight.w600, color: BentoTheme.cream)),
                             ],
                           ),
                         ))
@@ -250,7 +250,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                 DropdownButtonFormField<String>(
                   initialValue: _transferAccountId,
                   dropdownColor: BentoTheme.darkCardAlt,
-                  style: const TextStyle(color: BentoTheme.cream),
+                  style: TextStyle(color: BentoTheme.cream),
                   iconEnabledColor: BentoTheme.creamAlpha(0.55),
                   decoration: _darkInputDecoration(label: 'Hacia la cuenta'),
                   items: accounts
@@ -261,7 +261,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                               children: [
                                 Icon(a.type.icon, size: 18, color: a.type.color),
                                 const SizedBox(width: 8),
-                                Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600, color: BentoTheme.cream)),
+                                Text(a.name, style: TextStyle(fontWeight: FontWeight.w600, color: BentoTheme.cream)),
                               ],
                             ),
                           ))
@@ -315,7 +315,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               // Descripción
               TextField(
                 controller: _descriptionController,
-                style: const TextStyle(color: BentoTheme.cream, fontWeight: FontWeight.w500),
+                style: TextStyle(color: BentoTheme.cream, fontWeight: FontWeight.w500),
                 decoration: _darkInputDecoration(label: 'Descripción (opcional)', hint: 'Ej: Almuerzo con el equipo'),
               ),
               const SizedBox(height: 16),

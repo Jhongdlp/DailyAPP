@@ -77,7 +77,7 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancelar', style: TextStyle(color: BentoTheme.textSecondary)),
+            child: Text('Cancelar', style: TextStyle(color: BentoTheme.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: BentoTheme.errorRed, foregroundColor: Colors.white),
@@ -126,14 +126,14 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
+          title: Text(
             'Bóveda Segura',
             style: TextStyle(fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
           ),
           actions: [
             // Botón de Bloquear Bóveda
             IconButton(
-              icon: const Icon(Icons.lock_open, color: BentoTheme.primaryDark),
+              icon: Icon(Icons.lock_open, color: BentoTheme.primaryDark),
               tooltip: 'Bloquear Bóveda',
               onPressed: _lockVault,
             ),
@@ -163,12 +163,12 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                   onChanged: (val) => setState(() => _searchQuery = val),
                   decoration: InputDecoration(
                     hintText: 'Buscar en la bóveda...',
-                    prefixIcon: const Icon(Icons.search, color: BentoTheme.textSecondary),
+                    prefixIcon: Icon(Icons.search, color: BentoTheme.textSecondary),
                     filled: true,
                     fillColor: BentoTheme.cardBg,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: BentoTheme.borderMuted, width: 2),
+                      borderSide: BorderSide(color: BentoTheme.borderMuted, width: 2),
                     ),
                   ),
                 ),
@@ -199,7 +199,7 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                         backgroundColor: BentoTheme.cardBg,
-                        side: const BorderSide(color: BentoTheme.borderMuted, width: 1.5),
+                        side: BorderSide(color: BentoTheme.borderMuted, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         onSelected: (selected) {
                           setState(() {
@@ -221,11 +221,11 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.folder_open_outlined, size: 64, color: BentoTheme.textSecondary.withOpacity(0.5)),
+                            Icon(Icons.folder_open_outlined, size: 64, color: BentoTheme.textSecondary.withValues(alpha: 0.5)),
                             const SizedBox(height: 16),
                             Text(
                               _searchQuery.isEmpty ? 'Bóveda vacía' : 'Sin coincidencias',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.textSecondary),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.textSecondary),
                             ),
                           ],
                         ),
@@ -258,9 +258,9 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                                     width: 48,
                                     height: 48,
                                     decoration: BoxDecoration(
-                                      color: catInfo.color.withOpacity(0.1),
+                                      color: catInfo.color.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: catInfo.color.withOpacity(0.3), width: 1.5),
+                                      border: Border.all(color: catInfo.color.withValues(alpha: 0.3), width: 1.5),
                                     ),
                                     child: Icon(catInfo.icon, color: catInfo.color),
                                   ),
@@ -272,7 +272,7 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                                       children: [
                                         Text(
                                           decryptedTitle,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                             color: BentoTheme.textPrimary,
@@ -284,7 +284,7 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                                           const SizedBox(height: 4),
                                           Text(
                                             decryptedDesc,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12,
                                               color: BentoTheme.textSecondary,
                                             ),
@@ -298,7 +298,7 @@ class _VaultHomeScreenState extends ConsumerState<VaultHomeScreen> {
                                             'Usuario: ${payload['username']}',
                                             style: TextStyle(
                                               fontSize: 12,
-                                              color: BentoTheme.textSecondary.withOpacity(0.8),
+                                              color: BentoTheme.textSecondary.withValues(alpha: 0.8),
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,

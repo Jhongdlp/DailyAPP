@@ -66,7 +66,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentFinance)),
+          Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentFinance)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Row(
@@ -315,7 +315,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                       if (_isSearching) ...[
                         TextField(
                           controller: _searchController,
-                          style: const TextStyle(color: BentoTheme.cream),
+                          style: TextStyle(color: BentoTheme.cream),
                           onChanged: (val) => setState(() => _searchQuery = val),
                           decoration: InputDecoration(
                             prefixIcon: Icon(Icons.search_rounded, color: BentoTheme.creamAlpha(0.5)),
@@ -331,8 +331,8 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                               borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
                             ),
-                            focusedBorder: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(16)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: const BorderRadius.all(Radius.circular(16)),
                               borderSide: BorderSide(color: BentoTheme.accentFinance, width: 2),
                             ),
                             suffixIcon: _searchQuery.isNotEmpty
@@ -378,8 +378,8 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                       const SizedBox(height: 16),
 
                       if (accountsAsync.isLoading || txsAsync.isLoading)
-                        const Padding(
-                          padding: EdgeInsets.all(40),
+                        Padding(
+                          padding: const EdgeInsets.all(40),
                           child: Center(
                             child: CircularProgressIndicator(color: BentoTheme.accentFinance),
                           ),
@@ -484,7 +484,7 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
         children: [
           Row(
             children: [
-              const Icon(Icons.pie_chart_outline_rounded, size: 16, color: BentoTheme.accentFinance),
+              Icon(Icons.pie_chart_outline_rounded, size: 16, color: BentoTheme.accentFinance),
               const SizedBox(width: 6),
               Text(
                 'Gastos por Categoría (Este Mes)',
@@ -891,7 +891,7 @@ class _EmptyState extends StatelessWidget {
             onPressed: onPressed,
             style: OutlinedButton.styleFrom(
               foregroundColor: BentoTheme.accentFinance,
-              side: const BorderSide(color: BentoTheme.accentFinance, width: 2),
+              side: BorderSide(color: BentoTheme.accentFinance, width: 2),
             ),
             child: Text(buttonLabel),
           ),

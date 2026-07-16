@@ -229,8 +229,8 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(16)),
         borderSide: BorderSide(color: BentoTheme.accentAlarm, width: 2),
       ),
     );
@@ -244,7 +244,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
         backgroundColor: BentoTheme.darkBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: BentoTheme.cream),
+          icon: Icon(Icons.close, color: BentoTheme.cream),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -283,7 +283,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.notifications_active_outlined,
+                      Icon(Icons.notifications_active_outlined,
                           size: 14, color: BentoTheme.accentOrange),
                       const SizedBox(width: 6),
                       Text(
@@ -311,7 +311,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
             const SizedBox(height: 12),
             TextField(
               controller: _objectCtrl,
-              style: const TextStyle(color: BentoTheme.cream),
+              style: TextStyle(color: BentoTheme.cream),
               onChanged: (_) => setState(() {}),
               decoration: _darkInputDecoration(
                 hint: 'Ej: Taza de café',
@@ -400,7 +400,7 @@ class _AlarmFormState extends ConsumerState<AlarmForm> {
             const SizedBox(height: 12),
             TextField(
               controller: _labelCtrl,
-              style: const TextStyle(color: BentoTheme.cream),
+              style: TextStyle(color: BentoTheme.cream),
               textCapitalization: TextCapitalization.sentences,
               onChanged: (_) => setState(() {}),
               decoration: _darkInputDecoration(

@@ -203,7 +203,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
     }
     _semanticAdjacency = semantic;
 
-    final center = Offset(_worldSize / 2, _worldSize / 2);
+    final center = const Offset(_worldSize / 2, _worldSize / 2);
 
     for (final note in notes) {
       final manualDegree = adjacency[note.id]?.length ?? 0;
@@ -266,7 +266,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
     }
 
     final forces = <String, Offset>{for (final id in ids) id: Offset.zero};
-    final center = Offset(_worldSize / 2, _worldSize / 2);
+    final center = const Offset(_worldSize / 2, _worldSize / 2);
 
     // Repulsión entre todo par de nodos.
     for (int i = 0; i < ids.length; i++) {
@@ -456,7 +456,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
                   final viewportCenter =
                       Offset(constraints.maxWidth / 2, constraints.maxHeight / 2);
                   _panOffset = viewportCenter -
-                      Offset(_worldSize / 2, _worldSize / 2) * _scale;
+                      const Offset(_worldSize / 2, _worldSize / 2) * _scale;
                   _panInitialized = true;
                 }
                 return Container(
@@ -748,7 +748,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.add_link_rounded,
+            Icon(Icons.add_link_rounded,
                 size: 14, color: BentoTheme.accentBrain),
             const SizedBox(width: 5),
             ConstrainedBox(
@@ -757,7 +757,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
                 target.title.isEmpty ? 'Sin título' : target.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                   color: BentoTheme.cream,
@@ -819,8 +819,8 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
               hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
               prefixIcon: Icon(Icons.search, size: 18, color: BentoTheme.creamSecondary),
               suffixIcon: _searchingSemantic
-                  ? const Padding(
-                      padding: EdgeInsets.all(10),
+                  ? Padding(
+                      padding: const EdgeInsets.all(10),
                       child: SizedBox(
                         width: 14,
                         height: 14,
@@ -845,8 +845,8 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(color: BentoTheme.creamAlpha(0.20)),
               ),
-              focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: const BorderRadius.all(Radius.circular(12)),
                 borderSide: BorderSide(color: BentoTheme.accentBrain, width: 2),
               ),
             ),

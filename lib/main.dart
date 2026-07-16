@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:alarm/alarm.dart';
 import 'core/theme/bento_theme.dart';
 import 'core/providers/settings_provider.dart';
+import 'core/providers/appearance_provider.dart';
 import 'core/providers/alarms_provider.dart';
 import 'core/providers/habits_provider.dart';
 import 'core/services/alarm_service.dart';
@@ -38,7 +39,8 @@ class SistemDailyApp extends ConsumerStatefulWidget {
   ConsumerState<SistemDailyApp> createState() => _SistemDailyAppState();
 }
 
-class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
+class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
+    with WidgetsBindingObserver {
   bool _initializing = true;
   String? _pendingAlarmId;
   String? _activeDismissAlarmId;
@@ -46,7 +48,24 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeApp();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Con el tema en "sistema", el brillo del SO es una entrada más del color.
+  /// MaterialApp lo resuelve solo, pero BentoTheme.darkMode es un flag propio:
+  /// sin este aviso la app se quedaría con la paleta del brillo anterior.
+  @override
+  void didChangePlatformBrightness() {
+    if (ref.read(appearanceProvider).mode == ThemeMode.system) {
+      setState(() {});
+    }
   }
 
   void _handleNotificationTap(NotificationResponse response) {
@@ -258,20 +277,34 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Sincronizar la fuente de verdad de los getters de color ANTES de
+    // construir cualquier widget que los lea: primero la apariencia elegida
+    // (paleta + material), luego el modo ya resuelto.
+    final appearance = ref.watch(appearanceProvider);
+    BentoTheme.applyAppearance(appearance.resolved, appearance.material);
+
+    final themeMode = appearance.mode;
+    // El brillo se lee del dispatcher y no de MediaQuery: este build está por
+    // encima de MaterialApp, así que aquí todavía no hay MediaQuery que leer.
+    final isDark = appearance
+        .isDarkFor(View.of(context).platformDispatcher.platformBrightness);
+    BentoTheme.darkMode.value = isDark;
+
     if (_initializing) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: BentoTheme.darkTheme,
+        theme: BentoTheme.lightTheme,
+        darkTheme: BentoTheme.darkTheme,
+        themeMode: themeMode,
         navigatorKey: navigatorKey,
-        home: const BentoBackground(
-          backgroundColor: BentoTheme.darkBg,
+        home: BentoBackground(
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.widgets_outlined,
                     size: 64, color: BentoTheme.cream),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 CircularProgressIndicator(color: BentoTheme.cream),
               ],
             ),
@@ -286,9 +319,19 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp> {
     return MaterialApp(
       title: 'SistemDaily',
       debugShowCheckedModeBanner: false,
-      theme: BentoTheme.darkTheme,
+      theme: BentoTheme.lightTheme,
+      darkTheme: BentoTheme.darkTheme,
+      themeMode: themeMode,
       navigatorKey: navigatorKey,
-      home: homeWidget,
+      // La Key atada a la apariencia remonta el árbol al cambiar de modo, de
+      // paleta o de material: muchos widgets son const y leen colores
+      // estáticos de BentoTheme, así que sin remount se quedarían pintados con
+      // la paleta anterior. `isDark` entra aparte porque en modo sistema la
+      // firma no cambia aunque el SO sí lo haga.
+      home: KeyedSubtree(
+        key: ValueKey(Object.hash(appearance.signature, isDark)),
+        child: homeWidget,
+      ),
     );
   }
 }

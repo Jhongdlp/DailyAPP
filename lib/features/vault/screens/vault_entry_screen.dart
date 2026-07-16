@@ -168,7 +168,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
       appBar: AppBar(
         title: Text(
           isEditing ? 'Editar Elemento' : 'Nuevo Elemento',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
+          style: TextStyle(fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
         ),
         elevation: 0,
         backgroundColor: BentoTheme.bgLight,
@@ -188,7 +188,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Categoría',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
                       ),
@@ -213,7 +213,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Información General',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
                       ),
@@ -221,7 +221,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                       TextFormField(
                         controller: _titleController,
                         validator: (val) => val == null || val.isEmpty ? 'El título es requerido' : null,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Título',
                           hintText: 'Ej. Mi correo personal',
                           prefixIcon: Icon(Icons.title, color: BentoTheme.textSecondary),
@@ -231,7 +231,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                       TextFormField(
                         controller: _descController,
                         maxLines: 2,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Descripción / Notas rápidas',
                           hintText: 'Ej. Cuenta principal de desarrollo',
                           prefixIcon: Icon(Icons.notes, color: BentoTheme.textSecondary),
@@ -249,14 +249,14 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Detalles de la Cuenta',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _usernameController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Usuario / Correo',
                             hintText: 'ejemplo@correo.com',
                             prefixIcon: Icon(Icons.person_outline, color: BentoTheme.textSecondary),
@@ -269,7 +269,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                           validator: (val) => val == null || val.isEmpty ? 'La contraseña es requerida' : null,
                           decoration: InputDecoration(
                             labelText: 'Contraseña',
-                            prefixIcon: const Icon(Icons.password_outlined, color: BentoTheme.textSecondary),
+                            prefixIcon: Icon(Icons.password_outlined, color: BentoTheme.textSecondary),
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -289,7 +289,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _urlController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Sitio Web / URL',
                             hintText: 'https://ejemplo.com',
                             prefixIcon: Icon(Icons.link, color: BentoTheme.textSecondary),
@@ -304,14 +304,14 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Detalles de la Tarjeta',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _cardHolderController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Nombre del Titular',
                             hintText: 'JUAN PEREZ',
                             prefixIcon: Icon(Icons.person_outline, color: BentoTheme.textSecondary),
@@ -321,7 +321,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                         TextFormField(
                           controller: _cardNumberController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Número de Tarjeta',
                             hintText: '4000 1234 5678 9010',
                             prefixIcon: Icon(Icons.credit_card_outlined, color: BentoTheme.textSecondary),
@@ -333,7 +333,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                             Expanded(
                               child: TextFormField(
                                 controller: _cardExpiryController,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: 'Vencimiento',
                                   hintText: 'MM/AA',
                                   prefixIcon: Icon(Icons.date_range_outlined, color: BentoTheme.textSecondary),
@@ -348,7 +348,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                                 decoration: InputDecoration(
                                   labelText: 'CVV',
                                   hintText: '123',
-                                  prefixIcon: const Icon(Icons.lock_outline, color: BentoTheme.textSecondary),
+                                  prefixIcon: Icon(Icons.lock_outline, color: BentoTheme.textSecondary),
                                   suffixIcon: IconButton(
                                     icon: Icon(_obscureCvv ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                                     onPressed: () => setState(() => _obscureCvv = !_obscureCvv),
@@ -369,7 +369,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                       children: [
                         Text(
                           _category == 'note' ? 'Contenido de la Nota Segura' : 'Texto Confidencial',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: BentoTheme.primaryDark),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -392,7 +392,7 @@ class _VaultEntryScreenState extends ConsumerState<VaultEntryScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: _isSaving
-                      ? const Center(child: CircularProgressIndicator(color: BentoTheme.primaryDark))
+                      ? Center(child: CircularProgressIndicator(color: BentoTheme.primaryDark))
                       : ElevatedButton(
                           onPressed: _handleSave,
                           child: const Text('Guardar Elemento'),

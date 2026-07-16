@@ -16,7 +16,7 @@ class AlarmTab extends ConsumerWidget {
       height: 92,
       child: Stack(
         children: [
-          const Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentAlarm)),
+          Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentAlarm)),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
             child: Align(
@@ -115,7 +115,7 @@ class AlarmTab extends ConsumerWidget {
                 _buildSectionHeader(context, ref, alarmsAsync.value?.length ?? 0),
                 Expanded(
                   child: alarmsAsync.when(
-                    loading: () => const Center(
+                    loading: () => Center(
                       child: CircularProgressIndicator(color: BentoTheme.accentAlarm),
                     ),
                     error: (e, _) => Center(
@@ -157,7 +157,7 @@ class AlarmTab extends ConsumerWidget {
                                     shape: BoxShape.circle,
                                     color: BentoTheme.accentOrange.withValues(alpha: 0.14),
                                   ),
-                                  child: const Icon(Icons.alarm_add,
+                                  child: Icon(Icons.alarm_add,
                                       size: 56, color: BentoTheme.accentOrange),
                                 ),
                                 const SizedBox(height: 20),

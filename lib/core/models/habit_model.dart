@@ -2,18 +2,30 @@ import 'package:flutter/material.dart';
 import '../theme/bento_theme.dart';
 
 enum HabitCategory {
-  health('health', 'Salud', BentoTheme.successGreen, Icons.favorite_border),
-  mind('mind', 'Mente', BentoTheme.accentBlue, Icons.self_improvement),
-  productivity('productivity', 'Productividad', BentoTheme.accentOrange, Icons.bolt_outlined),
-  learning('learning', 'Aprendizaje', BentoTheme.accentPurple, Icons.school_outlined),
-  social('social', 'Social', BentoTheme.errorRed, Icons.groups_outlined),
-  general('general', 'General', BentoTheme.primaryDark, Icons.circle_outlined);
+  health('health', 'Salud', Icons.favorite_border),
+  mind('mind', 'Mente', Icons.self_improvement),
+  productivity('productivity', 'Productividad', Icons.bolt_outlined),
+  learning('learning', 'Aprendizaje', Icons.school_outlined),
+  social('social', 'Social', Icons.groups_outlined),
+  general('general', 'General', Icons.circle_outlined);
 
   final String value;
   final String label;
-  final Color color;
   final IconData icon;
-  const HabitCategory(this.value, this.label, this.color, this.icon);
+  const HabitCategory(this.value, this.label, this.icon);
+
+  /// El color no puede ser un campo del enum: el constructor de un enum exige
+  /// argumentos const, y los acentos son getters que resuelven contra el modo
+  /// claro/oscuro. Antes esto obligaba a que `general` llevara un gris fijo.
+  Color get color => switch (this) {
+        HabitCategory.health => BentoTheme.successGreen,
+        HabitCategory.mind => BentoTheme.accentBlue,
+        HabitCategory.productivity => BentoTheme.accentOrange,
+        HabitCategory.learning => BentoTheme.accentPurple,
+        HabitCategory.social => BentoTheme.errorRed,
+        // Neutro: el único que no toma acento, para no competir con ellos.
+        HabitCategory.general => BentoTheme.neuText.withValues(alpha: 0.55),
+      };
 
   static HabitCategory fromValue(String? v) => HabitCategory.values.firstWhere(
         (c) => c.value == v,

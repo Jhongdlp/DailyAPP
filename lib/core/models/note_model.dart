@@ -2,16 +2,25 @@ import 'package:flutter/material.dart';
 import '../theme/bento_theme.dart';
 
 enum NotePriority {
-  low(0, 'Baja', BentoTheme.textSecondary, Icons.arrow_downward),
-  normal(1, 'Normal', BentoTheme.accentBlue, Icons.remove),
-  high(2, 'Alta', BentoTheme.accentOrange, Icons.arrow_upward),
-  urgent(3, 'Urgente', BentoTheme.errorRed, Icons.priority_high);
+  low(0, 'Baja', Icons.arrow_downward),
+  normal(1, 'Normal', Icons.remove),
+  high(2, 'Alta', Icons.arrow_upward),
+  urgent(3, 'Urgente', Icons.priority_high);
 
   final int value;
   final String label;
-  final Color color;
   final IconData icon;
-  const NotePriority(this.value, this.label, this.color, this.icon);
+  const NotePriority(this.value, this.label, this.icon);
+
+  /// Getter y no campo: el constructor de un enum exige const y los acentos
+  /// resuelven contra el modo claro/oscuro.
+  Color get color => switch (this) {
+        // Neutro deliberado: "baja" no debe llamar la atención.
+        NotePriority.low => BentoTheme.neuText.withValues(alpha: 0.55),
+        NotePriority.normal => BentoTheme.accentBlue,
+        NotePriority.high => BentoTheme.accentOrange,
+        NotePriority.urgent => BentoTheme.errorRed,
+      };
 
   static NotePriority fromValue(int? v) =>
       NotePriority.values.firstWhere((p) => p.value == v,

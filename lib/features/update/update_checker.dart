@@ -41,7 +41,7 @@ class UpdateChecker {
           ),
           title: Row(
             children: [
-              const Icon(Icons.system_update, color: BentoTheme.accentLime),
+              Icon(Icons.system_update, color: BentoTheme.accentLime),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(

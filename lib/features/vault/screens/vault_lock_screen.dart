@@ -98,8 +98,8 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: BentoTheme.creamAlpha(0.14)),
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide(color: BentoTheme.accentBrain, width: 2),
       ),
     );
@@ -115,7 +115,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
         backgroundColor: BentoTheme.darkBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: BentoTheme.cream),
+          icon: Icon(Icons.arrow_back, color: BentoTheme.cream),
           tooltip: 'Volver',
           onPressed: () => Navigator.of(context).maybePop(),
         ),
@@ -123,12 +123,12 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-            stops: [0.0, 0.6],
+            stops: const [0.0, 0.6],
           ),
         ),
         child: Center(
@@ -223,7 +223,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                         ),
                         child: Column(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.fingerprint_outlined,
                               size: 64,
                               color: BentoTheme.accentBrain,
@@ -281,7 +281,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           TextField(
                             controller: _passwordController,
                             obscureText: _obscureText1,
-                            style: const TextStyle(color: BentoTheme.cream),
+                            style: TextStyle(color: BentoTheme.cream),
                             decoration: _darkInputDecoration(
                               hint: 'Ingresa tu contraseña maestra',
                               icon: Icons.lock_outline,
@@ -299,7 +299,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: _isProcessing
-                                ? const Center(child: CircularProgressIndicator(color: BentoTheme.accentBrain))
+                                ? Center(child: CircularProgressIndicator(color: BentoTheme.accentBrain))
                                 : ElevatedButton(
                                     onPressed: _handlePasswordUnlock,
                                     style: ElevatedButton.styleFrom(
@@ -361,7 +361,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscureText1,
-                            style: const TextStyle(color: BentoTheme.cream),
+                            style: TextStyle(color: BentoTheme.cream),
                             validator: (val) {
                               if (val == null || val.isEmpty) return 'La contraseña es obligatoria';
                               if (val.length < 6) return 'Debe tener al menos 6 caracteres';
@@ -383,7 +383,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           TextFormField(
                             controller: _confirmController,
                             obscureText: _obscureText2,
-                            style: const TextStyle(color: BentoTheme.cream),
+                            style: TextStyle(color: BentoTheme.cream),
                             validator: (val) {
                               if (val != _passwordController.text) {
                                 return 'Las contraseñas no coinciden';
@@ -406,7 +406,7 @@ class _VaultLockScreenState extends ConsumerState<VaultLockScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: _isProcessing
-                                ? const Center(child: CircularProgressIndicator(color: BentoTheme.accentBrain))
+                                ? Center(child: CircularProgressIndicator(color: BentoTheme.accentBrain))
                                 : ElevatedButton(
                                     onPressed: _handleSetup,
                                     style: ElevatedButton.styleFrom(

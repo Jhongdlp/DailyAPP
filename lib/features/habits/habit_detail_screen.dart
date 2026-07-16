@@ -217,7 +217,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       width: 32,
                       height: 32,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: BentoTheme.accentHabits),
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: BentoTheme.accentHabits),
                       child: const Icon(Icons.add, size: 14, color: Color(0xFF0C0C0D)),
                     ),
                   ),
@@ -266,12 +266,12 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
       backgroundColor: BentoTheme.darkBg,
       body: Container(
         constraints: const BoxConstraints.expand(),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [BentoTheme.darkBgTop, BentoTheme.darkBg],
-            stops: [0.0, 0.6],
+            stops: const [0.0, 0.6],
           ),
         ),
         child: SafeArea(
@@ -341,11 +341,11 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                       border: Border.all(color: BentoTheme.accentHabits.withValues(alpha: 0.5)),
                     ),
                     child: _analyzing
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentHabits))
+                        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.accentHabits))
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.psychology_outlined, size: 18, color: BentoTheme.accentHabits),
+                              Icon(Icons.psychology_outlined, size: 18, color: BentoTheme.accentHabits),
                               const SizedBox(width: 8),
                               Text(
                                 'Analizar con IA',
@@ -370,7 +370,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
+                                Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Coach de IA',

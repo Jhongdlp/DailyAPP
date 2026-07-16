@@ -76,7 +76,7 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
             return Center(
               child: Text(
                 labelOf(i),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 42,
                   fontWeight: FontWeight.w900,
                   color: BentoTheme.cream,
@@ -154,8 +154,8 @@ class _BentoTimePickerState extends State<BentoTimePicker> {
                   _notify();
                 },
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
                   ':',
                   style: TextStyle(

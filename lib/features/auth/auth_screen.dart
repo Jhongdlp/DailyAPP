@@ -90,7 +90,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(color: BentoTheme.primaryDark, width: 2),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.fingerprint,
                         size: 48,
                         color: BentoTheme.primaryDark,
@@ -105,7 +105,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'SistemDaily OS',
                       style: TextStyle(
                         fontSize: 14,
@@ -130,7 +130,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.w500),
+                        style: TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.w500),
                         decoration: const InputDecoration(
                           labelText: 'Correo Electrónico',
                           hintText: 'ejemplo@correo.com',
@@ -143,7 +143,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
-                        style: const TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.w500),
+                        style: TextStyle(color: BentoTheme.textPrimary, fontWeight: FontWeight.w500),
                         decoration: const InputDecoration(
                           labelText: 'Contraseña',
                           hintText: '••••••••',
@@ -170,7 +170,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           _isLogin 
                               ? '¿No tienes cuenta? Regístrate aquí' 
                               : '¿Ya tienes cuenta? Inicia sesión aquí',
-                          style: const TextStyle(color: BentoTheme.primaryDark, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: BentoTheme.primaryDark, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
