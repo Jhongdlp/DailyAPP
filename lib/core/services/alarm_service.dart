@@ -205,7 +205,33 @@ class AlarmService {
   static Future<NotificationAppLaunchDetails?> getLaunchDetails() =>
       _plugin.getNotificationAppLaunchDetails();
 
+  /// Id nativo que el paquete `alarm` usa para una alarma nuestra.
+  static int nativeId(String alarmId) => alarmId.hashCode.abs() % 100000;
+
+  /// Ids que el servicio nativo tiene sonando AHORA MISMO.
+  ///
+  /// Reprogramar implica `Alarm.stop`, que además de desprogramar mata el
+  /// audio y la vibración del servicio en curso. Si se aplica sobre una alarma
+  /// que está sonando, la pantalla de dismiss se queda muda.
+  static Future<Set<int>> _ringingIds() async {
+    try {
+      final active = await Alarm.getAlarms();
+      final flags = await Future.wait(active.map((s) => Alarm.isRinging(s.id)));
+      return {
+        for (var i = 0; i < active.length; i++)
+          if (flags[i]) active[i].id,
+      };
+    } catch (e) {
+      debugPrint('AlarmService: no pude leer las alarmas sonando: $e');
+      return const {};
+    }
+  }
+
   static Future<void> scheduleAlarm(AlarmModel alarm, {DateTime? from}) async {
+    // Al arrancar por un full-screen intent, el provider de alarmas reprograma
+    // todo; sin esta guarda cortaría la alarma que acaba de despertarnos.
+    if ((await _ringingIds()).contains(nativeId(alarm.id))) return;
+
     await cancelAlarm(alarm.id);
     if (!alarm.enabled || alarm.daysOfWeek.isEmpty) return;
 
@@ -239,16 +265,19 @@ class AlarmService {
   }
 
   static Future<void> cancelAlarm(String alarmId) async {
-    final idInt = alarmId.hashCode.abs() % 100000;
-    await Alarm.stop(idInt);
+    await Alarm.stop(nativeId(alarmId));
   }
 
   static Future<void> rescheduleAll(List<AlarmModel> alarms) async {
+    final ringing = await _ringingIds();
     final activeAlarms = await Alarm.getAlarms();
     for (final settings in activeAlarms) {
+      if (ringing.contains(settings.id)) continue;
       await Alarm.stop(settings.id);
     }
-    await Future.wait(alarms.map((alarm) => scheduleAlarm(alarm)));
+    await Future.wait(alarms
+        .where((alarm) => !ringing.contains(nativeId(alarm.id)))
+        .map((alarm) => scheduleAlarm(alarm)));
   }
 
   /// ¿Puede el sistema programar alarmas exactas? Si es `false`, los
