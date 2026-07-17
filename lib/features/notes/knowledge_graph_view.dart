@@ -115,9 +115,10 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
   String _searchQuery = '';
   Map<String, double> _semanticMatches = {};
   bool _searchingSemantic = false;
-
   String _vaultFilter = _kFilterAll;
   String? _focusedNodeId;
+  int _ticksSinceReheat = 0;
+  DateTime _lastInteractionTime = DateTime.now();
 
   @override
   void initState() {
@@ -239,7 +240,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
         spawn = neighborWithPos.position + Offset(cos(angle), sin(angle)) * 80;
       } else {
         final angle = _random.nextDouble() * 2 * pi;
-        final dist = _random.nextDouble() * 60;
+        final dist = 50.0 + _random.nextDouble() * 250.0;
         spawn = center + Offset(cos(angle), sin(angle)) * dist;
       }
 
@@ -316,6 +317,8 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
   }
 
   void _reheat() {
+    _lastInteractionTime = DateTime.now();
+    _ticksSinceReheat = 0;
     _lastElapsed = Duration.zero;
     if (!_ticker.isActive) _ticker.start();
   }
@@ -327,6 +330,8 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
     final dt = ((elapsed - _lastElapsed).inMicroseconds / 1e6).clamp(0.0, 1 / 30);
     _lastElapsed = elapsed;
     if (dt <= 0) return;
+
+    _ticksSinceReheat++;
 
     final ids = _nodes.keys.toList();
     if (ids.isEmpty) {
@@ -399,6 +404,21 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
       forces[id] = forces[id]! + (center - node.position) * _kGravity;
     }
 
+    // Fuerza de flotación Browniana autónoma para dar un efecto flotante "vivo"
+    final idleDuration = DateTime.now().difference(_lastInteractionTime);
+    final idleFactor = (1.0 - (idleDuration.inMilliseconds / 8000.0)).clamp(0.0, 1.0);
+    if (idleFactor > 0) {
+      final timeInSeconds = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      for (final id in ids) {
+        final seed = id.hashCode.toDouble();
+        final floatForce = Offset(
+          sin(timeInSeconds * 1.4 + seed) * (1.2 * idleFactor),
+          cos(timeInSeconds * 1.1 + seed) * (1.2 * idleFactor),
+        );
+        forces[id] = forces[id]! + floatForce;
+      }
+    }
+
     double kinetic = 0;
     for (final id in ids) {
       final node = _nodes[id]!;
@@ -410,7 +430,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
 
     setState(() {});
 
-    if (kinetic < _kineticEpsilon && _draggedNodeId == null) {
+    if (_ticksSinceReheat > 100 && kinetic < _kineticEpsilon && _draggedNodeId == null) {
       _ticker.stop();
     }
   }
@@ -988,16 +1008,10 @@ class _EdgePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final manualPaint = Paint()
-      ..color = BentoTheme.accentBrain.withValues(alpha: 0.35)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    final manualFadedPaint = Paint()
-      ..color = BentoTheme.accentBrain.withValues(alpha: 0.08)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+    final manualColor = BentoTheme.accentBrain;
+    final semanticColor = BentoTheme.accentPurple;
 
-    // Aristas manuales: línea sólida
+    // Aristas manuales: goma elástica curvílinea
     for (final entry in adjacency.entries) {
       final a = nodes[entry.key];
       if (a == null) continue;
@@ -1005,13 +1019,39 @@ class _EdgePainter extends CustomPainter {
         if (targetId.compareTo(entry.key) <= 0) continue;
         final b = nodes[targetId];
         if (b == null) continue;
+        
         final dim = _isDim(entry.key, targetId);
-        canvas.drawLine(
-            a.position, b.position, dim ? manualFadedPaint : manualPaint);
+        final color = dim ? manualColor.withValues(alpha: 0.08) : manualColor.withValues(alpha: 0.35);
+        final delta = b.position - a.position;
+        final dist = delta.distance;
+        final idealLen = 130.0; // Largo de muelle ideal
+
+        final paint = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke;
+
+        if (dist < idealLen) {
+          // Relajado -> La línea se arruga/saca curva (sag) y se hace más gruesa
+          final sag = (idealLen - dist) * 0.20;
+          final mid = (a.position + b.position) / 2;
+          final perp = Offset(-delta.dy, delta.dx) / (dist == 0 ? 1 : dist);
+          final controlPoint = mid + perp * sag;
+
+          final path = Path()
+            ..moveTo(a.position.dx, a.position.dy)
+            ..quadraticBezierTo(controlPoint.dx, controlPoint.dy, b.position.dx, b.position.dy);
+
+          paint.strokeWidth = 1.6 + (idealLen - dist) * 0.005;
+          canvas.drawPath(path, paint);
+        } else {
+          // Bajo tensión -> La línea se estira recta y se hace más delgada
+          paint.strokeWidth = max(0.6, 1.6 - (dist - idealLen) * 0.004);
+          canvas.drawLine(a.position, b.position, paint);
+        }
       }
     }
 
-    // Aristas semánticas: línea punteada púrpura, alpha según similitud
+    // Aristas semánticas: línea punteada púrpura elástica
     for (final entry in semanticAdjacency.entries) {
       final a = nodes[entry.key];
       if (a == null) continue;
@@ -1021,15 +1061,33 @@ class _EdgePainter extends CustomPainter {
         if (b == null) continue;
 
         final dim = _isDim(entry.key, semEntry.key);
-        // Similitud 0.55 → alpha ~0.25; similitud 0.9 → alpha ~0.65
         final alpha = dim ? 0.06 : (0.25 + (semEntry.value - 0.55) * 1.15)
             .clamp(0.15, 0.65)
             .toDouble();
+
+        final color = semanticColor.withValues(alpha: alpha);
+        final delta = b.position - a.position;
+        final dist = delta.distance;
+        final idealLen = 220.0; // Largo de muelle ideal
+
         final paint = Paint()
-          ..color = BentoTheme.accentPurple.withValues(alpha: alpha)
-          ..strokeWidth = 1.4
+          ..color = color
           ..style = PaintingStyle.stroke;
-        _drawDashedLine(canvas, a.position, b.position, paint);
+
+        if (dist < idealLen) {
+          // Relajado -> Punteado curvo
+          final sag = (idealLen - dist) * 0.25;
+          final mid = (a.position + b.position) / 2;
+          final perp = Offset(-delta.dy, delta.dx) / (dist == 0 ? 1 : dist);
+          final controlPoint = mid + perp * sag;
+
+          paint.strokeWidth = 1.4 + (idealLen - dist) * 0.004;
+          _drawDashedCurve(canvas, a.position, controlPoint, b.position, paint);
+        } else {
+          // Bajo tensión -> Punteado recto y delgado
+          paint.strokeWidth = max(0.5, 1.4 - (dist - idealLen) * 0.003);
+          _drawDashedLine(canvas, a.position, b.position, paint);
+        }
       }
     }
   }
@@ -1046,6 +1104,40 @@ class _EdgePainter extends CustomPainter {
       final segEnd = min(covered + dashLength, distance);
       canvas.drawLine(from + dir * covered, from + dir * segEnd, paint);
       covered = segEnd + gapLength;
+    }
+  }
+
+  void _drawDashedCurve(Canvas canvas, Offset p0, Offset p1, Offset p2, Paint paint) {
+    const double dashLength = 7.0;
+    const double gapLength = 6.0;
+    const int segments = 24;
+    
+    // Muestrear puntos de la curva de Bezier cuadrática
+    final points = List<Offset>.generate(segments + 1, (i) {
+      final t = i / segments;
+      final x = (1 - t) * (1 - t) * p0.dx + 2 * (1 - t) * t * p1.dx + t * t * p2.dx;
+      final y = (1 - t) * (1 - t) * p0.dy + 2 * (1 - t) * t * p1.dy + t * t * p2.dy;
+      return Offset(x, y);
+    });
+    
+    // Pintar guiones siguiendo el trazado curvo
+    double covered = 0.0;
+    bool drawing = true;
+    
+    for (int i = 0; i < segments; i++) {
+      final segmentStart = points[i];
+      final segmentEnd = points[i + 1];
+      final segmentLength = (segmentEnd - segmentStart).distance;
+      
+      if (drawing) {
+        canvas.drawLine(segmentStart, segmentEnd, paint);
+      }
+      
+      covered += segmentLength;
+      if (covered >= (drawing ? dashLength : gapLength)) {
+        covered = 0.0;
+        drawing = !drawing;
+      }
     }
   }
 
@@ -1069,3 +1161,4 @@ class _EdgePainter extends CustomPainter {
     return false;
   }
 }
+

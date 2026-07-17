@@ -620,3 +620,17 @@ create policy "Usuarios pueden eliminar sus propios mensajes"
   on public.chat_messages for delete
   to authenticated
   using ((select auth.uid()) = user_id);
+
+
+-- =====================================================
+-- 10. MIGRACIÓN RPG DE VIDA (Gamificación)
+-- =====================================================
+-- Añadir campos a la tabla de perfiles para almacenar nivel, xp, oro y salud.
+-- Ejecutar en el SQL Editor de Supabase si la base de datos ya está creada:
+--
+-- alter table public.profiles add column if not exists rpg_level integer not null default 1;
+-- alter table public.profiles add column if not exists rpg_xp integer not null default 0;
+-- alter table public.profiles add column if not exists rpg_gold integer not null default 0;
+-- alter table public.profiles add column if not exists rpg_hp integer not null default 100;
+-- alter table public.profiles add column if not exists rpg_rewards jsonb not null default '[]'::jsonb;
+

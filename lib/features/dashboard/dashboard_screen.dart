@@ -8,12 +8,12 @@ import '../habits/habits_tab.dart';
 import '../notes/notes_tab.dart';
 import '../chat/chat_tab.dart';
 import '../finance/finance_tab.dart';
+import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../../core/providers/appearance_provider.dart';
 import '../settings/personalize_screen.dart';
 import '../../core/providers/vault_provider.dart';
 import '../../core/providers/habits_provider.dart';
-import '../../core/providers/finance_provider.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/widgets/lazy_indexed_stack.dart';
 import '../update/update_checker.dart';
@@ -101,14 +101,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  Widget _buildConfigItem() {
+    return _AnimatedConfigItem(
+      onTap: () => _showConfigSheet(context),
+    );
+  }
+
   void _showConfigSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        // Nace del borde inferior igual que el dock, y como pieza suspendida
-        // solo proyecta sombra: sin bisel ni lóbulo claro, que recortados
-        // contra el scrim se veían como un halo alrededor del panel.
         return NeuCard(
           radius: const BorderRadius.vertical(top: Radius.circular(28)),
           elevation: 22,
@@ -120,14 +123,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Tirador: la superficie hundida lo hace legible como agarre.
               const NeuPressed(
                 borderRadius: 3,
                 distance: 2,
                 blur: 3,
                 child: SizedBox(width: 40, height: 5),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 12),
+              
+              // Mi Personaje / Mi Perfil
+              ListTile(
+                leading: Icon(Icons.person_outline, color: BentoTheme.accentLime),
+                title: Text(
+                  'Mi Personaje',
+                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CharacterScreen()),
+                  );
+                },
+              ),
+
+              // Modo claro / oscuro
               ListTile(
                 leading: Icon(
                   BentoTheme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
@@ -142,6 +161,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ref.read(appearanceProvider.notifier).toggleMode(BentoTheme.isDark);
                 },
               ),
+
+              // Personalizar
               ListTile(
                 leading: Icon(Icons.palette_outlined, color: BentoTheme.accentPurple),
                 title: Text(
@@ -155,6 +176,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   );
                 },
               ),
+
+              // Copiloto
               ListTile(
                 leading: Icon(Icons.chat_bubble_outline, color: BentoTheme.accentChat),
                 title: Text(
@@ -166,6 +189,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   setState(() => _currentIndex = 4);
                 },
               ),
+
+              // Buscar actualizaciones
               ListTile(
                 leading: Icon(Icons.system_update_outlined, color: BentoTheme.accentLime),
                 title: Text(
@@ -177,6 +202,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   UpdateChecker.check(context, silent: false);
                 },
               ),
+
+              // Cerrar sesión
               ListTile(
                 leading: const Icon(Icons.logout_outlined, color: BentoTheme.errorRed),
                 title: Text(
@@ -186,20 +213,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   
-                  // 1. Borrar caché local del usuario para privacidad y seguridad
                   await CacheService.delete('habits');
                   await CacheService.delete('notes');
                   
-                  // 2. Cerrar sesión remota
                   await Supabase.instance.client.auth.signOut();
                   
-                  // 3. Resetear proveedores para borrar estado en memoria
                   ref.invalidate(vaultProvider);
                   ref.invalidate(vaultsProvider);
                   ref.invalidate(habitsProvider);
                   ref.invalidate(notesProvider);
-                  ref.invalidate(accountsProvider);
-                  ref.invalidate(transactionsProvider);
                   
                   if (context.mounted) {
                     Navigator.of(context).pushReplacement(
@@ -227,23 +249,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         return BentoTheme.accentFinance;
       case 4:
         return BentoTheme.accentChat;
+      case 5:
+        return BentoTheme.accentLime;
       default:
         return BentoTheme.accentLime;
     }
-  }
-
-  Widget _buildConfigItem() {
-    return GestureDetector(
-      onTap: () => _showConfigSheet(context),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Icon(
-          Icons.settings_outlined,
-          color: BentoTheme.creamAlpha(0.42),
-          size: 22,
-        ),
-      ),
-    );
   }
 
   Widget _buildTabItem({
@@ -252,36 +262,193 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }) {
     final isSelected = _currentIndex == index;
     final activeColor = _getTabColor(index);
-
-    final iconWidget = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Icon(
-        icon,
-        color: isSelected ? activeColor : BentoTheme.creamAlpha(0.42),
-        size: 22,
-      ),
-    );
-
-    return GestureDetector(
+    return _AnimatedTabItem(
+      icon: icon,
+      isSelected: isSelected,
+      activeColor: activeColor,
       onTap: () {
         setState(() {
           _currentIndex = index;
         });
       },
-      child: isSelected
-          ? NeuPressed(
-              borderRadius: 16,
-              distance: 3,
-              blur: 6,
-              // Tinte del acento sobre la superficie hundida: el hueco se lee
-              // como iluminado por el color del tab, no solo como agujero.
-              color: Color.alphaBlend(
-                activeColor.withValues(alpha: 0.10),
-                BentoTheme.neuSurfaceSunken,
+    );
+  }
+}
+
+class _AnimatedTabItem extends StatefulWidget {
+  final IconData icon;
+  final bool isSelected;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _AnimatedTabItem({
+    required this.icon,
+    required this.isSelected,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  State<_AnimatedTabItem> createState() => _AnimatedTabItemState();
+}
+
+class _AnimatedTabItemState extends State<_AnimatedTabItem> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.80)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.80, end: 1.15)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.15, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 30,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedTabItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSelected && !oldWidget.isSelected) {
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = widget.activeColor;
+    
+    final iconWidget = AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: widget.isSelected ? _scaleAnimation.value : 1.0,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Icon(
+              widget.icon,
+              color: widget.isSelected ? activeColor : BentoTheme.creamAlpha(0.42),
+              size: 22,
+            ),
+          ),
+        );
+      },
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (!widget.isSelected) {
+          widget.onTap();
+        }
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.92, end: 1.0).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
               ),
-              child: iconWidget,
-            )
-          : iconWidget,
+              child: child,
+            ),
+          );
+        },
+        child: widget.isSelected
+            ? NeuPressed(
+                key: const ValueKey('selected'),
+                borderRadius: 16,
+                distance: 3,
+                blur: 6,
+                color: Color.alphaBlend(
+                  activeColor.withValues(alpha: 0.10),
+                  BentoTheme.neuSurfaceSunken,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: iconWidget,
+                ),
+              )
+            : SizedBox(
+                key: const ValueKey('unselected'),
+                width: double.infinity,
+                child: iconWidget,
+              ),
+      ),
+    );
+  }
+}
+
+class _AnimatedConfigItem extends StatefulWidget {
+  final VoidCallback onTap;
+  const _AnimatedConfigItem({required this.onTap});
+
+  @override
+  State<_AnimatedConfigItem> createState() => _AnimatedConfigItemState();
+}
+
+class _AnimatedConfigItemState extends State<_AnimatedConfigItem> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        _controller.forward(from: 0.0);
+        widget.onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: RotationTransition(
+          turns: Tween<double>(begin: 0.0, end: 0.25).animate(
+            CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+          ),
+          child: Icon(
+            Icons.menu_rounded,
+            color: BentoTheme.creamAlpha(0.42),
+            size: 22,
+          ),
+        ),
+      ),
     );
   }
 }

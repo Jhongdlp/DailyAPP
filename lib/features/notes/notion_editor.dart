@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/models/note_model.dart';
+import 'voice_recorder_sheet.dart';
 
 enum BlockType {
   text,
@@ -98,6 +99,7 @@ class _NotionEditorState extends State<NotionEditor> {
   EditorBlock? _overlayBlock;
   String _overlayQuery = '';
   bool _overlayIsWikilink = false;
+  bool _isFloatingMenuExpanded = false;
 
   @override
   void initState() {
@@ -702,6 +704,43 @@ class _NotionEditorState extends State<NotionEditor> {
         newBlock.focusNode.requestFocus();
       }
     });
+  }
+
+  void _dictateVoice() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return VoiceRecorderSheet(
+          onTranscribed: (text, tags) {
+            if (text.trim().isEmpty) return;
+            setState(() {
+              final activeBlock = _blocks[_focusedBlockIndex];
+              if (activeBlock.type == BlockType.text ||
+                  activeBlock.type == BlockType.heading1 ||
+                  activeBlock.type == BlockType.heading2 ||
+                  activeBlock.type == BlockType.heading3 ||
+                  activeBlock.type == BlockType.quote ||
+                  activeBlock.type == BlockType.code) {
+                final currentText = activeBlock.controller.text;
+                final spacing = currentText.isEmpty ? '' : ' ';
+                activeBlock.controller.text = '$currentText$spacing$text';
+              } else {
+                final newBlock = EditorBlock(
+                  type: BlockType.text,
+                  controller: TextEditingController(text: text),
+                );
+                _registerBlockListeners(newBlock);
+                _blocks.insert(_focusedBlockIndex + 1, newBlock);
+                _focusedBlockIndex = _focusedBlockIndex + 1;
+              }
+            });
+            _serialize();
+          },
+        );
+      },
+    );
   }
 
   void _moveBlockUp() {
@@ -1402,51 +1441,111 @@ class _NotionEditorState extends State<NotionEditor> {
     _serialize();
   }
 
-  // ─── BOTTOM BAR TOOLBAR ──────────────────────────────────
+  // ─── LEFT FLOATING TOOLBAR ────────────────────────────────
 
-  Widget _buildBottomBar() {
+  Widget _buildLeftFloatingMenu() {
+    if (!_isFloatingMenuExpanded) {
+      return InkWell(
+        onTap: () {
+          setState(() {
+            _isFloatingMenuExpanded = true;
+          });
+        },
+        borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
+        child: Container(
+          width: 32,
+          height: 48,
+          decoration: BoxDecoration(
+            color: BentoTheme.darkCard,
+            borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
+            border: Border(
+              top: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
+              right: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
+              bottom: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(2, 2),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: widget.accentColor,
+          ),
+        ),
+      );
+    }
+
     return Container(
+      width: 48,
       decoration: BoxDecoration(
         color: BentoTheme.darkCard,
-        border: Border(top: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5)),
+        borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
+        border: Border(
+          top: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
+          right: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
+          bottom: BorderSide(color: BentoTheme.creamAlpha(0.18), width: 1.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(3, 3),
+          ),
+        ],
       ),
-      padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
-        top: 8,
-        bottom: 8 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _bottomBarBtn(Icons.add_circle_outline, 'Bloque', _showAddBlockMenu),
-          _bottomBarBtn(Icons.swap_horiz, 'Convertir', _showConvertBlockMenu),
-          _bottomBarBtn(Icons.keyboard_arrow_up, 'Subir', _moveBlockUp),
-          _bottomBarBtn(Icons.keyboard_arrow_down, 'Bajar', _moveBlockDown),
-          _bottomBarBtn(Icons.delete_outline, 'Borrar', _deleteBlock, color: BentoTheme.errorRed),
+          // Close button
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            color: BentoTheme.creamSecondary,
+            onPressed: () {
+              setState(() {
+                _isFloatingMenuExpanded = false;
+              });
+            },
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          Divider(color: BentoTheme.creamAlpha(0.12), height: 16),
+          // Add block
+          _floatingMenuBtn(Icons.add_circle_outline, _showAddBlockMenu),
+          const SizedBox(height: 12),
+          // Convert block
+          _floatingMenuBtn(Icons.swap_horiz, _showConvertBlockMenu),
+          const SizedBox(height: 12),
+          // Dictado por voz
+          _floatingMenuBtn(Icons.mic, _dictateVoice, color: widget.accentColor),
+          const SizedBox(height: 12),
+          // Move up
+          _floatingMenuBtn(Icons.keyboard_arrow_up, _moveBlockUp),
+          const SizedBox(height: 12),
+          // Move down
+          _floatingMenuBtn(Icons.keyboard_arrow_down, _moveBlockDown),
+          const SizedBox(height: 12),
+          // Delete
+          _floatingMenuBtn(Icons.delete_outline, _deleteBlock, color: BentoTheme.errorRed),
         ],
       ),
     );
   }
 
-  Widget _bottomBarBtn(IconData icon, String label, VoidCallback onTap, {Color? color}) {
+  Widget _floatingMenuBtn(IconData icon, VoidCallback onTap, {Color? color}) {
     final finalColor = color ?? BentoTheme.cream;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: finalColor),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: finalColor),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.all(8.0),
+        child: Icon(icon, size: 20, color: finalColor),
       ),
     );
   }
@@ -1455,97 +1554,105 @@ class _NotionEditorState extends State<NotionEditor> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-            children: [
-              // Título de la Nota
-              TextField(
-                controller: widget.titleController,
-                style: GoogleFonts.montserrat(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: BentoTheme.cream,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Sin título',
-                  hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  filled: false,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                height: 1.5,
-                color: BentoTheme.creamAlpha(0.18),
-              ),
-              const SizedBox(height: 16),
-              // Lista de bloques editables (long-press en el handle reordena)
-              ReorderableListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                buildDefaultDragHandles: false,
-                itemCount: _blocks.length,
-                onReorderItem: _onReorderBlocks,
-                itemBuilder: (context, index) {
-                  final block = _blocks[index];
-                  final isFocused = _focusedBlockIndex == index;
-
-                  return Container(
-                    key: ValueKey(block.id),
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isFocused ? widget.accentColor.withValues(alpha: 0.03) : null,
-                      borderRadius: BorderRadius.circular(8),
+        Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                children: [
+                  // Título de la Nota
+                  TextField(
+                    controller: widget.titleController,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: BentoTheme.cream,
                     ),
-                    child: CompositedTransformTarget(
-                      link: block.layerLink,
-                      child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ReorderableDelayedDragStartListener(
-                          index: index,
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _focusedBlockIndex = index;
-                              });
-                              block.focusNode.requestFocus();
-                            },
-                            child: Container(
-                              width: 24,
-                              height: 38,
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.drag_indicator,
-                                size: 16,
-                                color: isFocused
-                                    ? widget.accentColor
-                                    : BentoTheme.creamAlpha(0.25),
+                    decoration: InputDecoration(
+                      hintText: 'Sin título',
+                      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      filled: false,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 1.5,
+                    color: BentoTheme.creamAlpha(0.18),
+                  ),
+                  const SizedBox(height: 16),
+                  // Lista de bloques editables (long-press en el handle reordena)
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: _blocks.length,
+                    onReorderItem: _onReorderBlocks,
+                    itemBuilder: (context, index) {
+                      final block = _blocks[index];
+                      final isFocused = _focusedBlockIndex == index;
+
+                      return Container(
+                        key: ValueKey(block.id),
+                        margin: const EdgeInsets.symmetric(vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isFocused ? widget.accentColor.withValues(alpha: 0.03) : null,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: CompositedTransformTarget(
+                          link: block.layerLink,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ReorderableDelayedDragStartListener(
+                                index: index,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _focusedBlockIndex = index;
+                                    });
+                                    block.focusNode.requestFocus();
+                                  },
+                                  child: Container(
+                                    width: 24,
+                                    height: 38,
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.drag_indicator,
+                                      size: 16,
+                                      color: isFocused
+                                          ? widget.accentColor
+                                          : BentoTheme.creamAlpha(0.25),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: _buildBlockField(block, index),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: _buildBlockField(block, index),
-                        ),
-                      ],
-                      ),
-                    ),
-                  );
-                },
+                      );
+                    },
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        // Toolbar inferior adaptado a celular que sube con el teclado
-        _buildBottomBar(),
+        // Toolbar lateral izquierdo flotante que esquiva el teclado y dock
+        Positioned(
+          left: 0,
+          bottom: 110,
+          child: _buildLeftFloatingMenu(),
+        ),
       ],
     );
   }

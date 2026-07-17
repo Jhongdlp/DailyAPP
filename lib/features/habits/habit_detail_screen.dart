@@ -7,6 +7,7 @@ import '../../core/providers/habits_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/utils/error_snackbar.dart';
+import '../../core/widgets/streak_flame.dart';
 import 'habit_form_dialog.dart';
 import 'widgets/habit_heatmap.dart';
 
@@ -300,7 +301,26 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
-                    _StatCard(label: 'Racha actual', value: '${habit.currentStreak()} 🔥', color: BentoTheme.accentOrange),
+                    _StatCard(
+                      label: 'Racha actual',
+                      value: '',
+                      color: StreakFlame.getColorForStreak(habit.currentStreak()),
+                      valueWidget: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${habit.currentStreak()}',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: StreakFlame.getColorForStreak(habit.currentStreak()),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          StreakFlame(streak: habit.currentStreak(), size: 18),
+                        ],
+                      ),
+                    ),
                     _StatCard(label: 'Mejor racha', value: '${habit.bestStreak()} 🏆', color: BentoTheme.accentPurple),
                     _StatCard(label: 'Cumplimiento 30d', value: '${(habit.completionRate(days: 30) * 100).round()}%', color: BentoTheme.successGreen),
                     _StatCard(label: 'Total completados', value: '${habit.completedDates.length}', color: color),
@@ -416,8 +436,14 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
 class _StatCard extends StatelessWidget {
   final String label;
   final String value;
+  final Widget? valueWidget;
   final Color color;
-  const _StatCard({required this.label, required this.value, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    this.valueWidget,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +455,7 @@ class _StatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value, style: GoogleFonts.montserrat(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
+          valueWidget ?? Text(value, style: GoogleFonts.montserrat(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
           Text(label, style: GoogleFonts.montserrat(fontSize: 11, color: BentoTheme.creamAlpha(0.45), fontWeight: FontWeight.w600)),
         ],
       ),

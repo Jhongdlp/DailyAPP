@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -71,8 +72,22 @@ class AlarmCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        if (alarm.enabled)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 10, bottom: 4),
+                            child: _RingingBellIcon(),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10, bottom: 4),
+                            child: Icon(
+                              Icons.notifications_none_outlined,
+                              size: 24,
+                              color: BentoTheme.creamAlpha(0.24),
+                            ),
+                          ),
                         Text(
                           alarm.time12,
                           style: GoogleFonts.montserrat(
@@ -87,7 +102,7 @@ class AlarmCard extends ConsumerWidget {
                         ),
                         const SizedBox(width: 6),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             alarm.amPm,
                             style: GoogleFonts.montserrat(
@@ -172,5 +187,50 @@ class AlarmCard extends ConsumerWidget {
           ),
         ),
       );
+  }
+}
+
+class _RingingBellIcon extends StatefulWidget {
+  const _RingingBellIcon();
+
+  @override
+  State<_RingingBellIcon> createState() => _RingingBellIconState();
+}
+
+class _RingingBellIconState extends State<_RingingBellIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final turns = 0.04 * math.sin(_controller.value * 2 * math.pi);
+        return RotationTransition(
+          turns: AlwaysStoppedAnimation(turns),
+          alignment: Alignment.topCenter,
+          child: Icon(
+            Icons.notifications_active_outlined,
+            size: 24,
+            color: BentoTheme.accentAlarm,
+          ),
+        );
+      },
+    );
   }
 }

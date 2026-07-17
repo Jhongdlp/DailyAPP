@@ -7,6 +7,8 @@ import 'package:alarm/alarm.dart';
 import '../../core/models/alarm_model.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/providers/settings_provider.dart';
+import '../../core/providers/rpg_provider.dart';
+import '../../core/widgets/rpg_celebration.dart';
 import '../../core/services/alarm_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/lock_task_service.dart';
@@ -125,6 +127,19 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
         await _logDismissal(validated: true);
         final idInt = _alarm!.id.hashCode.abs() % 100000;
         await Alarm.stop(idInt);
+        
+        // Otorgar recompensa RPG por levantarse a tiempo
+        final result = ref.read(rpgProvider.notifier).gainXpAndGold(30, 15);
+        if (mounted) {
+          RpgCelebration.show(
+            context,
+            xp: result['xpGained'] as int,
+            gold: result['goldGained'] as int,
+            levelUp: result['levelUp'] as bool,
+            newLevel: result['newLevel'] as int?,
+          );
+        }
+
         await AlarmService.scheduleAlarm(_alarm!, from: DateTime.now().add(const Duration(minutes: 1)));
         await Future.delayed(const Duration(seconds: 2));
         // Solo aquí (foto validada) liberamos la pantalla y salimos.

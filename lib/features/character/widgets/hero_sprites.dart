@@ -1,0 +1,267 @@
+import 'package:flutter/material.dart';
+
+/// Catálogo de héroes pixel art (grid 22 columnas x 20 filas).
+///
+/// Leyenda de la matriz:
+/// '.' transparente · 'o' contorno · 's/S' piel y sombra · 'e' ojos
+/// 'x' brillo · 'h/H' pelo · 'a/A' color primario · 'b/B' secundario
+/// 'm/M' madera o metal · 'g/G' oro · 'w' especial (filo, gema, cuerda)
+/// 'r/R' acento (capa, bufanda)
+class HeroDef {
+  final String id;
+  final String name;
+  final String className;
+  final String description;
+  final int unlockLevel;
+  final Color accent;
+  final List<String> sprite;
+  final Map<String, Color> palette;
+
+  const HeroDef({
+    required this.id,
+    required this.name,
+    required this.className,
+    required this.description,
+    required this.unlockLevel,
+    required this.accent,
+    required this.sprite,
+    required this.palette,
+  });
+}
+
+const int kHeroGridWidth = 22;
+const int kHeroGridHeight = 20;
+
+// Paleta compartida: misma piel y contorno para que el set sea coherente.
+const Map<String, Color> _common = {
+  'o': Color(0xFF2E2440),
+  's': Color(0xFFF6C998),
+  'S': Color(0xFFDE9A66),
+  'e': Color(0xFF2E2440),
+  'x': Color(0xFFFFFFFF),
+};
+
+Map<String, Color> _pal(Map<String, Color> extra) => {..._common, ...extra};
+
+final List<HeroDef> heroCatalog = [
+  HeroDef(
+    id: 'warrior',
+    name: 'Kael',
+    className: 'Guerrero',
+    description: 'Espada fiel y corazón valiente.',
+    unlockLevel: 1,
+    accent: const Color(0xFFE8743C),
+    palette: _pal(const {
+      'h': Color(0xFFE8743C),
+      'H': Color(0xFFB54A28),
+      'a': Color(0xFFC94F4F),
+      'A': Color(0xFF8F3838),
+      'm': Color(0xFFAEB9C9),
+      'M': Color(0xFF77839B),
+      'g': Color(0xFFE8B34B),
+      'G': Color(0xFFB87E2C),
+      'w': Color(0xFFDCE6F0),
+    }),
+    sprite: const [
+      "......................",
+      ".........oooo.........",
+      ".......oohhhhoo.......",
+      "......ohhhhhhhho......",
+      "......ohhhhhhhho......",
+      "......ohHssssHho......",
+      "......osssssssso......",
+      "......osesssseso..o...",
+      "......oSssssssSo.owo..",
+      ".......oSssssSo..owo..",
+      "......ommmmmmmmo.owo..",
+      ".....oMmmxmmmmmMoowo..",
+      ".....oMmmmmmmmmMoowo..",
+      ".....oSoaaaaaaoSoggg..",
+      "......ooaaaaaaoo.ogo..",
+      ".......ommmmmmo...o...",
+      ".......oMmooMmo.......",
+      ".......oMmooMmo.......",
+      ".......ooo..ooo.......",
+      "......................",
+    ],
+  ),
+  HeroDef(
+    id: 'ranger',
+    name: 'Lyra',
+    className: 'Exploradora',
+    description: 'Ninguna racha se le escapa.',
+    unlockLevel: 3,
+    accent: const Color(0xFF5FA052),
+    palette: _pal(const {
+      'h': Color(0xFFE8C860),
+      'H': Color(0xFFC09A38),
+      'a': Color(0xFF5FA052),
+      'A': Color(0xFF3C7440),
+      'b': Color(0xFF9C6B44),
+      'B': Color(0xFF6E4A2E),
+      'm': Color(0xFF8A5A38),
+      'M': Color(0xFF5E3C24),
+      'w': Color(0xFFEDE6D6),
+      'g': Color(0xFFE8B34B),
+      'G': Color(0xFFB87E2C),
+    }),
+    sprite: const [
+      "......................",
+      ".........oooo.........",
+      ".......ooaaaaoo.......",
+      "......oaaaaaaaao......",
+      "......oaaAaaAaao......",
+      "......oahhsshhao......",
+      "...om.osssssssso......",
+      "..omw.osesssseso......",
+      "..omw.oSssssssSo......",
+      "..omw..oSssssSo.......",
+      "..omwoaaaaaaaao.......",
+      "..omwoAabbbbaAo.......",
+      "..oSwoSobbxbbboSo.....",
+      "..omwoAabbbbaAo.......",
+      "..omw.oabbbbao........",
+      "...om..obbbbo.........",
+      ".......oBooBo.........",
+      ".......oBooBo.........",
+      ".......oo..oo.........",
+      "......................",
+    ],
+  ),
+  HeroDef(
+    id: 'rogue',
+    name: 'Shade',
+    className: 'Pícaro',
+    description: 'Rápido, sigiloso y letal contra los malos hábitos.',
+    unlockLevel: 5,
+    accent: const Color(0xFF6C5AA8),
+    palette: _pal(const {
+      'h': Color(0xFF3E3A52),
+      'H': Color(0xFF2E2440),
+      'a': Color(0xFF6C5AA8),
+      'A': Color(0xFF4A3C7C),
+      'b': Color(0xFF3E3A52),
+      'B': Color(0xFF2B283A),
+      'r': Color(0xFFC94F6D),
+      'R': Color(0xFF943850),
+      'm': Color(0xFFAEB9C9),
+      'M': Color(0xFF77839B),
+      'w': Color(0xFFDCE6F0),
+      'g': Color(0xFFE8B34B),
+      'G': Color(0xFFB87E2C),
+    }),
+    sprite: const [
+      "......................",
+      ".........oooo.........",
+      ".......ooaaaaoo.......",
+      "......oaaaaaaaao......",
+      "......oaAaaaaAao......",
+      "......oaassssaao......",
+      "......oaSssssSao......",
+      "......oasessesao......",
+      ".......oSssssSo.......",
+      ".......orrrrrro.......",
+      "......orRrrrrRro......",
+      "......obbbbbbbbo..o...",
+      ".....oBbbbxbbbbBoowo..",
+      ".....oSobbbbbboSoogo..",
+      "......oobbbbbboo......",
+      ".......obbbbbbo.......",
+      ".......oBboobBo.......",
+      ".......oBboobBo.......",
+      ".......ooo..ooo.......",
+      "......................",
+    ],
+  ),
+  HeroDef(
+    id: 'mage',
+    name: 'Ezra',
+    className: 'Maga',
+    description: 'Convierte la disciplina en magia.',
+    unlockLevel: 8,
+    accent: const Color(0xFF4A7DD6),
+    palette: _pal(const {
+      'h': Color(0xFFD66A9C),
+      'H': Color(0xFFA84878),
+      'a': Color(0xFF4A7DD6),
+      'A': Color(0xFF31549C),
+      'b': Color(0xFF8A5A38),
+      'B': Color(0xFF5E3C24),
+      'w': Color(0xFF7DE8D8),
+      'g': Color(0xFFE8B34B),
+      'G': Color(0xFFB87E2C),
+      'm': Color(0xFFAEB9C9),
+      'M': Color(0xFF77839B),
+    }),
+    sprite: const [
+      "...........o..........",
+      "..........oao.........",
+      ".........oaaao....owo.",
+      ".........oagao...owxwo",
+      "........oaaaaao...owo.",
+      ".......oaaaaaaao...o..",
+      ".....ooaaaaaaaaaoo.b..",
+      "....oaaAaaaaaaAaao.b..",
+      ".....oohhsssshhoo..b..",
+      "......ohsessesho...b..",
+      "......ohssssssho...b..",
+      ".......oSssssSo....b..",
+      "......oaaaaaaaao...b..",
+      ".....oAaaxaaaaaAo..b..",
+      ".....oAaaaaaaaaAoSob..",
+      ".....oaaaaaaaaaao..b..",
+      "....oAaaaaaaaaaAo..b..",
+      "....oaaaaaaaaaaao..b..",
+      ".....ooooooooooo...o..",
+      "......................",
+    ],
+  ),
+  HeroDef(
+    id: 'paladin',
+    name: 'Auren',
+    className: 'Paladín',
+    description: 'La constancia hecha armadura.',
+    unlockLevel: 12,
+    accent: const Color(0xFFE8B34B),
+    palette: _pal(const {
+      'h': Color(0xFFF2EFE9),
+      'H': Color(0xFFC8C2B4),
+      'a': Color(0xFFE8B34B),
+      'A': Color(0xFFB87E2C),
+      'b': Color(0xFFF2EFE9),
+      'B': Color(0xFFC8C2B4),
+      'r': Color(0xFFC94F4F),
+      'R': Color(0xFF943838),
+      'm': Color(0xFFAEB9C9),
+      'M': Color(0xFF77839B),
+      'w': Color(0xFF7DE8D8),
+      'g': Color(0xFFFFE08A),
+      'G': Color(0xFFE8B34B),
+    }),
+    sprite: const [
+      "..........oo..........",
+      ".........ohho.........",
+      ".........ohho.........",
+      ".......oaaaaaao.......",
+      "......oaaaaaaaao......",
+      "......oaAaaaaAao......",
+      "......oassssssao......",
+      "......oasessesao......",
+      ".......oSssssSo.......",
+      "....oroaaaaaaaaoro....",
+      "...orroaaaaaaaaorro...",
+      "...orroaagwwgaaorro...",
+      "...orroaAaaaaAaorro...",
+      "...oRroaAaaaaAaoRro...",
+      "....oRoaaaaaaaaoRo....",
+      ".....ooaAaaaaAaoo.....",
+      ".......oAaooAao.......",
+      ".......oAaooAao.......",
+      ".......ooo..ooo.......",
+      "......................",
+    ],
+  ),
+];
+
+HeroDef heroById(String id) =>
+    heroCatalog.firstWhere((h) => h.id == id, orElse: () => heroCatalog.first);

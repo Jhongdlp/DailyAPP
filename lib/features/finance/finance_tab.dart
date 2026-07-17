@@ -190,8 +190,9 @@ class _FinanceTabState extends ConsumerState<FinanceTab> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            Text(
-                              usdFormat.format(totalBalance),
+                            AnimatedBalanceText(
+                              balance: totalBalance,
+                              formatter: usdFormat,
                               style: GoogleFonts.montserrat(
                                 fontSize: 34,
                                 fontWeight: FontWeight.w700,
@@ -707,8 +708,9 @@ class _AccountCard extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      usdFormat.format(balance),
+                    child: AnimatedBalanceText(
+                      balance: balance,
+                      formatter: usdFormat,
                       style: GoogleFonts.montserrat(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -897,6 +899,59 @@ class _EmptyState extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class AnimatedBalanceText extends StatefulWidget {
+  final double balance;
+  final TextStyle style;
+  final dynamic formatter; // NumberFormat or similar
+  final Duration duration;
+
+  const AnimatedBalanceText({
+    super.key,
+    required this.balance,
+    required this.style,
+    required this.formatter,
+    this.duration = const Duration(milliseconds: 1000),
+  });
+
+  @override
+  State<AnimatedBalanceText> createState() => _AnimatedBalanceTextState();
+}
+
+class _AnimatedBalanceTextState extends State<AnimatedBalanceText> {
+  double _oldBalance = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _oldBalance = widget.balance;
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedBalanceText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.balance != widget.balance) {
+      setState(() {
+        _oldBalance = oldWidget.balance;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: _oldBalance, end: widget.balance),
+      duration: widget.duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Text(
+          widget.formatter.format(value),
+          style: widget.style,
+        );
+      },
     );
   }
 }

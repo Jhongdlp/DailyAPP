@@ -12,6 +12,7 @@ import '../../core/providers/vault_provider.dart';
 import '../../core/services/knowledge_service.dart';
 import 'notion_editor.dart';
 import 'knowledge_graph_view.dart';
+import 'voice_recorder_sheet.dart';
 import '../vault/screens/vault_lock_screen.dart';
 import '../vault/screens/vault_home_screen.dart';
 import '../habits/widgets/habit_blob_header.dart';
@@ -302,7 +303,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Title Input
                   TextField(
                     controller: titleCtrl,
                     autofocus: true,
@@ -333,8 +333,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Vault Selection
                   Text(
                     'Guardar en Bóveda',
                     style: TextStyle(
@@ -349,7 +347,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        // Unclassified option
                         GestureDetector(
                           onTap: () {
                             setModalState(() => selectedVault = null);
@@ -385,7 +382,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
                             ),
                           ),
                         ),
-                        // Vaults list
                         ...vaults.map((vault) {
                           final selected = selectedVault?.id == vault.id;
                           final color = vault.flutterColor;
@@ -427,8 +423,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Priority selection
                   Text(
                     'Prioridad',
                     style: TextStyle(
@@ -465,7 +459,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                 Icon(p.icon,
                                     size: 16,
                                     color: selected ? p.color : BentoTheme.creamSecondary),
-                                const SizedBox(width: 4),
+                                const SizedBox(height: 4),
                                 Text(
                                   p.label,
                                   style: TextStyle(
@@ -482,45 +476,126 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     }).toList(),
                   ),
                   const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: BentoTheme.accentBrain,
+                            side: BorderSide(
+                              color: BentoTheme.accentBrain.withValues(alpha: 0.5),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showVoiceNoteRecordingSheet(selectedVault, selectedPriority);
+                          },
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.mic, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Grabar Voz',
+                                style: GoogleFonts.montserrat(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: BentoTheme.accentBrain,
+                            foregroundColor: const Color(0xFF0C0C0D),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: () async {
+                            final title = titleCtrl.text.trim();
+                            final actualTitle = title.isEmpty ? 'Nota sin título' : title;
+                            Navigator.pop(ctx);
 
-                  // Create Button
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: BentoTheme.accentBrain,
-                      foregroundColor: const Color(0xFF0C0C0D),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide.none),
-                    ),
-                    onPressed: () async {
-                      final title = titleCtrl.text.trim();
-                      final actualTitle = title.isEmpty ? 'Nota sin título' : title;
-                      Navigator.pop(ctx);
+                            final vaultId = selectedVault?.id;
+                            await ref.read(notesProvider.notifier).addNote(
+                                  actualTitle,
+                                  '',
+                                  vaultId: vaultId,
+                                  priority: selectedPriority,
+                                );
 
-                      final vaultId = selectedVault?.id;
-                      await ref.read(notesProvider.notifier).addNote(
-                            actualTitle,
-                            '',
-                            vaultId: vaultId,
-                            priority: selectedPriority,
-                          );
-
-                      // Get the newly created note and open editor
-                      final notes = ref.read(notesProvider);
-                      if (notes.isNotEmpty) {
-                        final note = notes.reduce((curr, next) {
-                          final currTime = curr.createdAt ?? DateTime(0);
-                          final nextTime = next.createdAt ?? DateTime(0);
-                          return currTime.isAfter(nextTime) ? curr : next;
-                        });
-                        _openEditor(note);
-                      }
-                    },
-                    child: const Text('Crear Nota'),
+                            final notes = ref.read(notesProvider);
+                            if (notes.isNotEmpty) {
+                              final note = notes.reduce((curr, next) {
+                                final currTime = curr.createdAt ?? DateTime(0);
+                                final nextTime = next.createdAt ?? DateTime(0);
+                                return currTime.isAfter(nextTime) ? curr : next;
+                              });
+                              _openEditor(note);
+                            }
+                          },
+                          child: Text(
+                            'Crear Nota',
+                            style: GoogleFonts.montserrat(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                 ],
               ),
             );
+          },
+        );
+      },
+    );
+  }
+
+  void _showVoiceNoteRecordingSheet(NoteVault? selectedVault, NotePriority priority) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return VoiceRecorderSheet(
+          onTranscribed: (text, tags) async {
+            final now = DateTime.now();
+            final title = 'Nota de Voz - ${now.day}/${now.month} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+            
+            var content = text;
+            if (tags.isNotEmpty) {
+              content += '\n\n${tags.join(" ")}';
+            }
+
+            final vaultId = selectedVault?.id;
+            await ref.read(notesProvider.notifier).addNote(
+                  title,
+                  content,
+                  vaultId: vaultId,
+                  priority: priority,
+                );
+
+            final notes = ref.read(notesProvider);
+            if (notes.isNotEmpty) {
+              final note = notes.reduce((curr, next) {
+                final currTime = curr.createdAt ?? DateTime(0);
+                final nextTime = next.createdAt ?? DateTime(0);
+                return currTime.isAfter(nextTime) ? curr : next;
+              });
+              _openEditor(note);
+            }
           },
         );
       },
@@ -1110,7 +1185,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
                               ),
                             ] else ...[
                               _buildUnvaultedCard(notes),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 22),
                               GridView.builder(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
@@ -1164,34 +1239,32 @@ class _NotesTabState extends ConsumerState<NotesTab>
     required IconData icon,
     required String label,
     required VoidCallback onPressed,
+    Color? color,
   }) {
-    return InkWell(
+    final textColor = color ?? BentoTheme.cream;
+    return NeuCard(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: BentoTheme.darkCard,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: BentoTheme.creamAlpha(0.20), width: 1.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 17, color: BentoTheme.cream),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: BentoTheme.cream,
-              ),
+      borderRadius: 20,
+      distance: 3,
+      blur: 6,
+      color: color?.withValues(alpha: 0.12),
+      borderColor: color?.withValues(alpha: 0.35),
+      borderWidth: 1.2,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: textColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: textColor,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1229,16 +1302,27 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
   Widget _buildVaultsHeader() {
     return SizedBox(
-      height: 126,
+      height: 100,
       child: Stack(
         children: [
           Positioned.fill(child: HabitBlobHeader(accentColor: BentoTheme.accentBrain)),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
+                Text(
+                  'Segundo Cerebro',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 30,
+                    height: 0.98,
+                    letterSpacing: -0.8,
+                    color: BentoTheme.cream,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     _buildHeaderActionPill(
@@ -1249,21 +1333,10 @@ class _NotesTabState extends ConsumerState<NotesTab>
                     const SizedBox(width: 10),
                     _buildHeaderActionPill(
                       icon: Icons.create_new_folder_outlined,
-                      label: 'Nueva',
+                      label: 'Nueva Bóveda',
                       onPressed: _showCreateVaultDialog,
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Segundo Cerebro',
-                  style: GoogleFonts.montserrat(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 30,
-                    height: 0.98,
-                    letterSpacing: -0.8,
-                    color: BentoTheme.cream,
-                  ),
                 ),
               ],
             ),
@@ -1275,46 +1348,47 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
   Widget _buildUnvaultedCard(List<Note> allNotes) {
     final count = allNotes.where((n) => n.vaultId == null).length;
-    return GestureDetector(
+    return NeuCard(
       onTap: () {
         setState(() {
           _currentVault = null;
           _view = _NotesView.notesList;
         });
       },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: BentoTheme.darkCardAlt,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BentoTheme.creamAlpha(0.1), width: 1.5),
-        ),
-        child: Row(
-          children: [
-            _vaultIconBadge(null, size: 40),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Sin clasificar',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: BentoTheme.cream,
-                        fontSize: 14),
-                  ),
-                  Text(
-                    '$count ${count == 1 ? 'nota' : 'notas'}',
-                    style: TextStyle(
-                        fontSize: 12, color: BentoTheme.creamSecondary),
-                  ),
-                ],
-              ),
+      borderRadius: 18,
+      distance: 4.0,
+      blur: 8.0,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          NeuPressed(
+            borderRadius: 12,
+            padding: const EdgeInsets.all(8),
+            child: _vaultIconGlyph(null, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Sin clasificar',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: BentoTheme.cream,
+                      fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$count ${count == 1 ? 'nota' : 'notas'}',
+                  style: TextStyle(
+                      fontSize: 12, color: BentoTheme.creamSecondary),
+                ),
+              ],
             ),
-            Icon(Icons.chevron_right, color: BentoTheme.creamAlpha(0.4)),
-          ],
-        ),
+          ),
+          Icon(Icons.chevron_right, color: BentoTheme.creamAlpha(0.4)),
+        ],
       ),
     );
   }
@@ -1323,75 +1397,62 @@ class _NotesTabState extends ConsumerState<NotesTab>
     final count = allNotes.where((n) => n.vaultId == vault.id).length;
     final color = vault.flutterColor;
 
-    return GestureDetector(
+    return NeuCard(
       onTap: () => _openVault(vault),
       onLongPress: () => _showVaultOptionsSheet(vault),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        decoration: BoxDecoration(
-          color: BentoTheme.darkCardAlt,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _vaultIconBadge(vault, size: 40),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: color),
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              vault.name,
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 15,
-                color: BentoTheme.cream,
+      borderRadius: 20,
+      distance: 4.0,
+      blur: 8.0,
+      color: color.withValues(alpha: 0.05),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              NeuPressed(
+                borderRadius: 12,
+                padding: const EdgeInsets.all(8),
+                child: _vaultIconGlyph(vault, size: 20),
               ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            vault.name,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+              color: BentoTheme.cream,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (vault.description != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              vault.description!,
+              style: TextStyle(
+                  fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            if (vault.description != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                vault.description!,
-                style: TextStyle(
-                    fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            const SizedBox(height: 4),
-            Text(
-              '$count ${count == 1 ? 'nota' : 'notas'}',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: color.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w600),
-            ),
           ],
-        ),
+          const SizedBox(height: 6),
+          Text(
+            '$count ${count == 1 ? 'nota' : 'notas'}',
+            style: TextStyle(
+                fontSize: 11,
+                color: BentoTheme.creamSecondary,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }
+
+
 
   // ─────────────────────────────────────────────────────
   //  PANTALLA 2: LISTA DE NOTAS EN UNA BÓVEDA
@@ -1469,33 +1530,25 @@ class _NotesTabState extends ConsumerState<NotesTab>
                 Padding(
                   padding:
                       const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    onChanged: (_) => setState(() {}),
-                    style: TextStyle(color: BentoTheme.cream),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar en notas...',
-                      hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
-                      prefixIcon: Icon(Icons.search,
-                          color: BentoTheme.creamSecondary),
-                      filled: true,
-                      fillColor: BentoTheme.darkCardAlt,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                            color: vaultColor.withValues(alpha: 0.3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                            color: vaultColor.withValues(alpha: 0.3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: vaultColor, width: 2),
+                  child: NeuPressed(
+                    borderRadius: 14,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      onChanged: (_) => setState(() {}),
+                      style: TextStyle(color: BentoTheme.cream),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar en notas...',
+                        hintStyle: TextStyle(color: BentoTheme.creamAlpha(0.3)),
+                        prefixIcon: Icon(Icons.search,
+                            color: BentoTheme.creamSecondary, size: 20),
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 0, vertical: 12),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
                       ),
                     ),
                   ),
@@ -1585,95 +1638,89 @@ class _NotesTabState extends ConsumerState<NotesTab>
             ),
           );
         },
-        child: GestureDetector(
+        child: NeuCard(
           onTap: () => _openEditor(note),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: BentoTheme.darkCardAlt,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: isUrgent
-                    ? BentoTheme.errorRed.withValues(alpha: 0.5)
-                    : vaultColor.withValues(alpha: 0.25),
-                width: 1.5,
+          borderRadius: 16,
+          distance: 3.0,
+          blur: 6.0,
+          color: vaultColor.withValues(alpha: 0.03),
+          borderColor: isUrgent ? BentoTheme.errorRed.withValues(alpha: 0.4) : null,
+          borderWidth: 1.2,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Indicador de prioridad
+              Container(
+                width: 3.0,
+                height: 42,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: note.priority == NotePriority.normal
+                      ? vaultColor.withValues(alpha: 0.3)
+                      : note.priority.color,
+                  borderRadius: BorderRadius.circular(1.5),
+                ),
               ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Indicador de prioridad
-                Container(
-                  width: 4,
-                  height: 48,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    color: note.priority == NotePriority.normal
-                        ? vaultColor.withValues(alpha: 0.4)
-                        : note.priority.color,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        note.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: BentoTheme.cream,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      note.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: BentoTheme.cream,
                       ),
-                      if (note.content.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _stripMarkdown(note.content),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: BentoTheme.creamSecondary,
-                            height: 1.4,
-                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (note.content.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _stripMarkdown(note.content),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: BentoTheme.creamSecondary,
+                          height: 1.35,
                         ),
-                      ],
-                      if (hasReminder || note.linkedNoteIds.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            if (hasReminder)
-                              _miniChip(
-                                note.selfDestruct
-                                    ? Icons.local_fire_department_outlined
-                                    : Icons.notifications_active_outlined,
-                                _formatReminder(note.remindAt!),
-                                note.isReminderPending
-                                    ? (note.selfDestruct
-                                        ? BentoTheme.accentOrange
-                                        : BentoTheme.accentBrain)
-                                    : BentoTheme.creamSecondary,
-                              ),
-                            if (note.linkedNoteIds.isNotEmpty)
-                              _miniChip(
-                                  Icons.link_rounded,
-                                  '${note.linkedNoteIds.length}',
-                                  BentoTheme.accentPurple),
-                          ],
-                        ),
-                      ],
+                      ),
                     ],
-                  ),
+                    if (hasReminder || note.linkedNoteIds.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (hasReminder)
+                            _miniChip(
+                              note.selfDestruct
+                                  ? Icons.local_fire_department_outlined
+                                  : Icons.notifications_active_outlined,
+                              _formatReminder(note.remindAt!),
+                              note.isReminderPending
+                                  ? (note.selfDestruct
+                                      ? BentoTheme.accentOrange
+                                      : BentoTheme.accentBrain)
+                                  : BentoTheme.creamSecondary,
+                            ),
+                          if (note.linkedNoteIds.isNotEmpty)
+                            _miniChip(
+                                Icons.link_rounded,
+                                '${note.linkedNoteIds.length}',
+                                BentoTheme.accentPurple),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
-                Icon(Icons.chevron_right,
-                    color: BentoTheme.creamAlpha(0.4), size: 18),
-              ],
-            ),
+              ),
+              Icon(Icons.chevron_right,
+                  color: BentoTheme.creamAlpha(0.3), size: 16),
+            ],
           ),
         ),
       ),
@@ -2546,7 +2593,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
         ),
         Expanded(
           child: Container(
-            margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+            margin: const EdgeInsets.only(left: 16, right: 16, bottom: 92),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               color: BentoTheme.darkCard,
@@ -2921,21 +2968,23 @@ class _NotesTabState extends ConsumerState<NotesTab>
 
   Widget _miniChip(IconData icon, String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Text(
             text,
             style: TextStyle(
-                fontSize: 10, color: color, fontWeight: FontWeight.w700),
+                fontSize: 10,
+                color: color,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.2),
           ),
         ],
       ),
