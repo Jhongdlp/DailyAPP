@@ -96,6 +96,12 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
   Map<String, Map<String, double>> _semanticAdjacency = {};
   final _random = Random();
 
+  final Map<String, Widget> _nodeContentCache = {};
+  bool _needsCacheRebuild = true;
+  String _lastQuery = '';
+  String? _lastFocusedNodeId;
+  int _lastNodesCount = 0;
+
   double _scale = 1.0;
   Offset _panOffset = Offset.zero;
   bool _panInitialized = false;
@@ -172,6 +178,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
   }
 
   void _rebuildGraph() {
+    _needsCacheRebuild = true;
     final notes = _filteredNotes;
     final incomingIds = notes.map((n) => n.id).toSet();
     _nodes.removeWhere((id, _) => !incomingIds.contains(id));
@@ -242,6 +249,68 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
         title: note.title,
         vaultId: note.vaultId,
         linkCount: degree,
+      );
+    }
+  }
+
+  void _rebuildNodeContentCache() {
+    _nodeContentCache.clear();
+    final hasQuery = _searchQuery.isNotEmpty;
+    final matched = _matchedIds;
+    final focusedId = _focusedNodeId;
+
+    for (final node in _nodes.values) {
+      final vault = _vaultById(node.vaultId);
+      final baseColor = node.isOrphan
+          ? BentoTheme.creamAlpha(0.35)
+          : (vault?.flutterColor ?? BentoTheme.accentBrain);
+
+      final isMatch = !hasQuery || matched.contains(node.id);
+
+      var opacity = node.isOrphan ? 0.55 : 1.0;
+      if (hasQuery && !isMatch) opacity *= 0.28;
+
+      final inFocusSet = focusedId == null ||
+          _focusNeighborhood(focusedId).contains(node.id);
+      if (!inFocusSet) opacity *= 0.15;
+
+      final isFocused = node.id == focusedId;
+      final borderColor = isFocused
+          ? BentoTheme.accentBrain
+          : (hasQuery && isMatch && !node.isOrphan)
+              ? BentoTheme.accentBrain
+              : baseColor;
+
+      _nodeContentCache[node.id] = Opacity(
+        key: ValueKey('node-opacity-${node.id}'),
+        opacity: opacity.clamp(0.0, 1.0),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: BentoTheme.darkCardAlt,
+            border: Border.all(
+              color: borderColor,
+              width: isFocused ? 3.5 : (hasQuery && isMatch) ? 3 : 2,
+            ),
+          ),
+          padding: const EdgeInsets.all(4),
+          child: Text(
+            node.title.length > 16
+                ? '${node.title.substring(0, 15)}…'
+                : node.title,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              color: node.isOrphan
+                  ? BentoTheme.creamAlpha(0.6)
+                  : BentoTheme.cream,
+            ),
+          ),
+        ),
       );
     }
   }
@@ -443,6 +512,17 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
 
   @override
   Widget build(BuildContext context) {
+    if (_needsCacheRebuild ||
+        _lastQuery != _searchQuery ||
+        _lastFocusedNodeId != _focusedNodeId ||
+        _lastNodesCount != _nodes.length) {
+      _needsCacheRebuild = false;
+      _lastQuery = _searchQuery;
+      _lastFocusedNodeId = _focusedNodeId;
+      _lastNodesCount = _nodes.length;
+      _rebuildNodeContentCache();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -487,28 +567,30 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
                               maxWidth: _worldSize,
                               minHeight: _worldSize,
                               maxHeight: _worldSize,
-                              child: SizedBox(
-                                key: const ValueKey('graph-world'),
-                                width: _worldSize,
-                                height: _worldSize,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Positioned.fill(
-                                      child: CustomPaint(
-                                        painter: _EdgePainter(
-                                          nodes: _nodes,
-                                          adjacency: _adjacency,
-                                          semanticAdjacency: _semanticAdjacency,
-                                          highlightedIds: _matchedIds,
-                                          hasQuery: _searchQuery.isNotEmpty,
-                                          focusedId: _focusedNodeId,
+                              child: RepaintBoundary(
+                                child: SizedBox(
+                                  key: const ValueKey('graph-world'),
+                                  width: _worldSize,
+                                  height: _worldSize,
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Positioned.fill(
+                                        child: CustomPaint(
+                                          painter: _EdgePainter(
+                                            nodes: _nodes,
+                                            adjacency: _adjacency,
+                                            semanticAdjacency: _semanticAdjacency,
+                                            highlightedIds: _matchedIds,
+                                            hasQuery: _searchQuery.isNotEmpty,
+                                            focusedId: _focusedNodeId,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    for (final node in _nodes.values)
-                                      _buildNodeWidget(node),
-                                  ],
+                                      for (final node in _nodes.values)
+                                        _buildNodeWidget(node),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -556,62 +638,20 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView>
   }
 
   Widget _buildNodeWidget(GraphNode node) {
-    final vault = _vaultById(node.vaultId);
-    final baseColor = node.isOrphan
-        ? BentoTheme.creamAlpha(0.35)
-        : (vault?.flutterColor ?? BentoTheme.accentBrain);
-
-    final hasQuery = _searchQuery.isNotEmpty;
-    final isMatch = !hasQuery || _matchedIds.contains(node.id);
-
-    var opacity = node.isOrphan ? 0.55 : 1.0;
-    if (hasQuery && !isMatch) opacity *= 0.28;
-
-    // Modo focus: atenuar todo lo que no sea el vecindario del nodo enfocado
-    final focusedId = _focusedNodeId;
-    final inFocusSet =
-        focusedId == null || _focusNeighborhood(focusedId).contains(node.id);
-    if (!inFocusSet) opacity *= 0.15;
-
-    final isFocused = node.id == focusedId;
-    final borderColor = isFocused
-        ? BentoTheme.accentBrain
-        : (hasQuery && isMatch && !node.isOrphan)
-            ? BentoTheme.accentBrain
-            : baseColor;
-
     final d = node.radius * 2;
+    var cached = _nodeContentCache[node.id];
+    if (cached == null) {
+      _rebuildNodeContentCache();
+      cached = _nodeContentCache[node.id] ?? const SizedBox.shrink();
+    }
+
     return Positioned(
+      key: ValueKey('node-pos-${node.id}'),
       left: node.position.dx - node.radius,
       top: node.position.dy - node.radius,
       width: d,
       height: d,
-      child: Opacity(
-        opacity: opacity.clamp(0.0, 1.0),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: BentoTheme.darkCardAlt,
-            border: Border.all(
-              color: borderColor,
-              width: isFocused ? 3.5 : (hasQuery && isMatch) ? 3 : 2,
-            ),
-          ),
-          padding: const EdgeInsets.all(4),
-          child: Text(
-            node.title.length > 16 ? '${node.title.substring(0, 15)}…' : node.title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-              color: node.isOrphan ? BentoTheme.creamAlpha(0.6) : BentoTheme.cream,
-            ),
-          ),
-        ),
-      ),
+      child: cached,
     );
   }
 
@@ -1010,5 +1050,22 @@ class _EdgePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _EdgePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _EdgePainter oldDelegate) {
+    if (oldDelegate.hasQuery != hasQuery ||
+        oldDelegate.focusedId != focusedId ||
+        oldDelegate.highlightedIds.length != highlightedIds.length ||
+        oldDelegate.nodes.length != nodes.length) {
+      return true;
+    }
+    for (final id in highlightedIds) {
+      if (!oldDelegate.highlightedIds.contains(id)) return true;
+    }
+    for (final entry in nodes.entries) {
+      final oldNode = oldDelegate.nodes[entry.key];
+      if (oldNode == null || oldNode.position != entry.value.position) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

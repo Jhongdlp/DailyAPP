@@ -809,8 +809,10 @@ class AuroraBackground extends StatelessWidget {
           child: ColoredBox(color: BentoTheme.neuSurface),
         ),
         Positioned.fill(
-          child: CustomPaint(
-            painter: _NoiseBackgroundPainter(isDarkMode: BentoTheme.isDark),
+          child: RepaintBoundary(
+            child: CustomPaint(
+              painter: _NoiseBackgroundPainter(isDarkMode: BentoTheme.isDark),
+            ),
           ),
         ),
         Positioned.fill(
@@ -827,6 +829,11 @@ class _NoiseBackgroundPainter extends CustomPainter {
 
   _NoiseBackgroundPainter({required this.isDarkMode});
 
+  static final List<double> _normX1 = List<double>.generate(2000, (i) => math.sin(i * 432.12) * 0.5 + 0.5);
+  static final List<double> _normY1 = List<double>.generate(2000, (i) => math.cos(i * 765.43) * 0.5 + 0.5);
+  static final List<double> _normX2 = List<double>.generate(1200, (i) => math.sin(i * 987.65) * 0.5 + 0.5);
+  static final List<double> _normY2 = List<double>.generate(1200, (i) => math.cos(i * 234.56) * 0.5 + 0.5);
+
   @override
   void paint(Canvas canvas, Size size) {
     // 1. Dibujar ruido determinista fino (Fine Grain) para dar textura orgánica sin movimiento
@@ -841,8 +848,8 @@ class _NoiseBackgroundPainter extends CustomPainter {
     final List<Offset> points1 = [];
     const int count1 = 2000;
     for (int i = 0; i < count1; i++) {
-      final double x = (math.sin(i * 432.12) * 0.5 + 0.5) * size.width;
-      final double y = (math.cos(i * 765.43) * 0.5 + 0.5) * size.height;
+      final double x = _normX1[i] * size.width;
+      final double y = _normY1[i] * size.height;
       points1.add(Offset(x, y));
     }
     canvas.drawPoints(PointMode.points, points1, noisePaint1);
@@ -856,8 +863,8 @@ class _NoiseBackgroundPainter extends CustomPainter {
     final List<Offset> points2 = [];
     const int count2 = 1200;
     for (int i = 0; i < count2; i++) {
-      final double x = (math.sin(i * 987.65) * 0.5 + 0.5) * size.width;
-      final double y = (math.cos(i * 234.56) * 0.5 + 0.5) * size.height;
+      final double x = _normX2[i] * size.width;
+      final double y = _normY2[i] * size.height;
       points2.add(Offset(x, y));
     }
     canvas.drawPoints(PointMode.points, points2, noisePaint2);

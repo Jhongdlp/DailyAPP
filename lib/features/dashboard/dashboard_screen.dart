@@ -69,27 +69,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: NeuCard(
-              radius: const BorderRadius.vertical(top: Radius.circular(28)),
-              distance: 7,
-              blur: 14,
-              padding: EdgeInsets.only(
-                top: 12,
-                left: 10,
-                right: 10,
-                // El dock se extiende bajo la barra de gestos; los iconos se
-                // quedan por encima de ella.
-                bottom: 12 + bottomInset,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Expanded(child: _buildTabItem(icon: Icons.check_circle_outline, index: 0)),
-                  Expanded(child: _buildTabItem(icon: Icons.psychology_outlined, index: 1)),
-                  Expanded(child: _buildTabItem(icon: Icons.alarm_outlined, index: 2)),
-                  Expanded(child: _buildTabItem(icon: Icons.account_balance_wallet_outlined, index: 3)),
-                  Expanded(child: _buildConfigItem()),
-                ],
+            child: RepaintBoundary(
+              child: NeuCard(
+                radius: const BorderRadius.vertical(top: Radius.circular(28)),
+                distance: 7,
+                blur: 14,
+                padding: EdgeInsets.only(
+                  top: 12,
+                  left: 10,
+                  right: 10,
+                  // El dock se extiende bajo la barra de gestos; los iconos se
+                  // quedan por encima de ella.
+                  bottom: 12 + bottomInset,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Expanded(child: _buildTabItem(icon: Icons.check_circle_outline, index: 0)),
+                    Expanded(child: _buildTabItem(icon: Icons.psychology_outlined, index: 1)),
+                    Expanded(child: _buildTabItem(icon: Icons.alarm_outlined, index: 2)),
+                    Expanded(child: _buildTabItem(icon: Icons.account_balance_wallet_outlined, index: 3)),
+                    Expanded(child: _buildConfigItem()),
+                  ],
+                ),
               ),
             ),
           ),
