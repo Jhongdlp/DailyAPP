@@ -3,6 +3,22 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/bento_theme.dart';
+import '../models/achievement_catalog.dart';
+
+/// Snackbars para logros recién desbloqueados (resultado de gainXpAndGold)
+class AchievementToast {
+  static void show(BuildContext context, dynamic unlocked) {
+    if (unlocked is! List<AchievementDef> || unlocked.isEmpty) return;
+    for (final a in unlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${a.emoji} ¡Logro desbloqueado: ${a.title}!'),
+          backgroundColor: BentoTheme.successGreen,
+        ),
+      );
+    }
+  }
+}
 
 class RpgCelebration {
   static void show(

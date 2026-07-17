@@ -8,6 +8,7 @@ import '../../core/models/alarm_model.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/rpg_provider.dart';
+import '../../core/models/achievement_catalog.dart';
 import '../../core/widgets/rpg_celebration.dart';
 import '../../core/services/alarm_service.dart';
 import '../../core/services/cache_service.dart';
@@ -128,8 +129,16 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
         final idInt = _alarm!.id.hashCode.abs() % 100000;
         await Alarm.stop(idInt);
         
-        // Otorgar recompensa RPG por levantarse a tiempo
-        final result = ref.read(rpgProvider.notifier).gainXpAndGold(30, 15);
+        // Otorgar recompensa RPG por levantarse a tiempo.
+        // Madrugar (antes de las 8am) da bonus y cuenta para el logro Alondra.
+        final early = DateTime.now().hour < 8;
+        final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+          early ? 50 : 30,
+          early ? 25 : 15,
+          counterKeys: early
+              ? const [RpgCounters.wakes, RpgCounters.earlyWakes]
+              : const [RpgCounters.wakes],
+        );
         if (mounted) {
           RpgCelebration.show(
             context,
@@ -138,6 +147,7 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
             levelUp: result['levelUp'] as bool,
             newLevel: result['newLevel'] as int?,
           );
+          AchievementToast.show(context, result['unlocked']);
         }
 
         await AlarmService.scheduleAlarm(_alarm!, from: DateTime.now().add(const Duration(minutes: 1)));

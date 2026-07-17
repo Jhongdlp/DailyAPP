@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 import '../../core/models/account_model.dart';
 import '../../core/models/transaction_model.dart';
 import '../../core/providers/finance_provider.dart';
+import '../../core/providers/rpg_provider.dart';
+import '../../core/models/achievement_catalog.dart';
+import '../../core/widgets/rpg_celebration.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/utils/error_snackbar.dart';
 
@@ -99,6 +102,22 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
         await notifier.updateTransaction(tx);
       } else {
         await notifier.addTransaction(tx);
+        // Recompensa por constancia financiera
+        final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+          5,
+          2,
+          counterKeys: const [RpgCounters.transactions],
+        );
+        if (mounted) {
+          RpgCelebration.show(
+            context,
+            xp: result['xpGained'] as int,
+            gold: result['goldGained'] as int,
+            levelUp: result['levelUp'] as bool,
+            newLevel: result['newLevel'] as int?,
+          );
+          AchievementToast.show(context, result['unlocked']);
+        }
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {

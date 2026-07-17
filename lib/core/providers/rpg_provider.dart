@@ -153,12 +153,10 @@ class RpgNotifier extends Notifier<RpgStats> {
     // Sumar XP y Oro
     int newXp = state.xp + xpReward;
     int newLevel = state.level;
-    bool levelUp = false;
 
     while (newXp >= (newLevel * 100)) {
       newXp -= (newLevel * 100);
       newLevel++;
-      levelUp = true;
     }
 
     final newCounters = Map<String, int>.of(state.counters);

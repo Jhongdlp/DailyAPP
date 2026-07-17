@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/bento_theme.dart';
 import '../../../core/providers/rpg_provider.dart';
 import '../../../core/models/cosmetic_catalog.dart';
-import '../../../core/models/achievement_catalog.dart';
 import '../../../core/widgets/rpg_celebration.dart';
 
 /// Bazar: cosméticos comprables con oro que se equipan sobre el héroe.
@@ -64,7 +63,7 @@ class CosmeticShop extends ConsumerWidget {
                   notifier.buyCosmetic(item.id, item.price, item.slot);
               if (unlocked == null) return;
               RpgCelebration.show(context, xp: 0, gold: -item.price, levelUp: false);
-              _showUnlockedToasts(context, unlocked);
+              AchievementToast.show(context, unlocked);
             },
             child: const Text('Comprar'),
           ),
@@ -171,18 +170,6 @@ class CosmeticShop extends ConsumerWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// Muestra snackbars por logros recién desbloqueados
-void _showUnlockedToasts(BuildContext context, List<AchievementDef> unlocked) {
-  for (final a in unlocked) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${a.emoji} ¡Logro desbloqueado: ${a.title}!'),
-        backgroundColor: BentoTheme.successGreen,
       ),
     );
   }

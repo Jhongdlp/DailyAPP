@@ -9,6 +9,9 @@ import '../../core/models/note_vault_model.dart';
 import '../../core/providers/notes_provider.dart';
 import '../../core/providers/vaults_provider.dart';
 import '../../core/providers/vault_provider.dart';
+import '../../core/providers/rpg_provider.dart';
+import '../../core/models/achievement_catalog.dart';
+import '../../core/widgets/rpg_celebration.dart';
 import '../../core/services/knowledge_service.dart';
 import 'notion_editor.dart';
 import 'knowledge_graph_view.dart';
@@ -532,6 +535,17 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                   priority: selectedPriority,
                                 );
 
+                            final rpgResult =
+                                ref.read(rpgProvider.notifier).gainXpAndGold(
+                              5,
+                              2,
+                              counterKeys: const [RpgCounters.notes],
+                            );
+                            if (mounted) {
+                              AchievementToast.show(
+                                  context, rpgResult['unlocked']);
+                            }
+
                             final notes = ref.read(notesProvider);
                             if (notes.isNotEmpty) {
                               final note = notes.reduce((curr, next) {
@@ -586,6 +600,15 @@ class _NotesTabState extends ConsumerState<NotesTab>
                   vaultId: vaultId,
                   priority: priority,
                 );
+
+            final rpgResult = ref.read(rpgProvider.notifier).gainXpAndGold(
+              5,
+              2,
+              counterKeys: const [RpgCounters.notes],
+            );
+            if (mounted) {
+              AchievementToast.show(context, rpgResult['unlocked']);
+            }
 
             final notes = ref.read(notesProvider);
             if (notes.isNotEmpty) {

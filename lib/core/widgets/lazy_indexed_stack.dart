@@ -41,8 +41,15 @@ class _LazyIndexedStackState extends State<LazyIndexedStack> {
       alignment: widget.alignment,
       sizing: widget.sizing,
       children: [
+        // TickerMode apaga las animaciones (llamas, loaders…) de los tabs que
+        // no están visibles: IndexedStack los mantiene montados y sus tickers
+        // seguirían corriendo a 60fps en segundo plano. Al volver al tab, sus
+        // animaciones se reanudan solas.
         for (int i = 0; i < widget.children.length; i++)
-          if (_builtIndices.contains(i)) widget.children[i] else const SizedBox.shrink(),
+          if (_builtIndices.contains(i))
+            TickerMode(enabled: i == widget.index, child: widget.children[i])
+          else
+            const SizedBox.shrink(),
       ],
     );
   }

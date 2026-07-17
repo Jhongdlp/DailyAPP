@@ -7,6 +7,8 @@ import '../../core/widgets/rpg_celebration.dart';
 import 'widgets/pixel_character.dart';
 import 'widgets/hero_sprites.dart';
 import 'widgets/hero_gallery.dart';
+import 'widgets/cosmetic_shop.dart';
+import 'widgets/achievements_panel.dart';
 
 class CharacterScreen extends ConsumerStatefulWidget {
   const CharacterScreen({super.key});
@@ -282,6 +284,7 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
                                       color: BentoTheme.creamSecondary,
                                     ),
                                   ),
+                                  const EquippedBadgesRow(),
                                   const SizedBox(height: 10),
                                   // Barra de HP
                                   Row(
@@ -360,6 +363,39 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
                   ),
                   const SizedBox(height: 10),
                   const HeroGallery(),
+                  const SizedBox(height: 28),
+
+                  // ─── BAZAR DE COSMÉTICOS (comprar con oro) ───
+                  Text(
+                    'BAZAR DE COSMÉTICOS',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: BentoTheme.creamSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const CosmeticShop(),
+                  const SizedBox(height: 28),
+
+                  // ─── LOGROS (badges equipables) ───
+                  Text(
+                    'LOGROS',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: BentoTheme.creamSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toca un logro desbloqueado para lucirlo en tu carta (máx. 3)',
+                    style: TextStyle(fontSize: 10, color: BentoTheme.creamTertiary),
+                  ),
+                  const SizedBox(height: 10),
+                  const AchievementsPanel(),
                   const SizedBox(height: 28),
 
                   // ─── TIENDA DE RECOMPENSAS (Canjear Oro) ───

@@ -8,6 +8,7 @@ import '../../core/models/habit_model.dart';
 import '../../core/providers/habits_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/rpg_provider.dart';
+import '../../core/models/achievement_catalog.dart';
 import '../../core/widgets/rpg_celebration.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/utils/error_snackbar.dart';
@@ -114,7 +115,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     await ref.read(habitsProvider.notifier).toggleHabit(habit.id, day);
     
     if (!wasCompleted) {
-      final result = ref.read(rpgProvider.notifier).gainXpAndGold(15, 5);
+      final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+        15,
+        5,
+        counterKeys: const [RpgCounters.habitsDone],
+      );
       if (mounted) {
         RpgCelebration.show(
           context,
@@ -123,9 +128,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           levelUp: result['levelUp'] as bool,
           newLevel: result['newLevel'] as int?,
         );
+        AchievementToast.show(context, result['unlocked']);
       }
     } else {
-      ref.read(rpgProvider.notifier).revertReward(15, 5);
+      ref.read(rpgProvider.notifier).revertReward(
+        15,
+        5,
+        counterKeys: const [RpgCounters.habitsDone],
+      );
     }
   }
 
@@ -139,7 +149,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     
     final isCompletedNow = updatedHabit.isCompletedOn(day);
     if (!wasCompleted && isCompletedNow) {
-      final result = ref.read(rpgProvider.notifier).gainXpAndGold(15, 5);
+      final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+        15,
+        5,
+        counterKeys: const [RpgCounters.habitsDone],
+      );
       if (mounted) {
         RpgCelebration.show(
           context,
@@ -148,9 +162,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           levelUp: result['levelUp'] as bool,
           newLevel: result['newLevel'] as int?,
         );
+        AchievementToast.show(context, result['unlocked']);
       }
     } else if (wasCompleted && !isCompletedNow) {
-      ref.read(rpgProvider.notifier).revertReward(15, 5);
+      ref.read(rpgProvider.notifier).revertReward(
+        15,
+        5,
+        counterKeys: const [RpgCounters.habitsDone],
+      );
     }
   }
 
@@ -198,18 +217,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     ),
                   ),
                 if (featured != null) _buildFeaturedCard(context, featured, today, days),
-                if (compactHabits.isNotEmpty)
+                // Cada fila es un hijo directo del ListView (mismo layout que
+                // la Column anterior): así cada una recibe su propio
+                // RepaintBoundary automático y un toggle o animación en una
+                // fila no repinta las demás.
+                for (int i = 0; i < compactHabits.length; i++)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final habit in compactHabits) ...[
-                          _buildCompactRow(context, habit, today, days),
-                          const SizedBox(height: 10),
-                        ],
-                      ],
-                    ),
+                    padding: EdgeInsets.fromLTRB(22, i == 0 ? 12 : 0, 22, 10),
+                    child: _buildCompactRow(context, compactHabits[i], today, days),
                   ),
               ],
             ),
