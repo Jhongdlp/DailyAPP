@@ -159,7 +159,7 @@ class _StreakFlameState extends State<StreakFlame> with SingleTickerProviderStat
           builder: (context, child) {
             return CustomPaint(
               size: Size(currentSize, currentSize),
-              willChange: true,
+              willChange: widget.animate,
               painter: FlamePainter(
                 animationValue: _controller.value,
                 tier: tier,

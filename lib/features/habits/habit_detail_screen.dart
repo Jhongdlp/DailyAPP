@@ -317,7 +317,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                             ),
                           ),
                           const SizedBox(width: 5),
-                          StreakFlame(streak: habit.currentStreak(), size: 18),
+                          StreakFlame(streak: habit.currentStreak(), size: 18, animate: false),
                         ],
                       ),
                     ),

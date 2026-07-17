@@ -656,7 +656,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            StreakFlame(streak: habit.currentStreak(), size: 22),
+                            StreakFlame(streak: habit.currentStreak(), size: 22, animate: false),
                             const SizedBox(width: 4),
                             Text(
                               '${habit.currentStreak()}',
@@ -914,7 +914,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           ),
                           if (habit.currentStreak() > 0) ...[
                             const SizedBox(width: 6),
-                            StreakFlame(streak: habit.currentStreak(), size: 16),
+                            StreakFlame(streak: habit.currentStreak(), size: 16, animate: false),
                             const SizedBox(width: 3),
                             Text(
                               '${habit.currentStreak()}',
