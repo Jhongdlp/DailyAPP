@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_timezone
   gtk
   record_linux
+  syncfusion_pdfviewer_linux
   url_launcher_linux
 )
 

@@ -738,9 +738,14 @@ class _NeuInnerShadowPainter extends CustomPainter {
     // Cada sombra interior es el "negativo" de la forma desplazada: se rellena
     // todo menos la forma, y el recorte de arriba deja ver solo la banda que
     // entra por el borde. Sin el clip, esto pintaría sobre la pantalla entera.
+    // El relleno externo solo necesita cubrir el margen que el blur puede
+    // esparcir más allá del borde (antes se rellenaba un área ~9x más grande
+    // que el widget, encareciendo el blur en piezas chicas repetidas como los
+    // puntos de racha en las filas de hábitos).
+    final double pad = blur * 3 + distance.abs() + 2;
     void drawInner(Color color, Offset shift) {
       final path = Path()
-        ..addRect(Rect.fromLTRB(-size.width, -size.height, size.width * 2, size.height * 2))
+        ..addRect(Rect.fromLTRB(-pad, -pad, size.width + pad, size.height + pad))
         ..addRRect(rrect.shift(shift))
         ..fillType = PathFillType.evenOdd;
 

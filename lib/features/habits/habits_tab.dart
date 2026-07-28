@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -197,6 +198,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.only(top: 4, bottom: 110),
+              // Pre-rasteriza filas fuera de pantalla antes de que entren en
+              // vista: evita el hitch de blur/sombras al hacer scroll rápido.
+              scrollCacheExtent: const ScrollCacheExtent.pixels(800),
               children: [
                 _buildSectionHeader(context, activeToday.length, habits),
                 if (_aiFeedback != null) _buildAiFeedbackCard(context),
@@ -223,6 +227,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 // fila no repinta las demás.
                 for (int i = 0; i < compactHabits.length; i++)
                   Padding(
+                    key: ValueKey(compactHabits[i].id),
                     padding: EdgeInsets.fromLTRB(22, i == 0 ? 12 : 0, 22, 10),
                     child: _buildCompactRow(context, compactHabits[i], today, days),
                   ),

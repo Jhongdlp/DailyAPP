@@ -14,6 +14,7 @@ import 'core/services/alarm_service.dart';
 import 'core/services/lock_task_service.dart';
 import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
+import 'core/services/task_reminder_service.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/auth/auth_screen.dart';
@@ -75,9 +76,10 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
     // La notificación de prueba del diagnóstico no abre nada.
     if (alarmId.startsWith('test:')) return;
 
-    // Los recordatorios de notas/hábitos usan un prefijo propio
+    // Los recordatorios de notas/hábitos/agenda usan un prefijo propio
     if (alarmId.startsWith(NoteReminderService.payloadPrefix) ||
-        alarmId.startsWith(HabitReminderService.payloadPrefix)) {
+        alarmId.startsWith(HabitReminderService.payloadPrefix) ||
+        alarmId.startsWith(TaskReminderService.payloadPrefix)) {
       if (alarmId.startsWith(HabitReminderService.payloadPrefix)) {
         final habitId = alarmId.substring(HabitReminderService.payloadPrefix.length);
         final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
@@ -193,7 +195,8 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
         if (alarmId != null &&
             !alarmId.startsWith('test:') &&
             !alarmId.startsWith(NoteReminderService.payloadPrefix) &&
-            !alarmId.startsWith(HabitReminderService.payloadPrefix)) {
+            !alarmId.startsWith(HabitReminderService.payloadPrefix) &&
+            !alarmId.startsWith(TaskReminderService.payloadPrefix)) {
           _pendingAlarmId = alarmId;
         }
       }

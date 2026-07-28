@@ -8,12 +8,17 @@ import '../habits/habits_tab.dart';
 import '../notes/notes_tab.dart';
 import '../chat/chat_tab.dart';
 import '../finance/finance_tab.dart';
+import '../reading/reading_tab.dart';
+import '../agenda/agenda_tab.dart';
 import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../../core/providers/appearance_provider.dart';
 import '../settings/personalize_screen.dart';
 import '../../core/providers/vault_provider.dart';
 import '../../core/providers/habits_provider.dart';
+import '../../core/providers/tasks_provider.dart';
+import '../../core/providers/books_provider.dart';
+import '../../core/providers/book_bookmarks_provider.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/widgets/lazy_indexed_stack.dart';
 import '../update/update_checker.dart';
@@ -34,6 +39,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     const AlarmTab(),
     const FinanceTab(),
     const ChatTab(),
+    const AgendaTab(),
+    const ReadingTab(),
   ];
 
   @override
@@ -190,6 +197,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 },
               ),
 
+              // Agenda
+              ListTile(
+                leading: Icon(Icons.view_timeline_outlined, color: BentoTheme.accentLime),
+                title: Text(
+                  'Agenda',
+                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  setState(() => _currentIndex = 5);
+                },
+              ),
+
+              // Biblioteca
+              ListTile(
+                leading: Icon(Icons.auto_stories_outlined, color: BentoTheme.accentPurple),
+                title: Text(
+                  'Biblioteca',
+                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  setState(() => _currentIndex = 6);
+                },
+              ),
+
               // Buscar actualizaciones
               ListTile(
                 leading: Icon(Icons.system_update_outlined, color: BentoTheme.accentLime),
@@ -215,13 +248,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   
                   await CacheService.delete('habits');
                   await CacheService.delete('notes');
-                  
+                  await CacheService.delete('tasks');
+                  await CacheService.delete('books');
+                  await CacheService.delete('book_bookmarks');
+
                   await Supabase.instance.client.auth.signOut();
-                  
+
                   ref.invalidate(vaultProvider);
                   ref.invalidate(vaultsProvider);
                   ref.invalidate(habitsProvider);
                   ref.invalidate(notesProvider);
+                  ref.invalidate(tasksProvider);
+                  ref.invalidate(booksProvider);
+                  ref.invalidate(bookBookmarksProvider);
                   
                   if (context.mounted) {
                     Navigator.of(context).pushReplacement(
@@ -251,6 +290,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         return BentoTheme.accentChat;
       case 5:
         return BentoTheme.accentLime;
+      case 6:
+        return BentoTheme.accentPurple;
       default:
         return BentoTheme.accentLime;
     }

@@ -134,6 +134,7 @@ class _NotificationDiagnosticsSheetState
               _InfoRow('Zona horaria', d.timezone),
               _InfoRow('Notas en cola', '${d.pendingNotes}'),
               _InfoRow('Hábitos en cola', '${d.pendingHabits}'),
+              _InfoRow('Agenda en cola', '${d.pendingTasks}'),
               _InfoRow('Otras en cola', '${d.pendingOther}'),
               _InfoRow('Alarmas programadas', '${d.scheduledAlarms}'),
               const SizedBox(height: 18),

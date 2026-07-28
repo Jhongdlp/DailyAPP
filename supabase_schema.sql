@@ -634,3 +634,125 @@ create policy "Usuarios pueden eliminar sus propios mensajes"
 -- alter table public.profiles add column if not exists rpg_hp integer not null default 100;
 -- alter table public.profiles add column if not exists rpg_rewards jsonb not null default '[]'::jsonb;
 
+
+-- =====================================================
+-- 11. AGENDA (planificador de bloques de tiempo del día)
+-- =====================================================
+-- Distinta de habits: tareas puntuales del día (no recurrentes), con
+-- bloque de horario (start_at/end_at) para la vista de timeline diario.
+create table public.tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users on delete cascade not null,
+  title text not null,
+  notes text,
+  due_date date not null,
+  start_at timestamptz not null,
+  end_at timestamptz,
+  remind_at timestamptz,
+  priority smallint not null default 1 check (priority between 0 and 2), -- 0 baja, 1 normal, 2 alta
+  completed boolean not null default false,
+  completed_at timestamptz,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index tasks_user_due_idx on public.tasks (user_id, due_date);
+
+alter table public.tasks enable row level security;
+
+create policy "Usuarios pueden ver sus propias tareas"
+  on public.tasks for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden insertar sus propias tareas"
+  on public.tasks for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden actualizar sus propias tareas"
+  on public.tasks for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden eliminar sus propias tareas"
+  on public.tasks for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+
+-- BIBLIOTECA DE LECTURA (LIBROS PDF/EPUB)
+-- Los binarios de los libros solo se guardan localmente en el dispositivo;
+-- aquí solo se sincroniza la metadata, el progreso de lectura y los bookmarks.
+create table public.books (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users on delete cascade not null,
+  title text not null,
+  author text,
+  format text not null check (format in ('pdf', 'epub')),
+  local_filename text not null, -- nombre del archivo dentro de books/ en el directorio local de la app
+  total_pages integer, -- solo aplica a pdf
+  last_position text, -- número de página (pdf) o cfi/locator (epub) como texto
+  progress_percent double precision,
+  added_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  last_opened_at timestamp with time zone
+);
+
+alter table public.books enable row level security;
+
+create policy "Usuarios pueden ver sus propios libros"
+  on public.books for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden crear sus propios libros"
+  on public.books for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden actualizar sus propios libros"
+  on public.books for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden eliminar sus propios libros"
+  on public.books for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+
+create table public.book_bookmarks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users on delete cascade not null,
+  book_id uuid references public.books on delete cascade not null,
+  position text not null, -- número de página (pdf) o cfi/locator (epub)
+  label text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index book_bookmarks_book_idx on public.book_bookmarks (book_id);
+
+alter table public.book_bookmarks enable row level security;
+
+create policy "Usuarios pueden ver sus propios bookmarks"
+  on public.book_bookmarks for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden crear sus propios bookmarks"
+  on public.book_bookmarks for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden actualizar sus propios bookmarks"
+  on public.book_bookmarks for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Usuarios pueden eliminar sus propios bookmarks"
+  on public.book_bookmarks for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
