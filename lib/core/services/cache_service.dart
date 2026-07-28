@@ -11,7 +11,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class CacheService {
   static SharedPreferences? _prefs;
 
-  static const _knownKeys = ['habits', 'notes', 'alarms', 'tasks', 'semantic_edges', 'books', 'book_bookmarks'];
+  static const _knownKeys = [
+    'habits',
+    'notes',
+    'alarms',
+    'tasks',
+    'semantic_edges',
+    'books',
+    'book_bookmarks',
+    'book_highlights',
+    'reading_stats',
+  ];
 
   static Future<SharedPreferences> _instance() async {
     return _prefs ??= await SharedPreferences.getInstance();

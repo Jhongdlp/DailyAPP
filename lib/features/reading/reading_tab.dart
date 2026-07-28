@@ -1,13 +1,16 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/models/book_model.dart';
 import '../../core/providers/books_provider.dart';
 import '../habits/widgets/habit_blob_header.dart';
 import 'pdf_reader_screen.dart';
 import 'epub_reader_screen.dart';
+import 'widgets/reading_stats_strip.dart';
 
 class ReadingTab extends ConsumerStatefulWidget {
   const ReadingTab({super.key});
@@ -18,6 +21,25 @@ class ReadingTab extends ConsumerStatefulWidget {
 
 class _ReadingTabState extends ConsumerState<ReadingTab> {
   bool _importing = false;
+  bool _showSearch = false;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _showSearch = !_showSearch;
+      if (!_showSearch) {
+        _searchController.clear();
+        _query = '';
+      }
+    });
+  }
 
   Future<void> _importBook() async {
     if (_importing) return;
@@ -78,6 +100,55 @@ class _ReadingTabState extends ConsumerState<ReadingTab> {
     }
   }
 
+  Future<void> _renameBook(Book book) async {
+    final controller = TextEditingController(text: book.title);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: BentoTheme.neuSurface,
+        title: Text('Renombrar libro', style: GoogleFonts.montserrat(color: BentoTheme.cream)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: GoogleFonts.montserrat(color: BentoTheme.cream),
+          decoration: InputDecoration(
+            hintText: 'Título',
+            hintStyle: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.4)),
+          ),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text('Guardar', style: TextStyle(color: BentoTheme.accentPurple)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newTitle != null && newTitle.trim().isNotEmpty && newTitle.trim() != book.title) {
+      await ref.read(booksProvider.notifier).renameBook(book.id, newTitle.trim());
+    }
+  }
+
+  Future<void> _changeCover(Book book) async {
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+      if (picked == null) return;
+      await ref.read(booksProvider.notifier).setCoverImage(book.id, File(picked.path));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo cambiar la portada: $e')),
+        );
+      }
+    }
+  }
+
   Widget _buildHeaderIconButton({
     required IconData icon,
     required String tooltip,
@@ -133,16 +204,78 @@ class _ReadingTabState extends ConsumerState<ReadingTab> {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: _buildHeaderIconButton(
-                    icon: Icons.add_outlined,
-                    tooltip: 'Importar libro',
-                    onPressed: _importing ? null : _importBook,
+                  child: Row(
+                    children: [
+                      _buildHeaderIconButton(
+                        icon: _showSearch ? Icons.close : Icons.search,
+                        tooltip: 'Buscar libro',
+                        onPressed: _toggleSearch,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildHeaderIconButton(
+                        icon: Icons.add_outlined,
+                        tooltip: 'Importar libro',
+                        onPressed: _importing ? null : _importBook,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        style: GoogleFonts.montserrat(color: BentoTheme.cream),
+        onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+        decoration: InputDecoration(
+          hintText: 'Buscar por título o autor…',
+          hintStyle: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.4)),
+          prefixIcon: Icon(Icons.search, color: BentoTheme.creamAlpha(0.5)),
+          filled: true,
+          fillColor: BentoTheme.creamAlpha(0.06),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bookCover(Book book) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: FutureBuilder<File?>(
+        future: resolveBookCover(book.coverImageFilename),
+        builder: (context, snapshot) {
+          final coverFile = snapshot.data;
+          return Container(
+            width: 46,
+            height: 62,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: BentoTheme.accentPurple.withValues(alpha: 0.16),
+            ),
+            child: coverFile != null
+                ? Image.file(coverFile, width: 46, height: 62, fit: BoxFit.cover)
+                : Icon(
+                    book.format == BookFormat.pdf
+                        ? Icons.picture_as_pdf_outlined
+                        : Icons.menu_book_outlined,
+                    color: BentoTheme.accentPurple,
+                  ),
+          );
+        },
       ),
     );
   }
@@ -155,19 +288,7 @@ class _ReadingTabState extends ConsumerState<ReadingTab> {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Container(
-            width: 46,
-            height: 62,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: BentoTheme.accentPurple.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              book.format == BookFormat.pdf ? Icons.picture_as_pdf_outlined : Icons.menu_book_outlined,
-              color: BentoTheme.accentPurple,
-            ),
-          ),
+          _bookCover(book),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -207,9 +328,36 @@ class _ReadingTabState extends ConsumerState<ReadingTab> {
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.delete_outline, color: BentoTheme.creamAlpha(0.4)),
-            onPressed: () => _confirmDelete(book),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: BentoTheme.creamAlpha(0.4)),
+            color: BentoTheme.neuSurface,
+            onSelected: (value) {
+              switch (value) {
+                case 'cover':
+                  _changeCover(book);
+                  break;
+                case 'rename':
+                  _renameBook(book);
+                  break;
+                case 'delete':
+                  _confirmDelete(book);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'cover',
+                child: Text('Cambiar portada', style: GoogleFonts.montserrat(color: BentoTheme.cream)),
+              ),
+              PopupMenuItem(
+                value: 'rename',
+                child: Text('Renombrar', style: GoogleFonts.montserrat(color: BentoTheme.cream)),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('Eliminar', style: GoogleFonts.montserrat(color: BentoTheme.errorRed)),
+              ),
+            ],
           ),
         ],
       ),
@@ -219,12 +367,21 @@ class _ReadingTabState extends ConsumerState<ReadingTab> {
   @override
   Widget build(BuildContext context) {
     final books = ref.watch(booksProvider);
+    final filtered = _query.isEmpty
+        ? books
+        : books
+            .where((b) =>
+                b.title.toLowerCase().contains(_query) ||
+                (b.author?.toLowerCase().contains(_query) ?? false))
+            .toList();
 
     return BentoBackground(
       backgroundColor: BentoTheme.darkBg,
       child: Column(
         children: [
           _buildHeader(),
+          if (_showSearch) _buildSearchField(),
+          if (!_showSearch) const ReadingStatsStrip(),
           Expanded(
             child: books.isEmpty
                 ? Center(
@@ -253,12 +410,19 @@ class _ReadingTabState extends ConsumerState<ReadingTab> {
                       ),
                     ),
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                    itemCount: books.length,
-                    separatorBuilder: (context, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) => _bookCard(books[index]),
-                  ),
+                : filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Sin resultados para "$_query"',
+                          style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5)),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                        itemCount: filtered.length,
+                        separatorBuilder: (context, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) => _bookCard(filtered[index]),
+                      ),
           ),
         ],
       ),

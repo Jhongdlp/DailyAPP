@@ -156,7 +156,9 @@ class NotesNotifier extends Notifier<List<Note>> {
     return state.where((n) => n.vaultId == vaultId).toList();
   }
 
-  Future<void> addNote(
+  /// Crea una nota y devuelve la versión guardada, para que quien la crea
+  /// pueda enlazarla (por ejemplo, un resaltado de un libro).
+  Future<Note> addNote(
     String title,
     String content, {
     List<String>? linkedNoteIds,
@@ -209,6 +211,8 @@ class NotesNotifier extends Notifier<List<Note>> {
     if (saved.isReminderPending) {
       await NoteReminderService.scheduleReminder(saved);
     }
+
+    return saved;
   }
 
   Future<void> updateNote(

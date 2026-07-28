@@ -6,17 +6,26 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/book_model.dart';
 import '../services/cache_service.dart';
+import 'book_highlights_provider.dart';
 import 'settings_provider.dart';
 
 final _uuidRegex = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
 
 const _bookColumns = 'id, user_id, title, author, format, local_filename, '
-    'total_pages, last_position, progress_percent, added_at, last_opened_at';
+    'cover_image_filename, total_pages, last_position, progress_percent, '
+    'added_at, last_opened_at';
 
 Future<Directory> _booksDir() async {
   final docs = await getApplicationDocumentsDirectory();
   final dir = Directory('${docs.path}/books');
+  if (!await dir.exists()) await dir.create(recursive: true);
+  return dir;
+}
+
+Future<Directory> _coversDir() async {
+  final docs = await getApplicationDocumentsDirectory();
+  final dir = Directory('${docs.path}/books/covers');
   if (!await dir.exists()) await dir.create(recursive: true);
   return dir;
 }
@@ -27,6 +36,14 @@ Future<Directory> _booksDir() async {
 Future<File> resolveBookFile(String localFilename) async {
   final dir = await _booksDir();
   return File('${dir.path}/$localFilename');
+}
+
+/// Resuelve la ruta local de la portada personalizada de un libro, si existe.
+Future<File?> resolveBookCover(String? coverImageFilename) async {
+  if (coverImageFilename == null || coverImageFilename.isEmpty) return null;
+  final dir = await _coversDir();
+  final file = File('${dir.path}/$coverImageFilename');
+  return await file.exists() ? file : null;
 }
 
 class BooksNotifier extends Notifier<List<Book>> {
@@ -166,6 +183,66 @@ class BooksNotifier extends Notifier<List<Book>> {
     }
   }
 
+  Future<void> renameBook(String id, String newTitle) async {
+    final title = newTitle.trim();
+    if (title.isEmpty) return;
+    final index = state.indexWhere((b) => b.id == id);
+    if (index == -1) return;
+
+    final updated = state[index].copyWith(title: title);
+    state = _sorted([
+      for (final b in state)
+        if (b.id == id) updated else b
+    ]);
+    unawaited(CacheService.save('books', state.map((b) => b.toCacheJson()).toList()));
+
+    try {
+      if (_hasSupabase && _uuidRegex.hasMatch(id)) {
+        await Supabase.instance.client.from('books').update({'title': title}).eq('id', id);
+      }
+    } catch (_) {
+      // El renombrado local ya quedó guardado
+    }
+  }
+
+  /// Copia la imagen elegida por el usuario al directorio local de portadas
+  /// y la asocia al libro, reemplazando la portada anterior si existía.
+  Future<void> setCoverImage(String id, File imageFile) async {
+    final index = state.indexWhere((b) => b.id == id);
+    if (index == -1) return;
+    final previous = state[index];
+
+    final ext = imageFile.path.split('.').last.toLowerCase();
+    final coverFilename = '${id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+    final dir = await _coversDir();
+    await imageFile.copy('${dir.path}/$coverFilename');
+
+    final updated = previous.copyWith(coverImageFilename: coverFilename);
+    state = _sorted([
+      for (final b in state)
+        if (b.id == id) updated else b
+    ]);
+    unawaited(CacheService.save('books', state.map((b) => b.toCacheJson()).toList()));
+
+    if (previous.coverImageFilename != null && previous.coverImageFilename!.isNotEmpty) {
+      try {
+        final oldFile = File('${dir.path}/${previous.coverImageFilename}');
+        if (await oldFile.exists()) await oldFile.delete();
+      } catch (_) {}
+    }
+
+    try {
+      if (_hasSupabase && _uuidRegex.hasMatch(id)) {
+        await Supabase.instance.client
+            .from('books')
+            .update({'cover_image_filename': coverFilename}).eq('id', id);
+      }
+    } catch (_) {
+      // La portada local ya quedó guardada
+    }
+  }
+
   Future<void> deleteBook(String id) async {
     final book = state.firstWhere((b) => b.id == id, orElse: () => Book(
       id: id,
@@ -177,10 +254,20 @@ class BooksNotifier extends Notifier<List<Book>> {
     state = state.where((b) => b.id != id).toList();
     unawaited(CacheService.save('books', state.map((b) => b.toCacheJson()).toList()));
 
+    // Los resaltados viven en local: sin el libro no tienen a qué anclarse.
+    unawaited(ref.read(bookHighlightsProvider.notifier).deleteForBook(id));
+
     if (book.localFilename.isNotEmpty) {
       try {
         final file = await resolveBookFile(book.localFilename);
         if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+
+    if (book.coverImageFilename != null && book.coverImageFilename!.isNotEmpty) {
+      try {
+        final coverFile = await resolveBookCover(book.coverImageFilename);
+        if (coverFile != null) await coverFile.delete();
       } catch (_) {}
     }
 

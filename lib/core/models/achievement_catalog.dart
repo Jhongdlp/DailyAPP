@@ -44,6 +44,9 @@ class RpgCounters {
   static const transactions = 'transactions';
   static const notes = 'notes';
   static const goldTotal = 'gold_total';
+  static const readingMinutes = 'reading_minutes';
+  static const booksFinished = 'books_finished';
+  static const highlights = 'highlights';
   // derivados (no viven en counters):
   static const level = 'level';
   static const cosmetics = 'cosmetics';
@@ -198,6 +201,62 @@ const List<AchievementDef> achievementCatalog = [
     target: 50,
     xpReward: 80,
     goldReward: 50,
+  ),
+  // ── Lectura ──
+  AchievementDef(
+    id: 'lector-novato',
+    title: 'Lector Novato',
+    description: 'Lee durante 60 minutos',
+    emoji: '📖',
+    tier: BadgeTier.bronce,
+    counterKey: RpgCounters.readingMinutes,
+    target: 60,
+    xpReward: 30,
+    goldReward: 15,
+  ),
+  AchievementDef(
+    id: 'raton-de-biblioteca',
+    title: 'Ratón de Biblioteca',
+    description: 'Lee durante 10 horas',
+    emoji: '🐁',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.readingMinutes,
+    target: 600,
+    xpReward: 90,
+    goldReward: 60,
+  ),
+  AchievementDef(
+    id: 'devorador-de-libros',
+    title: 'Devorador de Libros',
+    description: 'Lee durante 50 horas',
+    emoji: '🐉',
+    tier: BadgeTier.diamante,
+    counterKey: RpgCounters.readingMinutes,
+    target: 3000,
+    xpReward: 300,
+    goldReward: 200,
+  ),
+  AchievementDef(
+    id: 'subrayador',
+    title: 'Subrayador',
+    description: 'Guarda 25 resaltados',
+    emoji: '🖍️',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.highlights,
+    target: 25,
+    xpReward: 60,
+    goldReward: 40,
+  ),
+  AchievementDef(
+    id: 'punto-final',
+    title: 'Punto Final',
+    description: 'Termina 3 libros',
+    emoji: '🏁',
+    tier: BadgeTier.oro,
+    counterKey: RpgCounters.booksFinished,
+    target: 3,
+    xpReward: 150,
+    goldReward: 100,
   ),
   // ── Economía y colección ──
   AchievementDef(

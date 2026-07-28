@@ -198,10 +198,13 @@ class RpgNotifier extends Notifier<RpgStats> {
 
   /// Otorga XP y oro por un evento de la app.
   /// [counterKeys] incrementa contadores de logros (ver RpgCounters).
+  /// [counterAmounts] suma cantidades arbitrarias a esos mismos contadores,
+  /// para eventos que no valen "uno" (por ejemplo, minutos leídos).
   Map<String, dynamic> gainXpAndGold(
     int xpAmount,
     int goldAmount, {
     List<String> counterKeys = const [],
+    Map<String, int> counterAmounts = const {},
   }) {
     int newXp = state.xp + xpAmount;
     int newLevel = state.level;
@@ -224,6 +227,9 @@ class RpgNotifier extends Notifier<RpgStats> {
     for (final key in counterKeys) {
       newCounters[key] = (newCounters[key] ?? 0) + 1;
     }
+    counterAmounts.forEach((key, amount) {
+      newCounters[key] = (newCounters[key] ?? 0) + amount;
+    });
     newCounters[RpgCounters.goldTotal] =
         (newCounters[RpgCounters.goldTotal] ?? 0) + goldAmount;
 

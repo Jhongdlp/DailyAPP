@@ -12,6 +12,7 @@ class Book {
   final String? author;
   final BookFormat format;
   final String localFilename;
+  final String? coverImageFilename;
   final int? totalPages;
   final String? lastPosition;
   final double? progressPercent;
@@ -24,6 +25,7 @@ class Book {
     this.author,
     required this.format,
     required this.localFilename,
+    this.coverImageFilename,
     this.totalPages,
     this.lastPosition,
     this.progressPercent,
@@ -38,6 +40,8 @@ class Book {
     String? lastPosition,
     double? progressPercent,
     DateTime? lastOpenedAt,
+    String? coverImageFilename,
+    bool clearCoverImage = false,
   }) {
     return Book(
       id: id,
@@ -45,6 +49,8 @@ class Book {
       author: author ?? this.author,
       format: format,
       localFilename: localFilename,
+      coverImageFilename:
+          clearCoverImage ? null : coverImageFilename ?? this.coverImageFilename,
       totalPages: totalPages ?? this.totalPages,
       lastPosition: lastPosition ?? this.lastPosition,
       progressPercent: progressPercent ?? this.progressPercent,
@@ -59,6 +65,7 @@ class Book {
         author: json['author'] as String?,
         format: BookFormat.fromValue(json['format'] as String),
         localFilename: json['local_filename'] as String,
+        coverImageFilename: json['cover_image_filename'] as String?,
         totalPages: json['total_pages'] as int?,
         lastPosition: json['last_position'] as String?,
         progressPercent: (json['progress_percent'] as num?)?.toDouble(),
@@ -76,6 +83,7 @@ class Book {
         'author': author,
         'format': format.name,
         'local_filename': localFilename,
+        'cover_image_filename': coverImageFilename,
         'total_pages': totalPages,
         'last_position': lastPosition,
         'progress_percent': progressPercent,
@@ -87,6 +95,7 @@ class Book {
         'author': author,
         'format': format.name,
         'local_filename': localFilename,
+        'cover_image_filename': coverImageFilename,
         'total_pages': totalPages,
         'last_position': lastPosition,
         'progress_percent': progressPercent,
