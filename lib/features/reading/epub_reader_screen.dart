@@ -4,6 +4,7 @@ import 'dart:async';
 // de Flutter; aquí solo interesa el de Material.
 import 'package:epub_view/epub_view.dart' hide Image;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,11 +14,13 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/models/book_model.dart';
 import '../../core/providers/book_highlights_provider.dart';
+import '../../core/providers/book_metrics_provider.dart';
 import '../../core/providers/books_provider.dart';
 import '../../core/providers/reader_prefs_provider.dart';
 import '../../core/providers/reader_theme_provider.dart';
 import '../../core/providers/reading_stats_provider.dart';
 import 'epub_internals.dart';
+import 'reader_tts_controller.dart';
 import 'widgets/book_bookmarks_sheet.dart';
 import 'widgets/book_highlights_sheet.dart';
 import 'widgets/book_search_sheet.dart';
@@ -34,7 +37,7 @@ class EpubReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   EpubController? _controller;
 
   /// Posición guardada del libro. Es el índice de párrafo como texto: los CFI
@@ -60,8 +63,26 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
   /// cuando cambian los resaltados o la composición del texto.
   final Map<int, String> _htmlCache = {};
 
-  int _currentParagraph = 0;
-  String? _currentChapterTitle;
+  /// Dónde va la lectura. Va por notificador y no por `setState` a propósito:
+  /// el listener de posición de `EpubView` dispara en cada frame de scroll, y
+  /// reconstruir la pantalla entera desde ahí obliga a `flutter_html` a
+  /// re-inflar los párrafos visibles (cada `Html` se cuelga de un `GlobalKey`
+  /// nuevo en cada build, así que su subárbol se rehace y se vuelve a medir).
+  /// Ese remedido a mitad de scroll era el tirón.
+  final ValueNotifier<_ReaderPosition> _position =
+      ValueNotifier(const _ReaderPosition());
+
+  /// Índice de texto plano listo: habilita la búsqueda.
+  final ValueNotifier<bool> _indexReady = ValueNotifier(false);
+
+  int get _currentParagraph => _position.value.paragraph;
+  String? get _currentChapterTitle => _position.value.chapterTitle;
+
+  /// Vista del libro memoizada por (tema, composición). Mientras esa pareja no
+  /// cambie se devuelve la misma instancia de widget, de modo que repintar el
+  /// chrome o arrastrar el brillo no toca el árbol del EPUB.
+  Widget? _cachedReader;
+  Object? _cachedReaderKey;
 
   bool _chromeVisible = true;
   bool _showResumeBanner = false;
@@ -72,12 +93,41 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
   double? _systemBrightness;
   String? _pendingSelection;
 
+  /// El `Scrollable` interno de la lista de `epub_view`.
+  ///
+  /// El paquete no expone ni su `ScrollController` ni la física, así que la
+  /// única vía para mover el libro por píxeles (pasar página, auto-scroll) es
+  /// pescar el scrollable desde el contexto de un párrafo. Se recaptura en cada
+  /// construcción porque `ScrollablePositionedList` alterna entre dos listas
+  /// internas al animar saltos, y la anterior queda desmontada.
+  ScrollableState? _listScrollable;
+
+  /// Píxeles que el auto-scroll dejó a medias entre frames. Sin acumularlos, a
+  /// velocidades bajas cada frame redondearía a cero y no se movería nada.
+  double _autoScrollRemainder = 0;
+  Duration _autoScrollLastTick = Duration.zero;
+  Ticker? _autoScrollTicker;
+  final ValueNotifier<bool> _autoScrolling = ValueNotifier(false);
+
+  ReaderTtsController? _tts;
+
+  /// Párrafo que se está leyendo en voz alta, para resaltarlo en el texto.
+  final ValueNotifier<int?> _spokenParagraph = ValueNotifier(null);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initController();
     _applyReadingEnvironment();
+
+    _tts = ReaderTtsController(
+      paragraphs: () => _plainTexts ?? const [],
+      onParagraph: (index) {
+        _spokenParagraph.value = index;
+        _jumpToParagraph(index);
+      },
+    )..addListener(_onTtsChanged);
   }
 
   @override
@@ -85,11 +135,25 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     WidgetsBinding.instance.removeObserver(this);
     _resumeBannerTimer?.cancel();
     _saveDebounce?.cancel();
+    _autoScrollTicker?.dispose();
     _saveProgressNow();
     _endSession();
+    _tts?.removeListener(_onTtsChanged);
+    _tts?.dispose();
     _controller?.dispose();
+    _position.dispose();
+    _indexReady.dispose();
+    _autoScrolling.dispose();
+    _spokenParagraph.dispose();
     _restoreReadingEnvironment();
     super.dispose();
+  }
+
+  void _onTtsChanged() {
+    if (!mounted) return;
+    final tts = _tts;
+    if (tts != null && !tts.isSpeaking) _spokenParagraph.value = null;
+    setState(() {});
   }
 
   @override
@@ -98,6 +162,8 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _saveProgressNow();
       _endSession();
+      // Desplazarse solo con la pantalla apagada perdería el sitio.
+      _stopAutoScroll();
     } else if (state == AppLifecycleState.resumed) {
       _startSession();
     }
@@ -156,6 +222,9 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     final saved = widget.book.lastPosition;
     final savedIndex = int.tryParse(saved ?? '');
 
+    _currentPosition = saved;
+    _position.value = _ReaderPosition(paragraph: savedIndex ?? 0);
+
     setState(() {
       _controller = EpubController(
         document: EpubDocument.openFile(file),
@@ -163,8 +232,6 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
         // índices, esos se resuelven al terminar de cargar.
         epubCfi: savedIndex == null ? saved : null,
       );
-      _currentPosition = saved;
-      _currentParagraph = savedIndex ?? 0;
     });
   }
 
@@ -203,28 +270,28 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     }
 
     if (!mounted) return;
-    setState(() {
-      _plainTexts = texts;
-      _cumulativeWords = cumulative;
-      _sessionStartWords ??= _wordsUpTo(_currentParagraph);
-    });
+    _plainTexts = texts;
+    _cumulativeWords = cumulative;
+    // La biblioteca necesita el total para estimar el tiempo restante sin
+    // volver a abrir el EPUB.
+    ref.read(bookMetricsProvider.notifier).setWords(widget.book.id, total);
+    _sessionStartWords ??= _wordsUpTo(_currentParagraph);
+    _position.value = _position.value.copyWith(total: _paragraphs.length);
+    _indexReady.value = true;
   }
 
   void _onChapterChanged(EpubChapterViewValue? value) {
     if (value == null) return;
 
-    final paragraph = value.position.index;
-    final chapterTitle = value.chapter?.Title?.trim();
-    if (paragraph == _currentParagraph && chapterTitle == _currentChapterTitle) {
-      return;
-    }
+    final next = _ReaderPosition(
+      paragraph: value.position.index,
+      total: _paragraphs.length,
+      chapterTitle: value.chapter?.Title?.trim(),
+    );
+    if (next == _position.value) return;
+    _position.value = next;
 
-    setState(() {
-      _currentParagraph = paragraph;
-      _currentChapterTitle = chapterTitle;
-    });
-
-    _currentPosition = paragraph.toString();
+    _currentPosition = next.paragraph.toString();
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 800), _saveProgressNow);
   }
@@ -292,10 +359,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
 
   // ─── Progreso ─────────────────────────────────────────────────────────────
 
-  double? get _progress {
-    if (_paragraphs.isEmpty) return null;
-    return ((_currentParagraph + 1) / _paragraphs.length).clamp(0.0, 1.0);
-  }
+  double? get _progress => _position.value.progress;
 
   /// Minutos que faltan para acabar el libro al ritmo estimado del usuario.
   int? get _minutesLeft {
@@ -342,6 +406,143 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     SystemChrome.setEnabledSystemUIMode(
       _chromeVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
     );
+  }
+
+  // ─── Desplazamiento por píxeles ───────────────────────────────────────────
+
+  /// Posición de scroll viva de la lista interna, o `null` si aún no se ha
+  /// montado (o si la que teníamos quedó desmontada tras un salto animado).
+  ScrollPosition? get _scrollPosition {
+    final scrollable = _listScrollable;
+    if (scrollable == null || !scrollable.mounted) return null;
+    final position = scrollable.position;
+    return position.hasPixels ? position : null;
+  }
+
+  void _captureScrollable(BuildContext context) {
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable != null) _listScrollable = scrollable;
+  }
+
+  /// Pasa una pantalla de texto. Se deja un solapamiento para no cortar la
+  /// línea que estaba justo en el borde: sin él se pierde una línea por página.
+  void _turnPage(int direction) {
+    final position = _scrollPosition;
+    if (position == null) return;
+
+    const overlap = 48.0;
+    final step = (position.viewportDimension - overlap).clamp(1.0, double.infinity);
+    final target = position.pixels + direction * step;
+
+    position.animateTo(
+      target.clamp(position.minScrollExtent, position.maxScrollExtent),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  // ─── Auto-scroll ──────────────────────────────────────────────────────────
+
+  /// Píxeles por segundo equivalentes al ritmo de lectura del usuario.
+  ///
+  /// Se estima en líneas: a [ReaderPrefs.wordsPerMinute] palabras por minuto y
+  /// unas 11 palabras por línea salen las líneas por minuto, y cada línea mide
+  /// `fontSize * lineHeight`. Es aproximado por definición, para eso está el
+  /// multiplicador que el usuario ajusta a ojo.
+  double get _autoScrollPixelsPerSecond {
+    final prefs = ref.read(readerPrefsProvider);
+    const wordsPerLine = 11.0;
+    final linesPerMinute = prefs.wordsPerMinute / wordsPerLine;
+    final lineHeightPx = prefs.fontSize * prefs.lineHeight;
+    return (linesPerMinute * lineHeightPx / 60) * prefs.autoScrollSpeed;
+  }
+
+  void _toggleAutoScroll() {
+    if (_autoScrolling.value) {
+      _stopAutoScroll();
+    } else {
+      _startAutoScroll();
+    }
+  }
+
+  void _startAutoScroll() {
+    if (_autoScrolling.value) return;
+    // Voz y auto-scroll compiten por mover la página; solo uno a la vez.
+    _tts?.stop();
+
+    _autoScrollRemainder = 0;
+    _autoScrollLastTick = Duration.zero;
+    _autoScrolling.value = true;
+
+    _autoScrollTicker ??= createTicker(_onAutoScrollTick);
+    _autoScrollTicker!.start();
+  }
+
+  void _stopAutoScroll() {
+    if (!_autoScrolling.value) return;
+    _autoScrollTicker?.stop();
+    _autoScrolling.value = false;
+  }
+
+  void _onAutoScrollTick(Duration elapsed) {
+    final position = _scrollPosition;
+    if (position == null) return;
+
+    // El primer tick solo sirve para fijar el origen del tiempo.
+    if (_autoScrollLastTick == Duration.zero) {
+      _autoScrollLastTick = elapsed;
+      return;
+    }
+
+    final deltaSeconds =
+        (elapsed - _autoScrollLastTick).inMicroseconds / Duration.microsecondsPerSecond;
+    _autoScrollLastTick = elapsed;
+
+    _autoScrollRemainder += _autoScrollPixelsPerSecond * deltaSeconds;
+    final step = _autoScrollRemainder.floorToDouble();
+    if (step < 1) return;
+    _autoScrollRemainder -= step;
+
+    final target = position.pixels + step;
+    if (target >= position.maxScrollExtent) {
+      position.jumpTo(position.maxScrollExtent);
+      _stopAutoScroll();
+      return;
+    }
+    position.jumpTo(target);
+  }
+
+  // ─── Lectura en voz alta ──────────────────────────────────────────────────
+
+  Future<void> _toggleTts() async {
+    final tts = _tts;
+    if (tts == null) return;
+
+    if (tts.isSpeaking) {
+      await tts.stop();
+      return;
+    }
+
+    if (_plainTexts == null) {
+      _snack('El libro todavía se está indexando');
+      return;
+    }
+
+    _stopAutoScroll();
+    final prefs = ref.read(readerPrefsProvider);
+    await tts.start(
+      fromParagraph: _currentParagraph,
+      rate: prefs.ttsRate,
+      language: prefs.ttsLanguage,
+    );
+
+    final error = tts.error;
+    if (error != null) _snack(error);
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ─── Búsqueda ─────────────────────────────────────────────────────────────
@@ -460,10 +661,16 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     final controller = _controller;
     final readerMode = ref.watch(readerThemeProvider);
     final palette = readerPaletteFor(readerMode);
-    final prefs = ref.watch(readerPrefsProvider);
+    // Solo lo que recompone el texto: el brillo cambia `ReaderPrefs` en cada
+    // frame del gesto y no debe reconstruir el libro.
+    final composition = ref.watch(readerPrefsProvider.select((p) => p.composition));
 
     // Los resaltados cambian el HTML ya preparado.
-    ref.listen(bookHighlightsProvider, (_, _) => _htmlCache.clear());
+    ref.listen(bookHighlightsProvider, (_, _) {
+      _htmlCache.clear();
+      _invalidateReader();
+      if (mounted) setState(() {});
+    });
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -473,14 +680,86 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
             )
           : Stack(
               children: [
-                Positioned.fill(child: _buildReader(controller, palette, prefs)),
+                Positioned.fill(
+                  child: _gestureLayer(
+                    child: _readerView(controller, readerMode, composition),
+                  ),
+                ),
                 _buildBrightnessStrip(),
                 _buildTopBar(palette),
                 _buildBottomBar(palette),
                 _buildResumeBanner(palette),
+                _buildPlaybackBar(palette),
               ],
             ),
     );
+  }
+
+  /// Gestos del área de lectura. Vive fuera de la vista memoizada para que
+  /// activar el paginado no obligue a `flutter_html` a recomponer el libro.
+  Widget _gestureLayer({required Widget child}) {
+    final paginated = ref.watch(readerPrefsProvider.select((p) => p.paginated));
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTapUp: (details) {
+        // Cualquier toque interrumpe el auto-scroll: es el gesto natural para
+        // "para, que quiero mirar esto".
+        if (_autoScrolling.value) {
+          _stopAutoScroll();
+          return;
+        }
+        if (!paginated) {
+          _toggleChrome();
+          return;
+        }
+
+        final width = MediaQuery.sizeOf(context).width;
+        final x = details.localPosition.dx;
+        if (x < width * 0.3) {
+          _turnPage(-1);
+        } else if (x > width * 0.7) {
+          _turnPage(1);
+        } else {
+          _toggleChrome();
+        }
+      },
+      // Deslizar de lado pasa página; el deslizamiento vertical se lo queda la
+      // lista, que sigue siendo la que desplaza el texto.
+      onHorizontalDragEnd: paginated
+          ? (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity.abs() < 150) return;
+              _turnPage(velocity < 0 ? 1 : -1);
+            }
+          : null,
+      child: child,
+    );
+  }
+
+  /// Devuelve la vista del libro memoizada: si el tema y la composición siguen
+  /// siendo los mismos, se reutiliza la instancia anterior y Flutter salta el
+  /// subárbol entero en vez de re-inflar los párrafos en pantalla.
+  Widget _readerView(
+    EpubController controller,
+    ReaderThemeMode mode,
+    ReaderComposition composition,
+  ) {
+    final key = (mode, composition);
+    final cached = _cachedReader;
+    if (cached != null && key == _cachedReaderKey) return cached;
+
+    _cachedReaderKey = key;
+    return _cachedReader = _buildReader(
+      controller,
+      readerPaletteFor(mode),
+      ref.read(readerPrefsProvider),
+    );
+  }
+
+  void _invalidateReader() {
+    _cachedReader = null;
+    _cachedReaderKey = null;
   }
 
   Widget _buildReader(
@@ -520,29 +799,45 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
             WidgetsBinding.instance.addPostFrameCallback((_) => _buildTextIndex());
           }
 
+          // Único punto desde el que se alcanza el scrollable de la lista.
+          _captureScrollable(context);
+
           return Column(
             children: [
               if (chapterIndex >= 0 && paragraphIndex == 0)
                 _chapterDivider(chapters[chapterIndex], palette),
-              Html(
-                data: _paragraphHtml(index, paragraphs[index]),
-                onLinkTap: (href, _, _) {
-                  if (href != null) onExternalLinkPressed(href);
-                },
-                style: {
-                  'html': Style(
-                    padding: HtmlPaddings.symmetric(horizontal: prefs.horizontalMargin),
-                    textAlign: prefs.justify ? TextAlign.justify : TextAlign.start,
-                  ).merge(Style.fromTextStyle(textStyle)),
-                  'mark': Style(color: palette.textColor),
-                  'a': Style(color: palette.textColor),
-                },
-                extensions: [
-                  TagExtension(
-                    tagsToExtend: const {'img'},
-                    builder: (imageContext) => _bookImage(imageContext, document),
-                  ),
-                ],
+              // El resaltado de la voz se cuelga de un notificador y recibe el
+              // párrafo ya construido como `child`: al avanzar la lectura solo
+              // se repinta el fondo, no se vuelve a inflar el HTML.
+              ValueListenableBuilder<int?>(
+                valueListenable: _spokenParagraph,
+                builder: (context, spoken, child) => ColoredBox(
+                  color: spoken == index
+                      ? palette.foregroundAlpha(0.09)
+                      : Colors.transparent,
+                  child: child,
+                ),
+                child: Html(
+                  data: _paragraphHtml(index, paragraphs[index]),
+                  onLinkTap: (href, _, _) {
+                    if (href != null) onExternalLinkPressed(href);
+                  },
+                  style: {
+                    'html': Style(
+                      padding:
+                          HtmlPaddings.symmetric(horizontal: prefs.horizontalMargin),
+                      textAlign: prefs.justify ? TextAlign.justify : TextAlign.start,
+                    ).merge(Style.fromTextStyle(textStyle)),
+                    'mark': Style(color: palette.textColor),
+                    'a': Style(color: palette.textColor),
+                  },
+                  extensions: [
+                    TagExtension(
+                      tagsToExtend: const {'img'},
+                      builder: (imageContext) => _bookImage(imageContext, document),
+                    ),
+                  ],
+                ),
               ),
             ],
           );
@@ -550,24 +845,20 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
       ),
     );
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: _toggleChrome,
-      child: SelectionArea(
-        onSelectionChanged: (content) => _pendingSelection = content?.plainText,
-        contextMenuBuilder: (context, selectableRegionState) =>
-            AdaptiveTextSelectionToolbar.buttonItems(
-          anchors: selectableRegionState.contextMenuAnchors,
-          buttonItems: [
-            ContextMenuButtonItem(
-              label: 'Acciones',
-              onPressed: () => _openSelectionActions(selectableRegionState),
-            ),
-            ...selectableRegionState.contextMenuButtonItems,
-          ],
-        ),
-        child: view,
+    return SelectionArea(
+      onSelectionChanged: (content) => _pendingSelection = content?.plainText,
+      contextMenuBuilder: (context, selectableRegionState) =>
+          AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: selectableRegionState.contextMenuAnchors,
+        buttonItems: [
+          ContextMenuButtonItem(
+            label: 'Acciones',
+            onPressed: () => _openSelectionActions(selectableRegionState),
+          ),
+          ...selectableRegionState.contextMenuButtonItems,
+        ],
       ),
+      child: view,
     );
   }
 
@@ -649,17 +940,20 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
                   ),
                 ),
               ),
-              IconButton(
-                tooltip: 'Buscar en el libro',
-                icon: Icon(Icons.search, color: palette.foreground),
-                onPressed: _plainTexts == null
-                    ? null
-                    : () => showBookSearchSheet(
-                          context,
-                          palette: palette,
-                          search: _search,
-                          onJumpToParagraph: _jumpToParagraph,
-                        ),
+              ValueListenableBuilder<bool>(
+                valueListenable: _indexReady,
+                builder: (context, ready, _) => IconButton(
+                  tooltip: 'Buscar en el libro',
+                  icon: Icon(Icons.search, color: palette.foreground),
+                  onPressed: ready
+                      ? () => showBookSearchSheet(
+                            context,
+                            palette: palette,
+                            search: _search,
+                            onJumpToParagraph: _jumpToParagraph,
+                          )
+                      : null,
+                ),
               ),
               IconButton(
                 tooltip: 'Índice',
@@ -677,7 +971,6 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
                 icon: Icon(Icons.text_fields, color: palette.foreground),
                 onPressed: () => showReaderSettingsSheet(
                   context,
-                  palette: palette,
                   onBrightnessChanged: _setBrightness,
                 ),
               ),
@@ -707,13 +1000,31 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
               context,
               palette: palette,
               bookId: widget.book.id,
+              bookTitle: widget.book.title,
               onJumpToParagraph: _jumpToParagraph,
             );
+          case 'tts':
+            _toggleTts();
+          case 'autoscroll':
+            _toggleAutoScroll();
         }
       },
       itemBuilder: (context) => [
         _menuItem('bookmarks', Icons.bookmark_outline, 'Marcadores', palette),
         _menuItem('highlights', Icons.brush_outlined, 'Resaltados', palette),
+        if (ReaderTtsController.isSupported)
+          _menuItem(
+            'tts',
+            _tts?.isSpeaking == true ? Icons.stop_circle_outlined : Icons.headphones_outlined,
+            _tts?.isSpeaking == true ? 'Detener la voz' : 'Leer en voz alta',
+            palette,
+          ),
+        _menuItem(
+          'autoscroll',
+          _autoScrolling.value ? Icons.pause_circle_outline : Icons.slideshow_outlined,
+          _autoScrolling.value ? 'Detener auto-scroll' : 'Auto-scroll',
+          palette,
+        ),
       ],
     );
   }
@@ -740,80 +1051,197 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
   }
 
   Widget _buildBottomBar(ReaderPalette palette) {
-    final progress = _progress;
-    final minutesLeft = _minutesLeft;
-
     return Positioned(
       left: 0,
       right: 0,
       bottom: 0,
       child: _chrome(
         offset: const Offset(0, 1),
-        child: Container(
-          color: palette.background.withValues(alpha: 0.96),
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 6,
-            bottom: MediaQuery.viewPaddingOf(context).bottom + 8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_paragraphs.length > 1)
-                SliderTheme(
-                  data: SliderThemeData(
-                    activeTrackColor: palette.foregroundAlpha(0.6),
-                    inactiveTrackColor: palette.foregroundAlpha(0.12),
-                    thumbColor: palette.foreground,
-                    overlayColor: palette.foregroundAlpha(0.1),
-                    trackHeight: 2,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                  ),
-                  child: Slider(
-                    value: progress ?? 0,
-                    onChanged: (value) =>
-                        _jumpToParagraph((value * (_paragraphs.length - 1)).round()),
-                  ),
-                ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _currentChapterTitle ?? widget.book.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.montserrat(
-                        color: palette.foregroundAlpha(0.6),
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    [
-                      if (progress != null) '${(progress * 100).round()}%',
-                      if (minutesLeft != null && minutesLeft > 0)
-                        '${_formatMinutes(minutesLeft)} restantes',
-                    ].join(' · '),
-                    style: GoogleFonts.montserrat(
-                      color: palette.foregroundAlpha(0.6),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+        child: ValueListenableBuilder<_ReaderPosition>(
+          valueListenable: _position,
+          builder: (context, position, _) => _bottomBarContent(palette, position),
         ),
       ),
     );
   }
 
-  Widget _buildResumeBanner(ReaderPalette palette) {
-    final chapter = _currentChapterTitle;
+  /// Lo único que se repinta al desplazarse: la barra de progreso.
+  Widget _bottomBarContent(ReaderPalette palette, _ReaderPosition position) {
+    final progress = position.progress;
+    final minutesLeft = _minutesLeft;
 
+    return Container(
+      color: palette.background.withValues(alpha: 0.96),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 6,
+        bottom: MediaQuery.viewPaddingOf(context).bottom + 8,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (position.total > 1)
+            SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: palette.foregroundAlpha(0.6),
+                inactiveTrackColor: palette.foregroundAlpha(0.12),
+                thumbColor: palette.foreground,
+                overlayColor: palette.foregroundAlpha(0.1),
+                trackHeight: 2,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              ),
+              child: Slider(
+                value: progress ?? 0,
+                onChanged: (value) =>
+                    _jumpToParagraph((value * (position.total - 1)).round()),
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  position.chapterTitle ?? widget.book.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.montserrat(
+                    color: palette.foregroundAlpha(0.6),
+                    fontSize: 11.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                [
+                  if (progress != null) '${(progress * 100).round()}%',
+                  if (minutesLeft != null && minutesLeft > 0)
+                    '${_formatMinutes(minutesLeft)} restantes',
+                ].join(' · '),
+                style: GoogleFonts.montserrat(
+                  color: palette.foregroundAlpha(0.6),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Controles de la reproducción en curso (voz o auto-scroll).
+  ///
+  /// Se muestra por encima de la barra inferior y sobrevive al modo inmersivo:
+  /// si el texto avanza solo, tiene que haber siempre una forma de pararlo.
+  Widget _buildPlaybackBar(ReaderPalette palette) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: MediaQuery.viewPaddingOf(context).bottom + (_chromeVisible ? 76 : 16),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _autoScrolling,
+        builder: (context, autoScrolling, _) {
+          final speaking = _tts?.isSpeaking ?? false;
+          if (!autoScrolling && !speaking) return const SizedBox.shrink();
+
+          final prefs = ref.read(readerPrefsProvider);
+          final notifier = ref.read(readerPrefsProvider.notifier);
+
+          return Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: palette.surface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    speaking ? Icons.graphic_eq : Icons.slideshow_outlined,
+                    size: 17,
+                    color: palette.foregroundAlpha(0.7),
+                  ),
+                  const SizedBox(width: 8),
+                  _playbackButton(
+                    palette,
+                    Icons.remove,
+                    'Más lento',
+                    () => speaking
+                        ? _changeTtsRate(prefs.ttsRate - 0.1)
+                        : notifier.setAutoScrollSpeed(prefs.autoScrollSpeed - 0.2),
+                  ),
+                  Text(
+                    speaking
+                        ? '${(prefs.ttsRate * 100).round()}%'
+                        : '${prefs.autoScrollSpeed.toStringAsFixed(1)}×',
+                    style: GoogleFonts.montserrat(
+                      color: palette.foregroundAlpha(0.75),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  _playbackButton(
+                    palette,
+                    Icons.add,
+                    'Más rápido',
+                    () => speaking
+                        ? _changeTtsRate(prefs.ttsRate + 0.1)
+                        : notifier.setAutoScrollSpeed(prefs.autoScrollSpeed + 0.2),
+                  ),
+                  const SizedBox(width: 2),
+                  _playbackButton(
+                    palette,
+                    Icons.stop,
+                    'Detener',
+                    () => speaking ? _tts?.stop() : _stopAutoScroll(),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _playbackButton(
+    ReaderPalette palette,
+    IconData icon,
+    String tooltip,
+    VoidCallback onPressed,
+  ) {
+    return IconButton(
+      tooltip: tooltip,
+      icon: Icon(icon, size: 18, color: palette.foregroundAlpha(0.75)),
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+      padding: EdgeInsets.zero,
+      onPressed: () {
+        onPressed();
+        setState(() {});
+      },
+    );
+  }
+
+  void _changeTtsRate(double rate) {
+    final clamped = rate.clamp(
+      ReaderPrefsNotifier.ttsRateRange.min,
+      ReaderPrefsNotifier.ttsRateRange.max,
+    );
+    ref.read(readerPrefsProvider.notifier).setTtsRate(clamped);
+    _tts?.setRate(clamped);
+  }
+
+  Widget _buildResumeBanner(ReaderPalette palette) {
     return Positioned(
       top: MediaQuery.viewPaddingOf(context).top + 60,
       left: 20,
@@ -841,17 +1269,23 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
                     size: 17, color: palette.foregroundAlpha(0.7)),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    chapter == null || chapter.isEmpty
-                        ? 'Retomas donde lo dejaste'
-                        : 'Retomas en $chapter',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.montserrat(
-                      color: palette.foregroundAlpha(0.8),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: ValueListenableBuilder<_ReaderPosition>(
+                    valueListenable: _position,
+                    builder: (context, position, _) {
+                      final chapter = position.chapterTitle;
+                      return Text(
+                        chapter == null || chapter.isEmpty
+                            ? 'Retomas donde lo dejaste'
+                            : 'Retomas en $chapter',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.montserrat(
+                          color: palette.foregroundAlpha(0.8),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -878,4 +1312,43 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
       ),
     );
   }
+}
+
+/// Instantánea de por dónde va la lectura.
+///
+/// Se compara por valor para que el notificador no dispare en cada frame de
+/// scroll, solo cuando de verdad cambia el párrafo o el capítulo visible.
+class _ReaderPosition {
+  final int paragraph;
+
+  /// Párrafos del libro. Es 0 hasta que `chapterBuilder` entrega la lista.
+  final int total;
+
+  final String? chapterTitle;
+
+  const _ReaderPosition({
+    this.paragraph = 0,
+    this.total = 0,
+    this.chapterTitle,
+  });
+
+  double? get progress =>
+      total == 0 ? null : ((paragraph + 1) / total).clamp(0.0, 1.0);
+
+  _ReaderPosition copyWith({int? paragraph, int? total, String? chapterTitle}) =>
+      _ReaderPosition(
+        paragraph: paragraph ?? this.paragraph,
+        total: total ?? this.total,
+        chapterTitle: chapterTitle ?? this.chapterTitle,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ReaderPosition &&
+      other.paragraph == paragraph &&
+      other.total == total &&
+      other.chapterTitle == chapterTitle;
+
+  @override
+  int get hashCode => Object.hash(paragraph, total, chapterTitle);
 }

@@ -781,11 +781,13 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   }
 
   /// Pocito hundido cuadrado para engastar el emoji/identidad de un hábito.
+  ///
+  /// `lite`: hay uno por fila y a 34px las sombras interiores desenfocadas no
+  /// aportan nada que el degradado cóncavo no dé ya.
   Widget _sunkenIconWell(String emoji, {required double size, required double iconSize, required double borderRadius}) {
     return NeuPressed(
+      lite: true,
       borderRadius: borderRadius,
-      distance: 2.5,
-      blur: 5,
       child: SizedBox(
         width: size,
         height: size,
@@ -859,15 +861,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               Color.lerp(accent, Colors.black, 0.18)!,
             ],
           ),
-          boxShadow: BentoTheme.neuRaised(distance: 2, blur: 4),
+          boxShadow: BentoTheme.neuRaisedLite(distance: 2, blur: 4),
         ),
         child: Icon(Icons.check, size: size * 0.54, color: Colors.white),
       );
     }
     return NeuPressed(
+      lite: true,
       borderRadius: size / 2,
-      distance: 2,
-      blur: 3.5,
       child: SizedBox(
         width: size,
         height: size,

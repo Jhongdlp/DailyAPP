@@ -100,6 +100,42 @@ ReaderPalette readerPaletteFor(ReaderThemeMode mode) {
   }
 }
 
+/// Tema local para los paneles del lector.
+///
+/// Los Material de serie (Switch, TextButton, el splash del InkWell, el cursor
+/// de los campos de texto) toman su color del tema de la app, que puede ser el
+/// neumórfico oscuro mientras se lee en claro: sin esto quedan sin contraste
+/// —o directamente invisibles— sobre el panel del lector.
+ThemeData readerSheetTheme(ReaderPalette palette) {
+  final brightness = ThemeData.estimateBrightnessForColor(palette.surface);
+  final base = ThemeData(brightness: brightness, useMaterial3: true);
+
+  return base.copyWith(
+    colorScheme: base.colorScheme.copyWith(
+      primary: palette.foreground,
+      onPrimary: palette.surface,
+      secondary: palette.foreground,
+      onSecondary: palette.surface,
+      surface: palette.surface,
+      onSurface: palette.foreground,
+      surfaceContainerHighest: palette.background,
+      outline: palette.foregroundAlpha(0.35),
+      outlineVariant: palette.foregroundAlpha(0.18),
+    ),
+    canvasColor: palette.surface,
+    dividerColor: palette.foregroundAlpha(0.15),
+    iconTheme: IconThemeData(color: palette.foreground),
+    splashColor: palette.foregroundAlpha(0.08),
+    highlightColor: palette.foregroundAlpha(0.05),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: palette.foreground),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(foregroundColor: palette.foreground),
+    ),
+  );
+}
+
 IconData readerThemeIcon(ReaderThemeMode mode) => switch (mode) {
       ReaderThemeMode.light => Icons.light_mode_outlined,
       ReaderThemeMode.sepia => Icons.wb_twilight_outlined,

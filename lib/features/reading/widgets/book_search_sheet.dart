@@ -34,7 +34,6 @@ Future<void> showBookSearchSheet(
 }) {
   return showReaderSheet(
     context,
-    palette: palette,
     expand: true,
     builder: (_) => _BookSearchSheet(
       palette: palette,

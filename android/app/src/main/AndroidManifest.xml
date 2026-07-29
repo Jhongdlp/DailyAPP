@@ -43,6 +43,30 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- "Abrir con" y "Compartir con" para libros. Los tipos van
+                 acotados a EPUB y PDF a propósito: con `*/*` la app aparecería
+                 como destino de cualquier archivo del sistema.
+                 El launchMode sigue siendo singleTop (no singleTask, como
+                 sugiere receive_sharing_intent) porque la alarma depende de
+                 él; los intents entrantes llegan igual por onNewIntent. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/epub+zip"/>
+                <data android:mimeType="application/pdf"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/epub+zip"/>
+                <data android:mimeType="application/pdf"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/epub+zip"/>
+                <data android:mimeType="application/pdf"/>
+            </intent-filter>
         </activity>
         <!-- Requerido por el paquete `alarm` para la notificación de aviso
              cuando la app es cerrada mientras hay una alarma programada -->

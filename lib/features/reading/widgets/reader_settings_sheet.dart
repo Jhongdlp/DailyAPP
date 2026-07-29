@@ -10,12 +10,10 @@ import 'reader_sheet.dart';
 /// márgenes, brillo y pantalla encendida.
 Future<void> showReaderSettingsSheet(
   BuildContext context, {
-  required ReaderPalette palette,
   required ValueChanged<double?> onBrightnessChanged,
 }) {
   return showReaderSheet(
     context,
-    palette: palette,
     builder: (_) => _ReaderSettingsSheet(onBrightnessChanged: onBrightnessChanged),
   );
 }
@@ -45,8 +43,9 @@ class _ReaderSettingsSheet extends ConsumerWidget {
               child: Text(
                 'Restablecer',
                 style: GoogleFonts.montserrat(
-                  color: palette.foregroundAlpha(0.6),
+                  color: palette.foregroundAlpha(0.75),
                   fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -121,6 +120,48 @@ class _ReaderSettingsSheet extends ConsumerWidget {
             value: prefs.keepScreenOn,
             onChanged: notifier.setKeepScreenOn,
           ),
+          const SizedBox(height: 14),
+          _label('Modo de avance', palette),
+          const SizedBox(height: 4),
+          _switchTile(
+            palette: palette,
+            icon: prefs.paginated ? Icons.auto_stories_outlined : Icons.swipe_vertical,
+            label: 'Pasar páginas',
+            value: prefs.paginated,
+            onChanged: notifier.setPaginated,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 28, bottom: 6),
+            child: Text(
+              prefs.paginated
+                  ? 'Toca los bordes o desliza de lado para pasar página.'
+                  : 'Desplazamiento continuo (el modo por defecto).',
+              style: GoogleFonts.montserrat(
+                color: palette.foregroundAlpha(0.5),
+                fontSize: 11,
+              ),
+            ),
+          ),
+          _slider(
+            palette: palette,
+            icon: Icons.slideshow_outlined,
+            label: 'Auto-scroll',
+            value: prefs.autoScrollSpeed,
+            min: ReaderPrefsNotifier.autoScrollRange.min,
+            max: ReaderPrefsNotifier.autoScrollRange.max,
+            display: '${prefs.autoScrollSpeed.toStringAsFixed(1)}×',
+            onChanged: notifier.setAutoScrollSpeed,
+          ),
+          _slider(
+            palette: palette,
+            icon: Icons.record_voice_over_outlined,
+            label: 'Voz',
+            value: prefs.ttsRate,
+            min: ReaderPrefsNotifier.ttsRateRange.min,
+            max: ReaderPrefsNotifier.ttsRateRange.max,
+            display: '${(prefs.ttsRate * 100).round()}%',
+            onChanged: notifier.setTtsRate,
+          ),
         ],
       ),
     );
@@ -130,7 +171,7 @@ class _ReaderSettingsSheet extends ConsumerWidget {
     return IconButton(
       tooltip: 'Devolver el brillo al sistema',
       visualDensity: VisualDensity.compact,
-      icon: Icon(Icons.restart_alt, size: 18, color: palette.foregroundAlpha(0.6)),
+      icon: Icon(Icons.restart_alt, size: 18, color: palette.foregroundAlpha(0.75)),
       onPressed: () {
         notifier.setBrightness(null);
         onBrightnessChanged(null);
@@ -141,8 +182,8 @@ class _ReaderSettingsSheet extends ConsumerWidget {
   Widget _label(String text, ReaderPalette palette) => Text(
         text,
         style: GoogleFonts.montserrat(
-          color: palette.foregroundAlpha(0.6),
-          fontWeight: FontWeight.w600,
+          color: palette.foregroundAlpha(0.75),
+          fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
       );
@@ -165,7 +206,7 @@ class _ReaderSettingsSheet extends ConsumerWidget {
                     border: Border.all(
                       color: mode == current
                           ? palette.foreground
-                          : palette.foregroundAlpha(0.15),
+                          : palette.foregroundAlpha(0.3),
                       width: mode == current ? 2 : 1,
                     ),
                   ),
@@ -203,7 +244,7 @@ class _ReaderSettingsSheet extends ConsumerWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: selected ? palette.foreground : palette.foregroundAlpha(0.15),
+                  color: selected ? palette.foreground : palette.foregroundAlpha(0.3),
                   width: selected ? 2 : 1,
                 ),
               ),
@@ -220,7 +261,7 @@ class _ReaderSettingsSheet extends ConsumerWidget {
                   Text(
                     family.description,
                     style: GoogleFonts.montserrat(
-                      color: palette.foregroundAlpha(0.5),
+                      color: palette.foregroundAlpha(0.65),
                       fontSize: 10,
                     ),
                   ),
@@ -248,14 +289,14 @@ class _ReaderSettingsSheet extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: palette.foregroundAlpha(0.6)),
+          Icon(icon, size: 18, color: palette.foregroundAlpha(0.75)),
           const SizedBox(width: 10),
           SizedBox(
             width: 92,
             child: Text(
               label,
               style: GoogleFonts.montserrat(
-                color: palette.foregroundAlpha(0.8),
+                color: palette.foregroundAlpha(0.9),
                 fontSize: 13,
               ),
             ),
@@ -283,8 +324,9 @@ class _ReaderSettingsSheet extends ConsumerWidget {
               display,
               textAlign: TextAlign.right,
               style: GoogleFonts.montserrat(
-                color: palette.foregroundAlpha(0.6),
+                color: palette.foregroundAlpha(0.8),
                 fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -303,13 +345,13 @@ class _ReaderSettingsSheet extends ConsumerWidget {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: palette.foregroundAlpha(0.6)),
+        Icon(icon, size: 18, color: palette.foregroundAlpha(0.75)),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             label,
             style: GoogleFonts.montserrat(
-              color: palette.foregroundAlpha(0.8),
+              color: palette.foregroundAlpha(0.9),
               fontSize: 13,
             ),
           ),

@@ -14,6 +14,7 @@ import 'reader_sheet.dart';
 
 /// Qué se le puede pedir a la IA sobre un fragmento seleccionado.
 enum _AiAction {
+  define('Definir', Icons.menu_book_outlined),
   explain('Explícame esto', Icons.lightbulb_outline),
   translate('Traducir', Icons.translate),
   context('Dame contexto', Icons.history_edu_outlined);
@@ -23,7 +24,23 @@ enum _AiAction {
   final String label;
   final IconData icon;
 
+  /// Acciones que tienen sentido para lo seleccionado: el diccionario solo
+  /// aparece con una palabra suelta, que es cuando "definir" significa algo.
+  static List<_AiAction> availableFor(String selection) {
+    final trimmed = selection.trim();
+    final isSingleWord =
+        trimmed.length <= 40 && !trimmed.contains(RegExp(r'\s'));
+    return [
+      for (final action in _AiAction.values)
+        if (action != _AiAction.define || isSingleWord) action,
+    ];
+  }
+
   String prompt(String fragment, String bookTitle) => switch (this) {
+        _AiAction.define =>
+          'Actúa como un diccionario. Da la definición de la palabra '
+              '"$fragment" en español: categoría gramatical, una o dos '
+              'acepciones breves y un sinónimo. Nada más.',
         _AiAction.explain =>
           'Explica de forma clara y breve este fragmento del libro "$bookTitle":\n\n"""$fragment"""',
         _AiAction.translate =>
@@ -50,7 +67,6 @@ Future<void> showSelectionActionsSheet(
 }) {
   return showReaderSheet(
     context,
-    palette: palette,
     expand: true,
     builder: (_) => _SelectionActionsSheet(
       palette: palette,
@@ -257,7 +273,7 @@ class _SelectionActionsSheetState extends ConsumerState<_SelectionActionsSheet> 
           const SizedBox(height: 8),
           Row(
             children: [
-              for (final action in _AiAction.values)
+              for (final action in _AiAction.availableFor(widget.selectedText))
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(right: 8),

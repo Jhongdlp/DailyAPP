@@ -9,11 +9,13 @@ import '../notes/notes_tab.dart';
 import '../chat/chat_tab.dart';
 import '../finance/finance_tab.dart';
 import '../reading/reading_tab.dart';
+import '../reading/shared_books_handler.dart';
 import '../agenda/agenda_tab.dart';
 import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
-import '../../core/providers/appearance_provider.dart';
 import '../settings/personalize_screen.dart';
+import '../../core/models/app_destination.dart';
+import '../../core/providers/dock_provider.dart';
 import '../../core/providers/vault_provider.dart';
 import '../../core/providers/habits_provider.dart';
 import '../../core/providers/tasks_provider.dart';
@@ -33,6 +35,8 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _currentIndex = 0;
 
+  /// En el mismo orden que [AppDestination]: el índice del enum ES el índice
+  /// del stack.
   final List<Widget> _tabs = [
     const HabitsTab(),
     const NotesTab(),
@@ -43,8 +47,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     const ReadingTab(),
   ];
 
+  SharedBooksHandler? _sharedBooks;
+
+  @override
+  void initState() {
+    super.initState();
+    _sharedBooks = SharedBooksHandler(
+      ref: ref,
+      onImported: (count) {
+        if (!mounted) return;
+        setState(() => _currentIndex = AppDestination.reading.tabIndex);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(count == 1
+                ? 'Libro añadido a tu biblioteca'
+                : '$count libros añadidos a tu biblioteca'),
+          ),
+        );
+      },
+    )..start();
+  }
+
+  @override
+  void dispose() {
+    _sharedBooks?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final dock = ref.watch(dockProvider);
+
     // BentoBackground ya no reserva el inset inferior: lo consume el dock para
     // poder nacer del borde físico de la pantalla.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
@@ -92,10 +125,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    Expanded(child: _buildTabItem(icon: Icons.check_circle_outline, index: 0)),
-                    Expanded(child: _buildTabItem(icon: Icons.psychology_outlined, index: 1)),
-                    Expanded(child: _buildTabItem(icon: Icons.alarm_outlined, index: 2)),
-                    Expanded(child: _buildTabItem(icon: Icons.account_balance_wallet_outlined, index: 3)),
+                    for (final destination in dock.slots)
+                      Expanded(child: _buildTabItem(destination)),
                     Expanded(child: _buildConfigItem()),
                   ],
                 ),
@@ -115,11 +146,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _showConfigSheet(BuildContext context) {
+    final overflow = ref.read(dockProvider).overflow;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (sheetContext) {
-        return NeuCard(
+        return ConstrainedBox(
+          // Con el dock en 3 huecos la lista crece hasta 4 destinos extra: en
+          // pantallas cortas tiene que poder desplazarse en vez de desbordar.
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+          ),
+          child: NeuCard(
           radius: const BorderRadius.vertical(top: Radius.circular(28)),
           elevation: 22,
           convex: false,
@@ -137,14 +177,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: SizedBox(width: 40, height: 5),
               ),
               const SizedBox(height: 12),
-              
-              // Mi Personaje / Mi Perfil
-              ListTile(
-                leading: Icon(Icons.person_outline, color: BentoTheme.accentLime),
-                title: Text(
-                  'Mi Personaje',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+
+              // 1. Ir a — solo lo que no cabe en el dock: repetir aquí una
+              // pestaña que ya está a un toque de distancia solo alarga la lista.
+              if (overflow.isNotEmpty) ...[
+                _SheetSection('Ir a'),
+                for (final destination in overflow)
+                  _SheetTile(
+                    icon: destination.icon,
+                    color: destination.accent,
+                    label: destination.label,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      setState(() => _currentIndex = destination.tabIndex);
+                    },
+                  ),
+                const SizedBox(height: 4),
+              ],
+
+              // 2. Tuyo
+              _SheetSection('Tu cuenta'),
+              _SheetTile(
+                icon: Icons.person_outline,
+                color: BentoTheme.accentLime,
+                label: 'Mi Personaje',
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   Navigator.of(context).push(
@@ -152,30 +213,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   );
                 },
               ),
-
-              // Modo claro / oscuro
-              ListTile(
-                leading: Icon(
-                  BentoTheme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                  color: BentoTheme.accentFinance,
-                ),
-                title: Text(
-                  BentoTheme.isDark ? 'Modo claro' : 'Modo oscuro',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  ref.read(appearanceProvider.notifier).toggleMode(BentoTheme.isDark);
-                },
-              ),
-
-              // Personalizar
-              ListTile(
-                leading: Icon(Icons.palette_outlined, color: BentoTheme.accentPurple),
-                title: Text(
-                  'Personalizar',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
+              _SheetTile(
+                icon: Icons.palette_outlined,
+                color: BentoTheme.accentPurple,
+                label: 'Personalizar',
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   Navigator.of(context).push(
@@ -184,52 +225,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 },
               ),
 
-              // Copiloto
-              ListTile(
-                leading: Icon(Icons.chat_bubble_outline, color: BentoTheme.accentChat),
-                title: Text(
-                  'Copiloto',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  setState(() => _currentIndex = 4);
-                },
-              ),
+              const SizedBox(height: 4),
 
-              // Agenda
-              ListTile(
-                leading: Icon(Icons.view_timeline_outlined, color: BentoTheme.accentLime),
-                title: Text(
-                  'Agenda',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  setState(() => _currentIndex = 5);
-                },
-              ),
-
-              // Biblioteca
-              ListTile(
-                leading: Icon(Icons.auto_stories_outlined, color: BentoTheme.accentPurple),
-                title: Text(
-                  'Biblioteca',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  setState(() => _currentIndex = 6);
-                },
-              ),
-
-              // Buscar actualizaciones
-              ListTile(
-                leading: Icon(Icons.system_update_outlined, color: BentoTheme.accentLime),
-                title: Text(
-                  'Buscar actualizaciones',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-                ),
+              // 3. App
+              _SheetSection('Aplicación'),
+              _SheetTile(
+                icon: Icons.system_update_outlined,
+                color: BentoTheme.accentFinance,
+                label: 'Buscar actualizaciones',
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   UpdateChecker.check(context, silent: false);
@@ -269,49 +272,76 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   }
                 },
               ),
+                    ],
+                  ),
+                ),
+              ),
             ],
+          ),
           ),
         );
       },
     );
   }
 
-  Color _getTabColor(int index) {
-    switch (index) {
-      case 0:
-        return BentoTheme.accentHabits;
-      case 1:
-        return BentoTheme.accentBrain;
-      case 2:
-        return BentoTheme.accentAlarm;
-      case 3:
-        return BentoTheme.accentFinance;
-      case 4:
-        return BentoTheme.accentChat;
-      case 5:
-        return BentoTheme.accentLime;
-      case 6:
-        return BentoTheme.accentPurple;
-      default:
-        return BentoTheme.accentLime;
-    }
-  }
-
-  Widget _buildTabItem({
-    required IconData icon,
-    required int index,
-  }) {
-    final isSelected = _currentIndex == index;
-    final activeColor = _getTabColor(index);
+  Widget _buildTabItem(AppDestination destination) {
     return _AnimatedTabItem(
-      icon: icon,
-      isSelected: isSelected,
-      activeColor: activeColor,
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
+      icon: destination.icon,
+      isSelected: _currentIndex == destination.tabIndex,
+      activeColor: destination.accent,
+      onTap: () => setState(() => _currentIndex = destination.tabIndex),
+    );
+  }
+}
+
+/// Encabezado de grupo del menú. Sin él las ocho filas se leen como una lista
+/// plana donde "Cerrar sesión" está a la misma altura visual que "Agenda".
+class _SheetSection extends StatelessWidget {
+  final String label;
+  const _SheetSection(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label.toUpperCase(),
+          style: GoogleFonts.montserrat(
+            color: BentoTheme.creamTertiary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SheetTile({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(
+        label,
+        style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+      ),
+      onTap: onTap,
     );
   }
 }

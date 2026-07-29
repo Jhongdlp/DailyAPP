@@ -15,6 +15,17 @@ class TasksNotifier extends Notifier<List<Task>> {
   Timer? _saveDebounce;
   String? _lastReminderFingerprint;
 
+  /// Último error de sincronización pendiente de mostrar. La UI lo lee tras
+  /// una mutación y lo consume con [takeSyncError]; antes estos errores se
+  /// tragaban en silencio y la tarea quedaba solo en local sin avisar.
+  String? lastSyncError;
+
+  String? takeSyncError() {
+    final error = lastSyncError;
+    lastSyncError = null;
+    return error;
+  }
+
   static const _cacheTtl = Duration(seconds: 90);
   static const _saveDebounceDuration = Duration(milliseconds: 400);
 
@@ -123,7 +134,17 @@ class TasksNotifier extends Notifier<List<Task>> {
     DateTime? endAt,
     DateTime? remindAt,
     TaskPriority priority = TaskPriority.normal,
+    String? habitId,
+    BlockType blockType = BlockType.task,
+    String? location,
+    bool isMit = false,
+    DateTime? plannedAt,
   }) async {
+    // Sin esto, guardar mientras la carga inicial sigue en vuelo hace que
+    // `_loadTasks` pise el estado optimista y la tarea recién creada
+    // desaparezca de la lista aunque sí se haya insertado en Supabase.
+    await _ensureLoaded();
+
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
     final localTask = Task(
       id: tempId,
@@ -134,6 +155,11 @@ class TasksNotifier extends Notifier<List<Task>> {
       endAt: endAt,
       remindAt: remindAt,
       priority: priority,
+      habitId: habitId,
+      blockType: blockType,
+      location: location,
+      isMit: isMit,
+      plannedAt: plannedAt,
     );
 
     state = [...state, localTask];
@@ -150,10 +176,19 @@ class TasksNotifier extends Notifier<List<Task>> {
           final response = await client.from('tasks').insert(localTask.toInsertJson(user.id)).select().single();
           final serverTask = Task.fromJson(response);
 
-          state = [
-            for (final t in state)
-              if (t.id == tempId) serverTask else t
-          ];
+          // Si algo recargó el estado mientras el insert estaba en vuelo, el
+          // temporal ya no está: en ese caso anexamos la versión del servidor
+          // en vez de descartarla silenciosamente.
+          final hasTemp = state.any((t) => t.id == tempId);
+          state = hasTemp
+              ? [
+                  for (final t in state)
+                    if (t.id == tempId) serverTask else t
+                ]
+              : [
+                  ...state.where((t) => t.id != serverTask.id),
+                  serverTask,
+                ];
           _scheduleCacheSave();
 
           unawaited(TaskReminderService.cancelReminder(tempId));
@@ -162,11 +197,72 @@ class TasksNotifier extends Notifier<List<Task>> {
         }
       }
     } catch (e) {
-      // Si falla, se queda como tarea local.
+      // La tarea sobrevive en local/caché; avisamos para que la UI lo muestre.
+      lastSyncError = 'No se pudo guardar en el servidor. Queda guardado en este dispositivo.';
     }
   }
 
+  /// Clona en [to] todos los bloques de [from], conservando horas y duración.
+  ///
+  /// Las rutinas se repiten: rehacer a mano el mismo lunes cada semana es la
+  /// clase de trabajo que hace abandonar el sistema. No copia el estado de
+  /// completado ni los bloques ligados a un hábito (esos los coloca la propia
+  /// bandeja de hábitos, y duplicarlos crearía dos bloques para el mismo día).
+  ///
+  /// Devuelve cuántos bloques se copiaron.
+  Future<int> copyDay({required DateTime from, required DateTime to}) async {
+    await _ensureLoaded();
+
+    final source = tasksForDay(from).where((t) => !t.isHabitBlock).toList();
+    if (source.isEmpty) return 0;
+
+    final target = DateTime(to.year, to.month, to.day);
+    final existing = tasksForDay(target);
+    var copied = 0;
+
+    for (final task in source) {
+      // No duplicar lo que ya está a la misma hora con el mismo nombre.
+      final alreadyThere = existing.any((t) =>
+          t.title == task.title &&
+          t.startAt.hour == task.startAt.hour &&
+          t.startAt.minute == task.startAt.minute);
+      if (alreadyThere) continue;
+
+      // Se conserva la hora del reloj, no el instante: copiar el lunes al
+      // martes debe dejar el bloque a la misma hora, no 24h después.
+      DateTime atTargetDay(DateTime d, {required bool nextDay}) => DateTime(
+            target.year,
+            target.month,
+            target.day + (nextDay ? 1 : 0),
+            d.hour,
+            d.minute,
+          );
+
+      final endCrossesMidnight = task.endAt != null && task.endAt!.isBefore(task.startAt);
+      DateTime shift(DateTime d) =>
+          atTargetDay(d, nextDay: d == task.endAt && endCrossesMidnight);
+
+      copied++;
+      await addTask(
+        title: task.title,
+        notes: task.notes,
+        dueDate: target,
+        startAt: shift(task.startAt),
+        endAt: task.endAt != null ? shift(task.endAt!) : null,
+        remindAt: task.hasReminder ? shift(task.startAt) : null,
+        priority: task.priority,
+        blockType: task.blockType,
+        location: task.location,
+        isMit: task.isMit,
+        plannedAt: DateTime.now(),
+      );
+    }
+
+    return copied;
+  }
+
   Future<void> updateTask(Task updated) async {
+    await _ensureLoaded();
     final index = state.indexWhere((t) => t.id == updated.id);
     if (index == -1) return;
 
@@ -183,7 +279,7 @@ class TasksNotifier extends Notifier<List<Task>> {
       if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(updated.id)) return;
       await Supabase.instance.client.from('tasks').update(updated.toUpdateJson()).eq('id', updated.id);
     } catch (e) {
-      // Ignoramos error de red/actualización en UI
+      lastSyncError = 'No se pudo actualizar en el servidor. El cambio quedó en este dispositivo.';
     }
   }
 
@@ -225,6 +321,7 @@ class TasksNotifier extends Notifier<List<Task>> {
   }
 
   Future<void> deleteTask(String taskId) async {
+    await _ensureLoaded();
     state = state.where((t) => t.id != taskId).toList();
     _scheduleCacheSave();
     unawaited(TaskReminderService.cancelReminder(taskId));

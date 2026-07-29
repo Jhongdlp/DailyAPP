@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/models/book_highlight_model.dart';
 import '../../../core/providers/book_highlights_provider.dart';
@@ -14,15 +18,16 @@ Future<void> showBookHighlightsSheet(
   BuildContext context, {
   required ReaderPalette palette,
   required String bookId,
+  required String bookTitle,
   required ValueChanged<int> onJumpToParagraph,
 }) {
   return showReaderSheet(
     context,
-    palette: palette,
     expand: true,
     builder: (_) => _BookHighlightsSheet(
       palette: palette,
       bookId: bookId,
+      bookTitle: bookTitle,
       onJumpToParagraph: onJumpToParagraph,
     ),
   );
@@ -31,11 +36,13 @@ Future<void> showBookHighlightsSheet(
 class _BookHighlightsSheet extends ConsumerWidget {
   final ReaderPalette palette;
   final String bookId;
+  final String bookTitle;
   final ValueChanged<int> onJumpToParagraph;
 
   const _BookHighlightsSheet({
     required this.palette,
     required this.bookId,
+    required this.bookTitle,
     required this.onJumpToParagraph,
   });
 
@@ -51,12 +58,24 @@ class _BookHighlightsSheet extends ConsumerWidget {
         ReaderSheetTitle(
           text: 'Resaltados',
           palette: palette,
-          trailing: Text(
-            '${highlights.length}',
-            style: GoogleFonts.montserrat(
-              color: palette.foregroundAlpha(0.5),
-              fontWeight: FontWeight.w700,
-            ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${highlights.length}',
+                style: GoogleFonts.montserrat(
+                  color: palette.foregroundAlpha(0.5),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (highlights.isNotEmpty)
+                _iconButton(
+                  icon: Icons.ios_share,
+                  palette: palette,
+                  tooltip: 'Exportar a Markdown',
+                  onPressed: () => _export(context, highlights),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: 10),
@@ -191,6 +210,76 @@ class _BookHighlightsSheet extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Vuelca los resaltados a un `.md` y lo abre con la app que el sistema
+  /// tenga asociada, desde donde ya se puede compartir o guardar donde sea.
+  Future<void> _export(BuildContext context, List<BookHighlight> highlights) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final markdown = _buildMarkdown(highlights);
+
+    // Aunque falle abrir el archivo, el contenido queda a mano.
+    await Clipboard.setData(ClipboardData(text: markdown));
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final safeName = bookTitle
+          .replaceAll(RegExp(r'[^\w\s\-]'), '')
+          .trim()
+          .replaceAll(RegExp(r'\s+'), '_');
+      final file = File(
+          '${dir.path}/resaltados_${safeName.isEmpty ? bookId : safeName}.md');
+      await file.writeAsString(markdown);
+
+      final result = await OpenFilex.open(file.path);
+      if (result.type != ResultType.done) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Resaltados copiados al portapapeles'),
+        ));
+      }
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Resaltados copiados al portapapeles'),
+      ));
+    }
+  }
+
+  String _buildMarkdown(List<BookHighlight> highlights) {
+    final now = DateTime.now();
+    final date = '${now.day.toString().padLeft(2, '0')}/'
+        '${now.month.toString().padLeft(2, '0')}/${now.year}';
+
+    final buffer = StringBuffer()
+      ..writeln('# Resaltados de "$bookTitle"')
+      ..writeln()
+      ..writeln('_${highlights.length} resaltados · exportado el ${date}_')
+      ..writeln();
+
+    String? currentChapter;
+    for (final highlight in highlights) {
+      final chapter = highlight.chapterTitle;
+      if (chapter != null && chapter != currentChapter) {
+        currentChapter = chapter;
+        buffer
+          ..writeln('## $chapter')
+          ..writeln();
+      }
+
+      // Cada línea del fragmento va citada: si no, un resaltado de varios
+      // párrafos rompe la cita en Markdown.
+      for (final line in highlight.text.trim().split('\n')) {
+        buffer.writeln('> ${line.trim()}');
+      }
+      buffer.writeln();
+
+      if (highlight.note != null && highlight.note!.isNotEmpty) {
+        buffer
+          ..writeln('**Nota:** ${highlight.note}')
+          ..writeln();
+      }
+    }
+
+    return buffer.toString();
   }
 
   void _cycleColor(WidgetRef ref, BookHighlight highlight) {

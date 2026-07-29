@@ -10,11 +10,14 @@ import 'core/providers/settings_provider.dart';
 import 'core/providers/appearance_provider.dart';
 import 'core/providers/alarms_provider.dart';
 import 'core/providers/habits_provider.dart';
+import 'core/providers/night_planning_provider.dart';
 import 'core/services/alarm_service.dart';
 import 'core/services/lock_task_service.dart';
 import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
 import 'core/services/task_reminder_service.dart';
+import 'core/services/night_planning_service.dart';
+import 'features/agenda/night_planning/night_planning_screen.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/auth/auth_screen.dart';
@@ -75,6 +78,15 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
 
     // La notificación de prueba del diagnóstico no abre nada.
     if (alarmId.startsWith('test:')) return;
+
+    // El aviso nocturno abre el ritual directamente: si obligara a pasar por
+    // la Agenda y buscar el botón, la mitad de las noches no se haría.
+    if (alarmId == NightPlanningService.payload) {
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const NightPlanningScreen()),
+      );
+      return;
+    }
 
     // Los recordatorios de notas/hábitos/agenda usan un prefijo propio
     if (alarmId.startsWith(NoteReminderService.payloadPrefix) ||
@@ -194,12 +206,27 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
         final alarmId = launchDetails?.notificationResponse?.payload;
         if (alarmId != null &&
             !alarmId.startsWith('test:') &&
+            alarmId != NightPlanningService.payload &&
             !alarmId.startsWith(NoteReminderService.payloadPrefix) &&
             !alarmId.startsWith(HabitReminderService.payloadPrefix) &&
             !alarmId.startsWith(TaskReminderService.payloadPrefix)) {
           _pendingAlarmId = alarmId;
         }
+        // Arranque en frío desde el aviso nocturno: se abre el ritual una vez
+        // montado el árbol de navegación.
+        if (alarmId == NightPlanningService.payload) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(builder: (_) => const NightPlanningScreen()),
+            );
+          });
+        }
       }
+
+      // Leer el provider lo construye, y su `build` reprograma el aviso
+      // nocturno. Hace falta en cada arranque: una notificación diaria se
+      // pierde si el sistema mata la app o se reinicia el teléfono.
+      ref.read(nightPlanningProvider);
 
       // El manifiesto declara showWhenLocked/turnScreenOn para que el
       // full-screen intent de la alarma se pinte sobre el bloqueo en arranque

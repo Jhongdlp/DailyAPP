@@ -471,9 +471,13 @@ class FlamePainter extends CustomPainter {
       final radius = (1.0 - p) * (w * 0.05).clamp(1.0, 3.0);
       final opacity = math.sin(p * math.pi);
 
+      // Sin maskFilter: un blur de 0.8px sobre un círculo de 1-3px no se
+      // distingue del antialiasing, pero cada MaskFilter obliga a una pasada
+      // offscreen. En los tiers altos son 24 pasadas por llama, y en la lista
+      // de hábitos hay una llama por fila.
       final paint = Paint()
         ..color = color.withValues(alpha: opacity * 0.75)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8);
+        ..isAntiAlias = true;
 
       canvas.drawCircle(Offset(px, py), radius, paint);
     }

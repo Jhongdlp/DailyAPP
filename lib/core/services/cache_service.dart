@@ -16,6 +16,7 @@ class CacheService {
     'notes',
     'alarms',
     'tasks',
+    'day_plans',
     'semantic_edges',
     'books',
     'book_bookmarks',

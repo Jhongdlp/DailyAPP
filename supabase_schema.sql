@@ -657,6 +657,38 @@ create table public.tasks (
 
 create index tasks_user_due_idx on public.tasks (user_id, due_date);
 
+-- Columnas y tabla de la planeación nocturna. La migración aditiva completa,
+-- reejecutable, está en supabase_migration_agenda.sql.
+alter table public.tasks
+  add column if not exists habit_id uuid references public.habits(id) on delete set null,
+  add column if not exists block_type text not null default 'task'
+    check (block_type in ('task','habit','deep','admin','rest','personal')),
+  add column if not exists location text,
+  add column if not exists is_mit boolean not null default false,
+  add column if not exists planned_at timestamptz;
+create index if not exists tasks_habit_idx on public.tasks (habit_id, due_date);
+
+-- Una fila por día planeado: lo que se mide es la conducta de planear, no
+-- cuántas tareas se hicieron.
+create table if not exists public.day_plans (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users on delete cascade not null,
+  plan_date date not null,
+  intention text,
+  reflection text,
+  mood smallint check (mood between 1 and 5),
+  ritual_completed boolean not null default false,
+  planned_at timestamptz not null default timezone('utc'::text, now()),
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  unique (user_id, plan_date)
+);
+create index if not exists day_plans_user_date_idx on public.day_plans (user_id, plan_date desc);
+alter table public.day_plans enable row level security;
+create policy day_plans_select_own on public.day_plans for select using (auth.uid() = user_id);
+create policy day_plans_insert_own on public.day_plans for insert with check (auth.uid() = user_id);
+create policy day_plans_update_own on public.day_plans for update using (auth.uid() = user_id);
+create policy day_plans_delete_own on public.day_plans for delete using (auth.uid() = user_id);
+
 alter table public.tasks enable row level security;
 
 create policy "Usuarios pueden ver sus propias tareas"

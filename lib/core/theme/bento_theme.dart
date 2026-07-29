@@ -94,6 +94,26 @@ class BentoTheme {
         ),
       ];
 
+  /// Versión barata de [neuRaised] para piezas CHICAS y repetidas (puntos de
+  /// racha, chips): solo los lóbulos ambientales, sin las sombras de contacto.
+  ///
+  /// Cada BoxShadow es un desenfoque en una superficie offscreen. A 20-30px las
+  /// sombras de contacto quedan con blur ~1.5px y no se distinguen, pero una
+  /// fila de hábitos tiene 8 piezas de estas: 32 pasadas de blur por fila solo
+  /// en puntos. Se compensan las alfas para que la pieza no se vea más plana.
+  static List<BoxShadow> neuRaisedLite({double distance = 3, double blur = 6}) => [
+        BoxShadow(
+          color: neuShadowDark.withValues(alpha: isDark ? 0.85 : 0.62),
+          offset: Offset(distance, distance),
+          blurRadius: blur,
+        ),
+        BoxShadow(
+          color: neuShadowLight.withValues(alpha: isDark ? 0.72 : 0.92),
+          offset: Offset(-distance, -distance),
+          blurRadius: blur,
+        ),
+      ];
+
   /// Sombra de una pieza que flota SOBRE la superficie (modales, sheets,
   /// diálogos) en vez de estar extruida de ella.
   ///
@@ -142,6 +162,25 @@ class BentoTheme {
         Color.lerp(shaded, lit, concavity)!,
       ],
       stops: const [0.0, 0.55, 1.0],
+    );
+  }
+
+  /// Cara de un hueco CHICO sin sombras interiores desenfocadas: el mismo
+  /// degradado diagonal de [neuFaceGradient] cóncavo pero llevado al extremo,
+  /// de modo que las paredes del hueco se lean solas.
+  ///
+  /// A tamaño de punto de racha o pocito de emoji, la banda oscura que entra
+  /// por arriba-izquierda ocupa casi toda la mitad de la pieza, así que un
+  /// degradado la reproduce; el blur real solo aporta coste. Para piezas
+  /// grandes sí hace falta [NeuPressed] completo.
+  static Gradient neuSunkenGradient(Color surface) {
+    final Color lit = Color.lerp(surface, neuShadowLight, isDark ? 0.55 : 0.95)!;
+    final Color shaded = Color.lerp(surface, neuShadowDark, isDark ? 0.80 : 0.62)!;
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [shaded, surface, lit],
+      stops: const [0.0, 0.5, 1.0],
     );
   }
 
@@ -667,6 +706,13 @@ class NeuPressed extends StatelessWidget {
   final Color? color;
   final double intensity;
 
+  /// Hueco barato para piezas chicas y repetidas: cambia las sombras
+  /// interiores desenfocadas por el degradado de [BentoTheme.neuSunkenGradient]
+  /// y conserva el bisel. Ahorra dos pasadas de blur offscreen por pieza —
+  /// decisivo en listas donde hay ocho o más huecos por fila. `distance`,
+  /// `blur` e `intensity` se ignoran en este modo.
+  final bool lite;
+
   const NeuPressed({
     super.key,
     required this.child,
@@ -676,6 +722,7 @@ class NeuPressed extends StatelessWidget {
     this.blur = 6.0,
     this.color,
     this.intensity = 1.0,
+    this.lite = false,
   });
 
   @override
@@ -684,6 +731,27 @@ class NeuPressed extends StatelessWidget {
     // (más oscura hacia arriba-izquierda, donde la pared bloquea la luz) y
     // bisel invertido en el labio del borde.
     final Color base = color ?? BentoTheme.neuSurfaceSunken;
+
+    if (lite) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: BentoTheme.neuSunkenGradient(base),
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        child: CustomPaint(
+          foregroundPainter: _NeuBevelPainter(
+            radius: BorderRadius.circular(borderRadius),
+            concavity: 1,
+            isDark: BentoTheme.isDark,
+          ),
+          child: Padding(
+            padding: padding ?? EdgeInsets.zero,
+            child: child,
+          ),
+        ),
+      );
+    }
+
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: BentoTheme.neuFaceGradient(base, concavity: 1),

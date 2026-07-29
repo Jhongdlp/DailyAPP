@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/models/app_destination.dart';
 import '../../core/providers/appearance_provider.dart';
+import '../../core/providers/dock_provider.dart';
 import '../../core/theme/app_palette.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/theme/oklch.dart';
@@ -43,6 +45,10 @@ class PersonalizeScreen extends ConsumerWidget {
                 _SectionTitle('Material', 'El tinte de la superficie'),
                 const SizedBox(height: 12),
                 _MaterialSection(material: appearance.material),
+                const SizedBox(height: 28),
+                _SectionTitle('Dock', 'Qué pestañas tienes a un toque'),
+                const SizedBox(height: 12),
+                _DockSection(),
                 const SizedBox(height: 28),
                 _ResetButton(),
               ],
@@ -119,18 +125,12 @@ class _SectionTitle extends StatelessWidget {
 /// acentos se juzgan en el sitio donde de verdad se van a ver, unos al lado de
 /// otros y sobre el material real. Una fila de círculos grandes hace que
 /// cualquier paleta parezca buena.
-class _PreviewCard extends StatelessWidget {
-  static const _icons = [
-    Icons.check_circle_outline,
-    Icons.psychology_outlined,
-    Icons.alarm_outlined,
-    Icons.account_balance_wallet_outlined,
-    Icons.chat_bubble_outline,
-  ];
-
+class _PreviewCard extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
-    final tabs = BentoTheme.accents.tabs;
+  Widget build(BuildContext context, WidgetRef ref) {
+    // La vista previa muestra el dock que el usuario tiene configurado, no uno
+    // de muestra: al cambiar tamaño o pestañas se ve el resultado aquí mismo.
+    final slots = ref.watch(dockProvider).slots;
 
     return NeuCard(
       borderRadius: 24,
@@ -142,16 +142,23 @@ class _PreviewCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              for (var i = 0; i < _icons.length; i++)
+              for (var i = 0; i < slots.length; i++)
                 Expanded(
                   child: _PreviewTab(
-                    icon: _icons[i],
-                    color: tabs[i],
+                    icon: slots[i].icon,
+                    color: slots[i].accent,
                     // Solo una pestaña se dibuja hundida, como en el dock real:
                     // así se ve a la vez el acento activo y los inactivos.
                     selected: i == 0,
                   ),
                 ),
+              Expanded(
+                child: _PreviewTab(
+                  icon: Icons.menu_rounded,
+                  color: BentoTheme.creamAlpha(0.42),
+                  selected: false,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -284,7 +291,16 @@ class _Segment extends StatelessWidget {
               ),
               child: content,
             )
-          : NeuCard(borderRadius: 16, distance: 4, blur: 8, child: content),
+          // padding cero explícito: NeuCard mete 20px por defecto y NeuPressed
+          // ninguno, así que sin esto el botón daba un salto de tamaño enorme
+          // al seleccionarlo.
+          : NeuCard(
+              borderRadius: 16,
+              distance: 4,
+              blur: 8,
+              padding: EdgeInsets.zero,
+              child: content,
+            ),
     );
   }
 }
@@ -392,7 +408,13 @@ class _PaletteRow extends StatelessWidget {
       onTap: onTap,
       child: selected
           ? NeuPressed(borderRadius: 18, child: content)
-          : NeuCard(borderRadius: 18, distance: 4, blur: 8, child: content),
+          : NeuCard(
+              borderRadius: 18,
+              distance: 4,
+              blur: 8,
+              padding: EdgeInsets.zero,
+              child: content,
+            ),
     );
   }
 }
@@ -466,6 +488,188 @@ class _SeedControls extends ConsumerWidget {
         PaletteScheme.triad => 'Tres colores anclados a 120°: contraste con estructura.',
         PaletteScheme.spread => 'La rueda entera. Cada pestaña se distingue al máximo.',
       };
+}
+
+// ─── Dock ───
+
+/// Tamaño del dock y qué destinos ocupan sus huecos.
+///
+/// El orden de selección es el orden en el dock: no hay arrastre porque
+/// quitar y volver a poner ya reordena, y un drag&drop en una fila de cinco
+/// iconos es más frágil que útil.
+class _DockSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dock = ref.watch(dockProvider);
+    final notifier = ref.read(dockProvider.notifier);
+
+    return NeuCard(
+      borderRadius: 20,
+      distance: 5,
+      blur: 10,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cuántas pestañas',
+            style: GoogleFonts.outfit(
+              color: BentoTheme.neuText,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (var n = DockConfig.minSize; n <= DockConfig.maxSize; n++)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _Segment(
+                      label: '$n',
+                      selected: dock.size == n,
+                      accent: BentoTheme.accentBrain,
+                      onTap: () => notifier.setSize(n),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _Note(
+            'El botón de menú va aparte y siempre está. Lo que no entre en el '
+            'dock lo sigues abriendo desde ahí.',
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Cuáles',
+                  style: GoogleFonts.outfit(
+                    color: BentoTheme.neuText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                '${dock.slots.length}/${dock.size}',
+                style: GoogleFonts.outfit(
+                  color: dock.isFull ? BentoTheme.accentBrain : BentoTheme.creamTertiary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final destination in AppDestination.values) ...[
+            _DockRow(
+              destination: destination,
+              // La posición se enseña porque el orden del dock no es el del
+              // enum, es el de selección: sin número no se entiende por qué
+              // una pestaña acaba a la izquierda o a la derecha.
+              position: dock.slots.indexOf(destination),
+              // Un hueco lleno no puede aceptar más, pero quitar siempre se puede.
+              enabled: dock.slots.contains(destination) || !dock.isFull,
+              onTap: () => notifier.toggle(destination),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (dock.isFull)
+            _Note('Para cambiar una, quítala primero y elige otra.'),
+        ],
+      ),
+    );
+  }
+}
+
+class _DockRow extends StatelessWidget {
+  final AppDestination destination;
+  final int position;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _DockRow({
+    required this.destination,
+    required this.position,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = position >= 0;
+    final accent = destination.accent;
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(
+            destination.icon,
+            size: 20,
+            color: selected ? accent : BentoTheme.creamAlpha(enabled ? 0.45 : 0.22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              destination.label,
+              style: GoogleFonts.outfit(
+                color: selected
+                    ? BentoTheme.neuText
+                    : BentoTheme.creamAlpha(enabled ? 0.6 : 0.3),
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+          if (selected)
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '${position + 1}',
+                style: GoogleFonts.outfit(
+                  color: accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: selected
+          ? NeuPressed(
+              borderRadius: 16,
+              color: Color.alphaBlend(
+                accent.withValues(alpha: 0.10),
+                BentoTheme.neuSurfaceSunken,
+              ),
+              child: content,
+            )
+          : Opacity(
+              opacity: enabled ? 1 : 0.5,
+              child: NeuCard(
+                borderRadius: 16,
+                distance: 4,
+                blur: 8,
+                padding: EdgeInsets.zero,
+                child: content,
+              ),
+            ),
+    );
+  }
 }
 
 // ─── Material ───

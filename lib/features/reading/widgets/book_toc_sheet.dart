@@ -17,7 +17,6 @@ Future<void> showBookTocSheet(
 }) {
   return showReaderSheet(
     context,
-    palette: palette,
     expand: true,
     builder: (sheetContext) {
       if (chapters.isEmpty) {
