@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atajos al mantener pulsado el icono de la app.
+
+     Son estáticos (declarados aquí y no creados en tiempo de ejecución) porque
+     son siempre los mismos tres y así existen desde la primera instalación, sin
+     que la app tenga que haberse abierto nunca.
+
+     El `targetPackage`/`targetClass` del intent debe apuntar a una activity
+     exportada: es el launcher, otro proceso, quien lo lanza. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="capture_expense"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_expense"
+        android:shortcutShortLabel="@string/capture_expense"
+        android:shortcutLongLabel="@string/shortcut_expense_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sistemdaily.sistem_daily"
+            android:targetClass="com.sistemdaily.sistem_daily.QuickCaptureActivity">
+            <extra
+                android:name="quick_capture_kind"
+                android:value="expense" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="capture_task"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_task"
+        android:shortcutShortLabel="@string/capture_task"
+        android:shortcutLongLabel="@string/shortcut_task_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sistemdaily.sistem_daily"
+            android:targetClass="com.sistemdaily.sistem_daily.QuickCaptureActivity">
+            <extra
+                android:name="quick_capture_kind"
+                android:value="task" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="capture_note"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_note"
+        android:shortcutShortLabel="@string/capture_note"
+        android:shortcutLongLabel="@string/shortcut_note_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sistemdaily.sistem_daily"
+            android:targetClass="com.sistemdaily.sistem_daily.QuickCaptureActivity">
+            <extra
+                android:name="quick_capture_kind"
+                android:value="note" />
+        </intent>
+    </shortcut>
+</shortcuts>

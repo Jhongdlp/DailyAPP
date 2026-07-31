@@ -13,6 +13,7 @@ class AlarmService {
   static const notesChannelId = 'sistdaily_notes_v1';
   static const habitsChannelId = 'sistdaily_habits_v1';
   static const tasksChannelId = 'sistdaily_tasks_v1';
+  static const sleepChannelId = 'sistdaily_sleep_v1';
   static const testChannelId = 'sistdaily_test_v1';
 
   /// Nombre del drawable (res/drawable/notification_icon.png) usado como icono
@@ -111,6 +112,14 @@ class AlarmService {
         tasksChannelId,
         'Recordatorios de Agenda',
         description: 'Recordatorios programados desde tu agenda',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      ),
+      AndroidNotificationChannel(
+        sleepChannelId,
+        'Rutina de Sueño',
+        description: 'Aviso de hora de dormir y recordatorios de la rutina nocturna',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
@@ -306,6 +315,7 @@ class AlarmService {
     var notes = 0;
     var habits = 0;
     var tasks = 0;
+    var sleep = 0;
     var other = 0;
     try {
       for (final request in await _plugin.pendingNotificationRequests()) {
@@ -316,6 +326,8 @@ class AlarmService {
           habits++;
         } else if (payload.startsWith('task:')) {
           tasks++;
+        } else if (payload.startsWith('sleep:')) {
+          sleep++;
         } else {
           other++;
         }
@@ -332,6 +344,7 @@ class AlarmService {
       pendingNotes: notes,
       pendingHabits: habits,
       pendingTasks: tasks,
+      pendingSleep: sleep,
       pendingOther: other,
       scheduledAlarms: (await Alarm.getAlarms()).length,
     );
@@ -433,6 +446,7 @@ class NotificationDiagnostics {
   final int pendingNotes;
   final int pendingHabits;
   final int pendingTasks;
+  final int pendingSleep;
   final int pendingOther;
   final int scheduledAlarms;
 
@@ -444,6 +458,7 @@ class NotificationDiagnostics {
     required this.pendingNotes,
     required this.pendingHabits,
     required this.pendingTasks,
+    required this.pendingSleep,
     required this.pendingOther,
     required this.scheduledAlarms,
   });

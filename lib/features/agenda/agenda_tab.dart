@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../core/models/habit_model.dart';
 import '../../core/models/task_model.dart';
 import '../../core/providers/day_plan_provider.dart';
@@ -258,6 +259,7 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
           DayStrip(
             selectedDay: _selectedDay,
             accentColor: accent,
+            countFor: (day) => ref.read(tasksProvider.notifier).tasksForDay(day).length,
             onSelect: (day) => setState(() => _selectedDay = day),
           ),
           ?_buildPlanTomorrowBanner(),
@@ -387,24 +389,47 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
     setState(() => _selectedDay = _dateOnly(DateTime.now().add(const Duration(days: 1))));
   }
 
+  /// Pista del día vacío.
+  ///
+  /// No estorba (deja pasar los toques) y enseña el gesto barato primero: un
+  /// toque. El arrastre se menciona en segundo plano como atajo, no como
+  /// requisito, que es justo al revés de como estaba.
   Widget _buildEmptyHint() {
     return IgnorePointer(
       child: Align(
         alignment: Alignment.topCenter,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(40, 60, 40, 0),
+          padding: const EdgeInsets.fromLTRB(36, 54, 36, 0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.touch_app_outlined, size: 30, color: BentoTheme.creamAlpha(0.25)),
-              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: BentoTheme.creamAlpha(0.05),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.touch_app_outlined, size: 26, color: BentoTheme.creamAlpha(0.3)),
+              ),
+              const SizedBox(height: 14),
               Text(
-                'Mantén y arrastra sobre una hora\npara crear un bloque',
+                'Toca una hora para crear un bloque',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.montserrat(
-                  color: BentoTheme.creamAlpha(0.4),
+                  color: BentoTheme.creamAlpha(0.55),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Manténla pulsada y arrastra si quieres\nmarcar la duración de una vez',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.montserrat(
+                  color: BentoTheme.creamAlpha(0.3),
                   fontWeight: FontWeight.w600,
-                  fontSize: 13,
+                  fontSize: 11.5,
                   height: 1.5,
                 ),
               ),
@@ -434,8 +459,14 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
 
     final barColor = overbooked ? BentoTheme.accentOrange : BentoTheme.accentLime;
 
+    // El avance del día vivía suelto en la cabecera como "3/7". Aquí, sobre la
+    // misma barra, las dos cifras se leen juntas: cuánto has comprometido y
+    // cuánto llevas hecho de eso.
+    final done = dayTasks.where(_isBlockCompleted).length;
+    final doneRatio = dayTasks.isEmpty ? 0.0 : done / dayTasks.length;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -451,20 +482,43 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
               ),
               const Spacer(),
               if (overbooked)
-                Text(
-                  'día muy lleno',
-                  style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w700, color: BentoTheme.accentOrange),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    'día muy lleno',
+                    style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w700, color: BentoTheme.accentOrange),
+                  ),
                 ),
+              Text(
+                '$done/${dayTasks.length}',
+                style: GoogleFonts.montserrat(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: done == dayTasks.length ? BentoTheme.accentLime : BentoTheme.creamAlpha(0.5),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
+          // Dos capas sobre el mismo riel: la clara es lo comprometido, la
+          // llena por dentro es lo ya hecho. Una sola lectura vertical.
           ClipRRect(
             borderRadius: BorderRadius.circular(100),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 4,
-              backgroundColor: BentoTheme.creamAlpha(0.08),
-              valueColor: AlwaysStoppedAnimation(barColor),
+            child: SizedBox(
+              height: 5,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: ColoredBox(color: BentoTheme.creamAlpha(0.07))),
+                  FractionallySizedBox(
+                    widthFactor: ratio,
+                    child: ColoredBox(color: barColor.withValues(alpha: 0.3)),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: ratio * doneRatio,
+                    child: ColoredBox(color: barColor),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -472,58 +526,100 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
     );
   }
 
+  /// El día que se está mirando, escrito como se dice en voz alta. Sustituye
+  /// al "Agenda" a secas: el título repetía lo que ya dice la barra de
+  /// navegación, mientras que la duda real al mirar la pantalla es *qué día
+  /// estoy viendo*, sobre todo tras navegar por la tira de fechas.
+  String _dayHeadline() {
+    final today = _dateOnly(DateTime.now());
+    final diff = _selectedDay.difference(today).inDays;
+    if (diff == 0) return 'Hoy';
+    if (diff == 1) return 'Mañana';
+    if (diff == -1) return 'Ayer';
+    final label = DateFormat('EEEE', 'es').format(_selectedDay);
+    return label[0].toUpperCase() + label.substring(1);
+  }
+
+  String _daySubtitle() => DateFormat("d 'de' MMMM", 'es').format(_selectedDay);
+
   Widget _buildHeader(List<Task> dayTasks) {
-    final completed = dayTasks.where(_isBlockCompleted).length;
+    final isToday = _selectedDay == _dateOnly(DateTime.now());
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
+      padding: const EdgeInsets.fromLTRB(22, 14, 18, 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            'Agenda',
-            style: GoogleFonts.montserrat(
-              fontWeight: FontWeight.w800,
-              fontSize: 34,
-              height: 0.92,
-              letterSpacing: -1.0,
-              color: BentoTheme.cream,
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (dayTasks.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text(
-                    '$completed/${dayTasks.length}',
-                    style: GoogleFonts.montserrat(fontSize: 13, fontWeight: FontWeight.w700, color: BentoTheme.creamAlpha(0.5)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _dayHeadline(),
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 30,
+                    height: 1.0,
+                    letterSpacing: -1.0,
+                    color: BentoTheme.cream,
                   ),
                 ),
-              PopupMenuButton<int>(
-                tooltip: 'Copiar un día',
-                color: BentoTheme.darkCard,
-                onSelected: (daysBack) => _copyDay(daysBack: daysBack),
-                itemBuilder: (context) => [
-                  _copyMenuItem(1, 'Copiar el día anterior'),
-                  _copyMenuItem(7, 'Copiar el mismo día de la semana pasada'),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Icon(Icons.copy_all_outlined, size: 19, color: BentoTheme.creamAlpha(0.55)),
+                const SizedBox(height: 2),
+                Text(
+                  _daySubtitle(),
+                  style: GoogleFonts.montserrat(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
+                    color: BentoTheme.creamAlpha(0.45),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Volver a hoy solo existe cuando hace falta. Un botón permanente
+          // que la mitad del tiempo no hace nada es peor que no tenerlo.
+          if (!isToday)
+            GestureDetector(
+              onTap: () => setState(() => _selectedDay = _dateOnly(DateTime.now())),
+              child: Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: BentoTheme.creamAlpha(0.07),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  'Hoy',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: BentoTheme.creamAlpha(0.7),
+                  ),
                 ),
               ),
-              NeuCard(
-                onTap: () => showTaskFormDialog(context, ref, day: _selectedDay),
-                borderRadius: 100,
-                distance: 3,
-                blur: 6,
-                color: BentoTheme.accentLime,
-                padding: const EdgeInsets.all(10),
-                child: const Icon(Icons.add, size: 18, color: Color(0xFF0C0C0D)),
-              ),
+            ),
+          PopupMenuButton<int>(
+            tooltip: 'Copiar un día',
+            color: BentoTheme.darkCard,
+            onSelected: (daysBack) => _copyDay(daysBack: daysBack),
+            itemBuilder: (context) => [
+              _copyMenuItem(1, 'Copiar el día anterior'),
+              _copyMenuItem(7, 'Copiar el mismo día de la semana pasada'),
             ],
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
+              child: Icon(Icons.copy_all_outlined, size: 19, color: BentoTheme.creamAlpha(0.5)),
+            ),
+          ),
+          NeuCard(
+            onTap: () => showTaskFormDialog(context, ref, day: _selectedDay),
+            borderRadius: 100,
+            distance: 3,
+            blur: 6,
+            color: BentoTheme.accentLime,
+            padding: const EdgeInsets.all(10),
+            child: const Icon(Icons.add, size: 18, color: Color(0xFF0C0C0D)),
           ),
         ],
       ),

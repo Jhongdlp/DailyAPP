@@ -47,6 +47,8 @@ class RpgCounters {
   static const readingMinutes = 'reading_minutes';
   static const booksFinished = 'books_finished';
   static const highlights = 'highlights';
+  static const sleepNights = 'sleep_nights';
+  static const sleepGoalNights = 'sleep_goal_nights';
   // derivados (no viven en counters):
   static const level = 'level';
   static const cosmetics = 'cosmetics';
@@ -155,6 +157,40 @@ const List<AchievementDef> achievementCatalog = [
     target: 15,
     xpReward: 120,
     goldReward: 80,
+  ),
+  // ── Sueño ──
+  AchievementDef(
+    id: 'diario-de-suenio',
+    title: 'Diario de Sueño',
+    description: 'Registra 7 noches completas',
+    emoji: '🌙',
+    tier: BadgeTier.bronce,
+    counterKey: RpgCounters.sleepNights,
+    target: 7,
+    xpReward: 40,
+    goldReward: 20,
+  ),
+  AchievementDef(
+    id: 'descanso-real',
+    title: 'Descanso Real',
+    description: 'Alcanza tu meta de sueño 14 noches',
+    emoji: '😴',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.sleepGoalNights,
+    target: 14,
+    xpReward: 90,
+    goldReward: 50,
+  ),
+  AchievementDef(
+    id: 'reloj-suizo',
+    title: 'Reloj Suizo',
+    description: 'Alcanza tu meta de sueño 60 noches',
+    emoji: '⏳',
+    tier: BadgeTier.oro,
+    counterKey: RpgCounters.sleepGoalNights,
+    target: 60,
+    xpReward: 200,
+    goldReward: 130,
   ),
   // ── Finanzas ──
   AchievementDef(

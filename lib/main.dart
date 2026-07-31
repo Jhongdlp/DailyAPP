@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -11,15 +13,20 @@ import 'core/providers/appearance_provider.dart';
 import 'core/providers/alarms_provider.dart';
 import 'core/providers/habits_provider.dart';
 import 'core/providers/night_planning_provider.dart';
+import 'core/providers/sleep_provider.dart';
 import 'core/services/alarm_service.dart';
 import 'core/services/lock_task_service.dart';
 import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
 import 'core/services/task_reminder_service.dart';
 import 'core/services/night_planning_service.dart';
+import 'core/services/sleep_service.dart';
+import 'core/services/quick_capture_sync.dart';
 import 'features/agenda/night_planning/night_planning_screen.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
+import 'features/alarm/sleep/sleep_dashboard_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
+import 'features/quick_capture/quick_capture_app.dart';
 import 'features/auth/auth_screen.dart';
 import 'features/update/update_checker.dart';
 
@@ -35,6 +42,16 @@ void main() async {
     ),
   );
 }
+
+/// Entry point del modal de captura rápida (tile del desplegable, widget de
+/// escritorio y atajos del icono).
+///
+/// Tiene que estar declarado en esta librería porque el engine busca el
+/// entrypoint por nombre dentro de la librería principal de la app; en otro
+/// fichero, `QuickCaptureActivity` no lo encontraría. La implementación vive en
+/// `features/quick_capture/` — aquí solo está la puerta.
+@pragma('vm:entry-point')
+void quickCaptureMain() => runQuickCapture();
 
 class SistemDailyApp extends ConsumerStatefulWidget {
   const SistemDailyApp({super.key});
@@ -72,6 +89,44 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Volver a primer plano es justo cuando puede haber capturas nuevas: el
+    // modal del desplegable se abre y se cierra sin pasar por esta app.
+    if (state == AppLifecycleState.resumed && !_initializing) {
+      _drainQuickCaptures();
+    }
+  }
+
+  /// Sube a Supabase lo que el modal de captura rápida dejó en la cola local.
+  ///
+  /// Se avisa solo cuando algo se guardó de verdad: sin confirmación, anotar
+  /// desde el desplegable sería un acto de fe (el modal se cierra al instante y
+  /// la app ni estaba abierta).
+  Future<void> _drainQuickCaptures() async {
+    try {
+      final result = await QuickCaptureSync.drain(ref);
+      if (result.saved == 0 || !mounted) return;
+
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+
+      final n = result.saved;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            n == 1 ? 'Captura rápida guardada' : '$n capturas rápidas guardadas',
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // La cola no se vacía si falla, así que se reintenta al siguiente resume.
+      debugPrint('main: no pude drenar la captura rápida: $e');
+    }
+  }
+
   void _handleNotificationTap(NotificationResponse response) {
     final alarmId = response.payload;
     if (alarmId == null) return;
@@ -85,6 +140,23 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
       navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => const NightPlanningScreen()),
       );
+      return;
+    }
+
+    // La rutina de sueño: tanto el aviso como su acción y las insistencias
+    // marcan el inicio del ciclo. `confirmBedtime` es idempotente, así que da
+    // igual por cuál de las tres llegue el usuario.
+    if (alarmId.startsWith(SleepService.payloadPrefix)) {
+      if (alarmId != SleepService.windDownPayload) {
+        ref.read(sleepProvider.notifier).confirmBedtime();
+      }
+      // Desde el botón de la notificación no se abre nada: la gracia es poder
+      // confirmar sin volver a encender la pantalla entera.
+      if (response.actionId == null) {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const SleepDashboardScreen()),
+        );
+      }
       return;
     }
 
@@ -173,6 +245,7 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
           final alarm = alarms.where((a) => a.id.hashCode.abs() % 100000 == ringingAlarmId).firstOrNull;
           if (alarm != null) {
             _pendingAlarmId = alarm.id;
+            unawaited(ref.read(sleepProvider.notifier).registerRing(alarm));
           }
         } catch (_) {}
       }
@@ -184,6 +257,9 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
           for (final alarmSettings in alarmSet.alarms) {
             final alarm = alarms.where((a) => a.id.hashCode.abs() % 100000 == alarmSettings.id).firstOrNull;
             if (alarm != null) {
+              // Antes del guard de pantalla: aunque el dismiss ya esté abierto,
+              // la hora del primer timbrazo es lo que luego mide el snooze.
+              unawaited(ref.read(sleepProvider.notifier).registerRing(alarm));
               if (_activeDismissAlarmId == alarm.id) return;
               if (navigatorKey.currentState != null) {
                 _activeDismissAlarmId = alarm.id;
@@ -247,6 +323,10 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
     // Si el permiso de notificaciones quedó denegado (Android deja de mostrar
     // el diálogo tras denegarlo), avisar y ofrecer abrir los ajustes.
     _warnIfNotificationsDisabled();
+
+    // Todo lo anotado desde el desplegable, el widget o los atajos del icono
+    // está esperando en una cola local: este es el momento de subirlo.
+    _drainQuickCaptures();
 
     // Buscar actualizaciones en segundo plano (solo si hay sesión activa).
     // Silencioso: solo muestra diálogo si hay una versión nueva.

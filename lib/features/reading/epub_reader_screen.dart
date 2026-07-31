@@ -664,6 +664,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     // Solo lo que recompone el texto: el brillo cambia `ReaderPrefs` en cada
     // frame del gesto y no debe reconstruir el libro.
     final composition = ref.watch(readerPrefsProvider.select((p) => p.composition));
+    final paginated = ref.watch(readerPrefsProvider.select((p) => p.paginated));
 
     // Los resaltados cambian el HTML ya preparado.
     ref.listen(bookHighlightsProvider, (_, _) {
@@ -682,9 +683,18 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
               children: [
                 Positioned.fill(
                   child: _gestureLayer(
-                    child: _readerView(controller, readerMode, composition),
+                    paginated: paginated,
+                    child: _scrollLock(
+                      paginated: paginated,
+                      child: _readerView(controller, readerMode, composition),
+                    ),
                   ),
                 ),
+                // Las zonas de paso de página van por encima del texto: la
+                // `SelectionArea` del lector se queda con los toques y los
+                // arrastres horizontales, así que desde un ancestro nunca
+                // llegan.
+                if (paginated) ..._pageTapZones(),
                 _buildBrightnessStrip(),
                 _buildTopBar(palette),
                 _buildBottomBar(palette),
@@ -697,9 +707,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
 
   /// Gestos del área de lectura. Vive fuera de la vista memoizada para que
   /// activar el paginado no obligue a `flutter_html` a recomponer el libro.
-  Widget _gestureLayer({required Widget child}) {
-    final paginated = ref.watch(readerPrefsProvider.select((p) => p.paginated));
-
+  Widget _gestureLayer({required bool paginated, required Widget child}) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTapUp: (details) {
@@ -735,6 +743,55 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
           : null,
       child: child,
     );
+  }
+
+  /// En paginado el texto deja de desplazarse libremente: la única forma de
+  /// avanzar es pasar página. `EpubView` no expone la física de su lista, así
+  /// que se le impone desde la `ScrollConfiguration` que hereda.
+  ///
+  /// Va por fuera de la vista memoizada a propósito: cambiar la configuración
+  /// solo repinta el `Scrollable`, no vuelve a inflar los párrafos.
+  Widget _scrollLock({required bool paginated, required Widget child}) {
+    if (!paginated) return child;
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        physics: const NeverScrollableScrollPhysics(),
+        scrollbars: false,
+      ),
+      child: child,
+    );
+  }
+
+  /// Franjas laterales invisibles para pasar página con toque o deslizamiento.
+  /// El centro se deja libre para seleccionar texto y para los enlaces.
+  List<Widget> _pageTapZones() {
+    final width = MediaQuery.sizeOf(context).width;
+    final zoneWidth = width * 0.28;
+
+    Widget zone({required bool left}) => Positioned(
+          left: left ? 0 : null,
+          right: left ? null : 0,
+          top: 0,
+          bottom: 0,
+          width: zoneWidth,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (_autoScrolling.value) {
+                _stopAutoScroll();
+                return;
+              }
+              _turnPage(left ? -1 : 1);
+            },
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity.abs() < 150) return;
+              _turnPage(velocity < 0 ? 1 : -1);
+            },
+          ),
+        );
+
+    return [zone(left: true), zone(left: false)];
   }
 
   /// Devuelve la vista del libro memoizada: si el tema y la composición siguen

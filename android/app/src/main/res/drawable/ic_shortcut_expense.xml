@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono del atajo del icono de la app. A diferencia del que usa el widget,
+     este lleva su propio disco de color: el launcher dibuja los atajos sobre un
+     badge claro, y un glifo blanco suelto quedaría invisible. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="@color/capture_expense"
+        android:pathData="M24,0A24,24 0 1,1 24,48A24,24 0 1,1 24,0Z" />
+    <group
+        android:scaleX="0.85"
+        android:scaleY="0.85"
+        android:translateX="13.8"
+        android:translateY="13.8">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M16,18L18.29,15.71L13.41,10.83L9.41,14.83L2,7.41L3.41,6L9.41,12L13.41,8L19.71,14.29L22,12V18Z" />
+    </group>
+</vector>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El widget es puramente estático: cuatro botones que lanzan una Activity.
+     Por eso updatePeriodMillis es 0 — no hay nada que refrescar, y cualquier
+     periodo distinto de cero despertaría el proceso cada media hora para nada. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="60dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_quick_capture"
+    android:previewLayout="@layout/widget_quick_capture"
+    android:description="@string/quick_capture_widget_description"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen" />

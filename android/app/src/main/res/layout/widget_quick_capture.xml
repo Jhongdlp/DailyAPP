@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget de captura rápida: cuatro accesos directos al mismo modal.
+
+     El primero abre sin tipo (lo decide el parser por lo que se escriba); los
+     otros tres lo abren con el tipo ya fijado, que es la ventaja de tener
+     botones separados aquí frente al tile del desplegable.
+
+     Solo se usan vistas admitidas por RemoteViews (LinearLayout, ImageView,
+     TextView): cualquier otra cosa reventaría al inflar el widget. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_background"
+    android:padding="8dp"
+    android:baselineAligned="false">
+
+    <LinearLayout
+        android:id="@+id/capture_free"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_button_background"
+        android:padding="6dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_quick_capture"
+            android:tint="@color/capture_free"
+            android:contentDescription="@string/capture_free" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/capture_free"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/capture_expense"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_button_background"
+        android:padding="6dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_capture_expense"
+            android:tint="@color/capture_expense"
+            android:contentDescription="@string/capture_expense" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/capture_expense"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/capture_task"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_button_background"
+        android:padding="6dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_capture_task"
+            android:tint="@color/capture_task"
+            android:contentDescription="@string/capture_task" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/capture_task"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/capture_note"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_button_background"
+        android:padding="6dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_capture_note"
+            android:tint="@color/capture_note"
+            android:contentDescription="@string/capture_note" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/capture_note"
+            android:textColor="@color/widget_text"
+            android:textSize="11sp"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>

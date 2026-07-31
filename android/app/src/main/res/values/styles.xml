@@ -15,4 +15,23 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+    <!-- Tema del modal de captura rápida. Translúcido de arriba abajo para que
+         la app que estuviera en pantalla se siga viendo detrás: es lo que hace
+         que el atajo se sienta como una ventana flotante y no como "se abrió
+         SistemDaily". No lleva windowBackground opaco ni splash, porque
+         cualquiera de los dos produciría un parpadeo del color de la app antes
+         del primer frame de Flutter.
+
+         backgroundDimEnabled va en false a propósito: el oscurecido lo pinta el
+         propio modal en Flutter, y sumar los dos deja la pantalla casi negra.
+
+         No hace falta versión en values-night: el modal resuelve claro/oscuro
+         desde la apariencia guardada del usuario, no desde el tema del sistema. -->
+    <style name="QuickCaptureTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>

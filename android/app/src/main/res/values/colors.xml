@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colores del widget de captura rápida.
+     El widget vive en el escritorio del launcher, fuera de Flutter: no puede
+     leer la paleta que el usuario eligió en "Personalizar" (esa se resuelve en
+     Dart en tiempo de ejecución). Así que usa una superficie neutra propia, con
+     variante en values-night, y solo toma prestados los acentos de la app para
+     los iconos, donde el color sí comunica el tipo de captura. -->
+<resources>
+    <color name="widget_surface">#FFF0F0F5</color>
+    <color name="widget_text">#FF2A2A35</color>
+    <color name="widget_ripple">#332A2A35</color>
+
+    <color name="capture_free">#FF7B61FF</color>
+    <color name="capture_expense">#FFD90429</color>
+    <color name="capture_task">#FF2D7FF9</color>
+    <color name="capture_note">#FF9B5DE5</color>
+</resources>

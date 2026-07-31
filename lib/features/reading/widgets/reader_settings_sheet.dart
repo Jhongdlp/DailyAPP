@@ -134,7 +134,7 @@ class _ReaderSettingsSheet extends ConsumerWidget {
             padding: const EdgeInsets.only(left: 28, bottom: 6),
             child: Text(
               prefs.paginated
-                  ? 'Toca los bordes o desliza de lado para pasar página.'
+                  ? 'Sin desplazamiento: toca los bordes o desliza de lado para pasar página.'
                   : 'Desplazamiento continuo (el modo por defecto).',
               style: GoogleFonts.montserrat(
                 color: palette.foregroundAlpha(0.5),

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Textos del lado nativo (widget, tile y atajos del icono). La app va en
+     español, así que estas cadenas son las del idioma por defecto; no hay
+     variantes por locale porque tampoco las tiene la UI de Flutter. -->
+<resources>
+    <string name="quick_capture_label">Anotar</string>
+    <string name="quick_capture_widget_label">SistemDaily · Anotar</string>
+    <string name="quick_capture_widget_description">Gastos, tareas y notas sin abrir la app</string>
+
+    <string name="capture_free">Anotar</string>
+    <string name="capture_expense">Gasto</string>
+    <string name="capture_task">Tarea</string>
+    <string name="capture_note">Nota</string>
+
+    <string name="shortcut_expense_long">Registrar un gasto</string>
+    <string name="shortcut_task_long">Crear una tarea</string>
+    <string name="shortcut_note_long">Escribir una nota</string>
+</resources>

@@ -12,8 +12,17 @@ import 'timeline_task_card.dart';
 const _peakStartHour = 8;
 const _peakEndHour = 12;
 
-const _gutterWidth = 48.0;
+const _gutterWidth = 52.0;
 const _laneGap = 4.0;
+
+/// Alto que se reserva al panel del borrador mientras se escribe el título.
+/// Un bloque de 15 min mide ~18px: escribir dentro sería imposible, así que
+/// mientras se edita el panel crece y luego el bloque queda con su alto real.
+const _draftEditorHeight = 92.0;
+
+/// Duraciones de un toque. Cubren el 90% de lo que uno planea; el resto se
+/// ajusta estirando el bloque o desde el formulario.
+const _durationPresets = <int>[15, 30, 45, 60, 90, 120];
 
 enum _DragMode { move, resize }
 
@@ -34,16 +43,17 @@ class _BlockDrag {
         end = originalEnd;
 }
 
-/// Timeline de un día con creación por arrastre.
+/// Timeline de un día con creación directa.
 ///
-/// El gesto principal es mantener y arrastrar sobre una franja vacía: eso crea
-/// el bloque con las horas exactas y abre un campo de título en línea, sin
-/// abrir ningún formulario. Es la diferencia entre un gesto y media docena de
-/// taps, y es lo que hace viable planear un día entero de una sentada.
+/// Hay dos gestos y el barato es el que se usa siempre: **un toque** sobre una
+/// franja vacía crea un bloque de 30 min a esa hora y abre el título en línea.
+/// Mantener y arrastrar sigue existiendo para quien quiera marcar la duración
+/// exacta de una vez, pero ya no es obligatorio: obligar a mantener el dedo
+/// para la acción más frecuente de la pantalla es exactamente el tipo de peaje
+/// que hace que se deje de planear.
 ///
-/// Se usa pulsación larga (no arrastre directo) a propósito: dentro de un
-/// scroll vertical, un arrastre inmediato competiría con el scroll y el
-/// resultado sería impredecible.
+/// La duración también se puede cambiar con un toque desde el propio panel del
+/// borrador, así que nunca hace falta arrastrar nada.
 class DayTimeline extends StatefulWidget {
   final DateTime day;
   final List<Task> tasks;
@@ -86,6 +96,10 @@ class _DayTimelineState extends State<DayTimeline> {
   bool _draftEditing = false;
   bool _submittingDraft = false;
 
+  /// Se marca cuando el gesto de crear vino de un arrastre. Si el usuario
+  /// eligió la duración con el dedo, no se le sobreescribe con un preset.
+  bool _draftFromDrag = false;
+
   _BlockDrag? _blockDrag;
 
   bool _didInitialScroll = false;
@@ -99,6 +113,12 @@ class _DayTimelineState extends State<DayTimeline> {
   }
 
   bool _isCompleted(Task t) => widget.isCompleted?.call(t) ?? t.completed;
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return DateTime(widget.day.year, widget.day.month, widget.day.day) ==
+        DateTime(now.year, now.month, now.day);
+  }
 
   TimelineScale get _scale {
     // No se pliega la madrugada si hay algo planeado ahí: comprimir un bloque
@@ -120,16 +140,12 @@ class _DayTimelineState extends State<DayTimeline> {
     if (_didInitialScroll || !_scrollController.hasClients) return;
     _didInitialScroll = true;
 
-    final now = DateTime.now();
-    final isToday = DateTime(widget.day.year, widget.day.month, widget.day.day) ==
-        DateTime(now.year, now.month, now.day);
-
     // Hoy: la hora actual. Otro día: el primer bloque, o el inicio de la
     // jornada si está vacío. Abrir un día siempre en 00:00 obliga a scrollear
     // antes de poder hacer nada.
     final int anchorMinutes;
-    if (isToday) {
-      anchorMinutes = minutesOfDay(now);
+    if (_isToday) {
+      anchorMinutes = minutesOfDay(DateTime.now());
     } else if (widget.tasks.isNotEmpty) {
       anchorMinutes = widget.tasks.map((t) => minutesOfDay(t.startAt)).reduce((a, b) => a < b ? a : b);
     } else {
@@ -142,16 +158,71 @@ class _DayTimelineState extends State<DayTimeline> {
 
   // ---------------------------------------------------------------- crear
 
-  void _onCreateStart(LongPressStartDetails details, TimelineScale scale) {
+  /// Toque simple sobre hueco: crea el bloque de golpe. Es el camino corto y
+  /// el que se usa el 90% de las veces.
+  void _onCanvasTap(TapUpDetails details, TimelineScale scale) {
+    // Con un borrador abierto, el toque fuera vale como "ya está": si hay
+    // título se guarda, y si no, se descarta. Pedir confirmación explícita
+    // para tirar un borrador vacío sería ruido.
     if (_draftEditing) {
-      _cancelDraft();
+      if (_draftController.text.trim().isEmpty) {
+        _cancelDraft();
+      } else {
+        _submitDraft();
+      }
       return;
     }
+    HapticFeedback.selectionClick();
+    final m = TimelineScale.snap(scale.minutesForY(details.localPosition.dy));
+    _openDraft(m, (m + 30).clamp(0, TimelineScale.minutesPerDay), fromDrag: false);
+  }
+
+  void _openDraft(int start, int end, {required bool fromDrag}) {
+    setState(() {
+      _draftStart = start;
+      _draftEnd = end;
+      _draftEditing = true;
+      _draftFromDrag = fromDrag;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _draftFocus.requestFocus();
+      _ensureDraftVisible();
+    });
+  }
+
+  /// Sube o baja el scroll lo justo para que el panel del borrador no quede
+  /// detrás del teclado ni fuera de pantalla.
+  void _ensureDraftVisible() {
+    if (!_scrollController.hasClients || _draftStart == null) return;
+    final scale = _scale;
+    final top = scale.yForMinutes(_draftStart!);
+    final offset = _scrollController.offset;
+    final viewport = _scrollController.position.viewportDimension;
+    // Se deja margen arriba para ver de qué hora viene y abajo para el panel.
+    const marginTop = 80.0;
+    final marginBottom = _draftEditorHeight + 40;
+    double? target;
+    if (top - marginTop < offset) {
+      target = top - marginTop;
+    } else if (top + marginBottom > offset + viewport) {
+      target = top + marginBottom - viewport;
+    }
+    if (target == null) return;
+    _scrollController.animateTo(
+      target.clamp(0.0, _scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _onCreateStart(LongPressStartDetails details, TimelineScale scale) {
+    if (_draftEditing) return;
     HapticFeedback.selectionClick();
     final m = TimelineScale.snap(scale.minutesForY(details.localPosition.dy));
     setState(() {
       _draftStart = m;
       _draftEnd = (m + 30).clamp(0, TimelineScale.minutesPerDay);
+      _draftFromDrag = true;
     });
   }
 
@@ -174,17 +245,28 @@ class _DayTimelineState extends State<DayTimeline> {
   }
 
   void _onCreateEnd() {
-    if (_draftStart == null) return;
-    setState(() => _draftEditing = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _draftFocus.requestFocus());
+    if (_draftStart == null || _draftEditing) return;
+    _openDraft(_draftStart!, _draftEnd!, fromDrag: true);
+  }
+
+  void _setDraftDuration(int minutes) {
+    final start = _draftStart;
+    if (start == null) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _draftEnd = (start + minutes).clamp(start + TimelineScale.snapMinutes, TimelineScale.minutesPerDay);
+      _draftFromDrag = false;
+    });
   }
 
   void _cancelDraft() {
     _draftController.clear();
+    FocusScope.of(context).unfocus();
     setState(() {
       _draftStart = null;
       _draftEnd = null;
       _draftEditing = false;
+      _draftFromDrag = false;
     });
   }
 
@@ -198,6 +280,7 @@ class _DayTimelineState extends State<DayTimeline> {
     _submittingDraft = true;
     final start = _dateAt(_draftStart!);
     final end = _dateAt(_draftEnd!);
+    HapticFeedback.lightImpact();
     _cancelDraft();
     try {
       await widget.onCreate(title, start, end);
@@ -260,6 +343,7 @@ class _DayTimelineState extends State<DayTimeline> {
     setState(() => _blockDrag = null);
     if (drag == null) return;
     if (drag.start == drag.originalStart && drag.end == drag.originalEnd) return;
+    HapticFeedback.lightImpact();
     widget.onReschedule(drag.task, _dateAt(drag.start), _dateAt(drag.end));
   }
 
@@ -272,20 +356,21 @@ class _DayTimelineState extends State<DayTimeline> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final laneAreaWidth = constraints.maxWidth - _gutterWidth;
+        final laneAreaWidth = constraints.maxWidth - _gutterWidth - 12;
         return SingleChildScrollView(
           controller: _scrollController,
-          padding: const EdgeInsets.only(bottom: 140),
+          padding: const EdgeInsets.only(bottom: 160),
           child: SizedBox(
             height: scale.totalHeight,
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 // Capa de gestos al fondo: los bloques, al estar encima, se
                 // quedan con sus propios toques antes de llegar aquí.
                 Positioned.fill(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: _draftEditing ? _cancelDraft : null,
+                    onTapUp: (d) => _onCanvasTap(d, scale),
                     onLongPressStart: (d) => _onCreateStart(d, scale),
                     onLongPressMoveUpdate: (d) => _onCreateUpdate(d, scale),
                     onLongPressEnd: (_) => _onCreateEnd(),
@@ -293,9 +378,20 @@ class _DayTimelineState extends State<DayTimeline> {
                 ),
                 ..._buildPeakBand(scale, laneAreaWidth),
                 ..._buildGrid(scale),
-                if (_draftStart != null) _buildDraft(scale, laneAreaWidth),
                 ..._buildBlocks(scale, laneAreaWidth),
                 ..._buildNowLine(scale),
+                // Con el borrador abierto, cualquier toque fuera lo cierra —
+                // incluso sobre otro bloque. Sin esta capa, tocar un bloque
+                // vecino abría su formulario y el borrador se perdía sin que
+                // nadie hubiera pedido tirarlo.
+                if (_draftEditing)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (d) => _onCanvasTap(d, scale),
+                    ),
+                  ),
+                if (_draftStart != null) _buildDraft(scale, laneAreaWidth),
               ],
             ),
           ),
@@ -307,17 +403,30 @@ class _DayTimelineState extends State<DayTimeline> {
   List<Widget> _buildPeakBand(TimelineScale scale, double laneAreaWidth) {
     final top = scale.yForMinutes(_peakStartHour * 60);
     final bottom = scale.yForMinutes(_peakEndHour * 60);
+    final accent = BentoTheme.accentLime;
     return [
       Positioned(
         top: top,
-        left: _gutterWidth,
-        width: laneAreaWidth,
+        left: _gutterWidth - 6,
+        width: laneAreaWidth + 6,
         height: bottom - top,
         child: IgnorePointer(
           child: Container(
             decoration: BoxDecoration(
-              color: BentoTheme.accentLime.withValues(alpha: 0.045),
-              borderRadius: BorderRadius.circular(10),
+              color: accent.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(14),
+              border: Border(left: BorderSide(color: accent.withValues(alpha: 0.28), width: 2)),
+            ),
+            alignment: Alignment.topRight,
+            padding: const EdgeInsets.only(top: 5, right: 9),
+            child: Text(
+              'FRANJA DE FOCO',
+              style: GoogleFonts.montserrat(
+                fontSize: 8.5,
+                letterSpacing: 1.3,
+                fontWeight: FontWeight.w700,
+                color: accent.withValues(alpha: 0.4),
+              ),
             ),
           ),
         ),
@@ -327,6 +436,7 @@ class _DayTimelineState extends State<DayTimeline> {
 
   List<Widget> _buildGrid(TimelineScale scale) {
     final widgets = <Widget>[];
+    final nowHour = DateTime.now().hour;
 
     if (scale.isCollapsing) {
       widgets.add(Positioned(
@@ -339,15 +449,33 @@ class _DayTimelineState extends State<DayTimeline> {
           behavior: HitTestBehavior.opaque,
           child: Row(
             children: [
-              const SizedBox(width: 8),
-              Icon(Icons.expand_more, size: 15, color: BentoTheme.creamAlpha(0.35)),
-              const SizedBox(width: 4),
-              Text(
-                '00:00 – 06:00',
-                style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w600, color: BentoTheme.creamAlpha(0.35)),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: BentoTheme.creamAlpha(0.05),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.expand_more_rounded, size: 13, color: BentoTheme.creamAlpha(0.4)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '00:00 – 06:00',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                        color: BentoTheme.creamAlpha(0.4),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Container(height: 1, color: BentoTheme.creamAlpha(0.06))),
+              Expanded(child: Container(height: 1, color: BentoTheme.creamAlpha(0.05))),
+              const SizedBox(width: 12),
             ],
           ),
         ),
@@ -356,38 +484,84 @@ class _DayTimelineState extends State<DayTimeline> {
 
     final firstHour = scale.isCollapsing ? _nightBoundaryHour : 0;
     for (var hour = firstHour; hour < 24; hour++) {
+      // Las horas ya pasadas se apagan: el ojo debe aterrizar en lo que queda
+      // por delante, no en lo que ya no se puede cambiar.
+      final isPast = _isToday && hour < nowHour;
+      final isCurrent = _isToday && hour == nowHour;
+      final labelAlpha = isCurrent ? 0.85 : (isPast ? 0.18 : 0.42);
+      final lineAlpha = isPast ? 0.04 : 0.08;
+
       widgets.add(Positioned(
-        top: scale.yForMinutes(hour * 60),
+        top: scale.yForMinutes(hour * 60) - 7,
         left: 0,
-        right: 0,
+        right: 12,
         child: IgnorePointer(
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                width: 40,
+                width: _gutterWidth - 10,
                 child: Text(
                   '${hour.toString().padLeft(2, '0')}:00',
-                  style: GoogleFonts.montserrat(fontSize: 10, color: BentoTheme.creamAlpha(0.35)),
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 10,
+                    fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+                    letterSpacing: 0.1,
+                    color: isCurrent
+                        ? BentoTheme.accentLime
+                        : BentoTheme.creamAlpha(labelAlpha),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(child: Container(height: 1, color: BentoTheme.creamAlpha(0.08))),
+              const SizedBox(width: 10),
+              Expanded(child: Container(height: 1, color: BentoTheme.creamAlpha(lineAlpha))),
             ],
           ),
         ),
       ));
+
+      // Marca de la media hora: da resolución para leer dónde cae un bloque
+      // sin llenar la pantalla de líneas.
+      if (!scale.isCollapsing || hour >= _nightBoundaryHour) {
+        widgets.add(Positioned(
+          top: scale.yForMinutes(hour * 60 + 30),
+          left: _gutterWidth,
+          right: 12,
+          child: IgnorePointer(
+            child: Container(height: 1, color: BentoTheme.creamAlpha(isPast ? 0.015 : 0.03)),
+          ),
+        ));
+      }
     }
 
     if (scale.isCollapsing == false && _nightExpanded) {
       widgets.add(Positioned(
-        top: 0,
-        right: 8,
+        top: 2,
+        right: 12,
         child: GestureDetector(
           onTap: () => setState(() => _nightExpanded = false),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Icon(Icons.unfold_less, size: 16, color: BentoTheme.creamAlpha(0.4)),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: BentoTheme.creamAlpha(0.06),
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.unfold_less_rounded, size: 13, color: BentoTheme.creamAlpha(0.45)),
+                const SizedBox(width: 4),
+                Text(
+                  'plegar madrugada',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: BentoTheme.creamAlpha(0.45),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ));
@@ -397,24 +571,53 @@ class _DayTimelineState extends State<DayTimeline> {
   }
 
   List<Widget> _buildNowLine(TimelineScale scale) {
+    if (!_isToday) return const [];
     final now = DateTime.now();
-    final isToday = DateTime(widget.day.year, widget.day.month, widget.day.day) ==
-        DateTime(now.year, now.month, now.day);
-    if (!isToday) return const [];
     return [
       Positioned(
-        top: scale.yForTime(now),
-        left: _gutterWidth - 4,
-        right: 0,
+        top: scale.yForTime(now) - 9,
+        left: 0,
+        right: 12,
         child: IgnorePointer(
           child: Row(
             children: [
+              // La hora exacta en la canaleta: saber "son las 14:35" sin salir
+              // del timeline es lo que hace que la línea signifique algo.
               Container(
-                width: 7,
-                height: 7,
+                width: _gutterWidth - 10,
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: BentoTheme.errorRed,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    _fmt(minutesOfDay(now)),
+                    style: GoogleFonts.montserrat(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                width: 5,
+                height: 5,
                 decoration: BoxDecoration(color: BentoTheme.errorRed, shape: BoxShape.circle),
               ),
-              Expanded(child: Container(height: 1.5, color: BentoTheme.errorRed)),
+              Expanded(
+                child: Container(
+                  height: 1.5,
+                  decoration: BoxDecoration(
+                    color: BentoTheme.errorRed.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -422,72 +625,155 @@ class _DayTimelineState extends State<DayTimeline> {
     ];
   }
 
+  // ---------------------------------------------------------------- draft
+
   Widget _buildDraft(TimelineScale scale, double laneAreaWidth) {
     final start = _draftStart!;
     final end = _draftEnd!;
-    final top = scale.yForMinutes(start);
-    final height = scale.heightForRange(start, end);
+    final accent = BentoTheme.accentLime;
+    final rawTop = scale.yForMinutes(start);
+    final rawHeight = scale.heightForRange(start, end);
+
+    if (!_draftEditing) {
+      // Fase de arrastre: solo la silueta con el rango, sin nada que leer.
+      return Positioned(
+        top: rawTop,
+        left: _gutterWidth,
+        width: laneAreaWidth,
+        height: rawHeight,
+        child: IgnorePointer(
+          child: Container(
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: accent.withValues(alpha: 0.8), width: 1.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            alignment: Alignment.topLeft,
+            child: Text(
+              '${_fmt(start)} – ${_fmt(end)}  ·  ${_durationLabel(end - start)}',
+              style: GoogleFonts.montserrat(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: accent,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Editando: el panel se ancla al inicio del bloque pero se le da alto
+    // propio, y se frena para no salirse por abajo del lienzo.
+    final top = rawTop.clamp(0.0, (scale.totalHeight - _draftEditorHeight).clamp(0.0, double.infinity));
 
     return Positioned(
       top: top,
       left: _gutterWidth,
       width: laneAreaWidth,
-      height: _draftEditing ? (height < 52 ? 52 : height) : height,
+      height: _draftEditorHeight,
       child: Container(
         decoration: BoxDecoration(
-          color: BentoTheme.accentLime.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: BentoTheme.accentLime, width: 1.5),
+          color: Color.alphaBlend(accent.withValues(alpha: 0.10), BentoTheme.neuSurface),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: accent.withValues(alpha: 0.75), width: 1.5),
+          boxShadow: BentoTheme.neuFloating(elevation: 14),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: _draftEditing
-            ? Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _draftController,
-                      focusNode: _draftFocus,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _submitDraft(),
-                      style: GoogleFonts.montserrat(
-                        color: BentoTheme.cream,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.5,
-                      ),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        border: InputBorder.none,
-                        hintText: '${_fmt(start)} – ${_fmt(end)}   ¿qué vas a hacer?',
-                        hintStyle: GoogleFonts.montserrat(
-                          color: BentoTheme.creamAlpha(0.45),
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _cancelDraft,
-                    child: Icon(Icons.close, size: 17, color: BentoTheme.creamAlpha(0.5)),
-                  ),
-                  const SizedBox(width: 2),
-                  GestureDetector(
-                    onTap: _submitDraft,
-                    child: Icon(Icons.check, size: 19, color: BentoTheme.accentLime),
-                  ),
-                ],
-              )
-            : Align(
-                alignment: Alignment.topLeft,
-                child: Text(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Text(
                   '${_fmt(start)} – ${_fmt(end)}',
                   style: GoogleFonts.montserrat(
-                    fontSize: 12,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                    color: accent,
+                  ),
+                ),
+                const Spacer(),
+                _draftIconButton(Icons.close_rounded, BentoTheme.creamAlpha(0.45), _cancelDraft),
+                const SizedBox(width: 2),
+                _draftIconButton(Icons.check_rounded, accent, _submitDraft),
+              ],
+            ),
+            Expanded(
+              child: Center(
+                child: TextField(
+                  controller: _draftController,
+                  focusNode: _draftFocus,
+                  textInputAction: TextInputAction.done,
+                  textCapitalization: TextCapitalization.sentences,
+                  onSubmitted: (_) => _submitDraft(),
+                  style: GoogleFonts.montserrat(
+                    color: BentoTheme.cream,
                     fontWeight: FontWeight.w700,
-                    color: BentoTheme.accentLime,
+                    fontSize: 14,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    hintText: '¿Qué vas a hacer?',
+                    hintStyle: GoogleFonts.montserrat(
+                      color: BentoTheme.creamAlpha(0.35),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
+            ),
+            // Duración de un toque. Es la alternativa a estirar el bloque, y
+            // el motivo por el que ya no hace falta arrastrar para nada.
+            SizedBox(
+              height: 24,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _durationPresets.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 5),
+                itemBuilder: (context, i) {
+                  final minutes = _durationPresets[i];
+                  final selected = !_draftFromDrag && (end - start) == minutes;
+                  return GestureDetector(
+                    onTap: () => _setDraftDuration(minutes),
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 9),
+                      decoration: BoxDecoration(
+                        color: selected ? accent : BentoTheme.creamAlpha(0.07),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        _durationLabel(minutes),
+                        style: GoogleFonts.montserrat(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: selected ? const Color(0xFF0C0C0D) : BentoTheme.creamAlpha(0.6),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _draftIconButton(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }
@@ -495,6 +781,7 @@ class _DayTimelineState extends State<DayTimeline> {
   List<Widget> _buildBlocks(TimelineScale scale, double laneAreaWidth) {
     final drag = _blockDrag;
     final laid = layoutBlocks(widget.tasks);
+    final nowMinutes = _isToday ? minutesOfDay(DateTime.now()) : -1;
 
     return [
       for (final block in laid)
@@ -506,6 +793,7 @@ class _DayTimelineState extends State<DayTimeline> {
           final laneWidth = (laneAreaWidth - _laneGap * (block.laneCount - 1)) / block.laneCount;
           final left = _gutterWidth + block.lane * (laneWidth + _laneGap);
           final height = scale.heightForRange(start, end);
+          final completed = _isCompleted(block.task);
 
           return Positioned(
             top: scale.yForMinutes(start),
@@ -516,8 +804,13 @@ class _DayTimelineState extends State<DayTimeline> {
               key: ValueKey(block.task.id),
               task: block.task,
               height: height,
-              completed: _isCompleted(block.task),
+              completed: completed,
               isDragging: isDragging,
+              // Un bloque ya pasado y sin marcar se muestra apagado: no es un
+              // error, pero tampoco merece el mismo peso visual que lo que
+              // queda por hacer.
+              isPast: nowMinutes >= 0 && end <= nowMinutes && !completed,
+              isNow: nowMinutes >= start && nowMinutes < end,
               timeLabel: '${_fmt(start)} – ${_fmt(end)}',
               onTap: () => widget.onTapBlock(block.task),
               onToggle: () => widget.onToggleBlock(block.task),
@@ -538,6 +831,13 @@ String _fmt(int minutes) {
   return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 }
 
+String _durationLabel(int minutes) {
+  if (minutes < 60) return '${minutes}m';
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  return m == 0 ? '${h}h' : '${h}h $m';
+}
+
 /// Envuelve la tarjeta con los gestos de mover y estirar.
 ///
 /// Mover exige pulsación larga primero (para no arrastrar bloques sin querer
@@ -548,6 +848,8 @@ class _DraggableBlock extends StatelessWidget {
   final double height;
   final bool completed;
   final bool isDragging;
+  final bool isPast;
+  final bool isNow;
   final String timeLabel;
   final VoidCallback onTap;
   final VoidCallback onToggle;
@@ -562,6 +864,8 @@ class _DraggableBlock extends StatelessWidget {
     required this.height,
     required this.completed,
     required this.isDragging,
+    required this.isPast,
+    required this.isNow,
     required this.timeLabel,
     required this.onTap,
     required this.onToggle,
@@ -577,6 +881,8 @@ class _DraggableBlock extends StatelessWidget {
       task: task,
       height: height,
       completed: completed,
+      isPast: isPast,
+      isNow: isNow,
       timeLabel: timeLabel,
       onTap: onTap,
       onToggleComplete: onToggle,
@@ -585,44 +891,53 @@ class _DraggableBlock extends StatelessWidget {
     return AnimatedScale(
       scale: isDragging ? 1.03 : 1.0,
       duration: const Duration(milliseconds: 120),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onLongPressStart: (_) => onMoveStart(),
-              onLongPressMoveUpdate: (d) => onDragUpdate(d.offsetFromOrigin.dy),
-              onLongPressEnd: (_) => onDragEnd(),
-              onLongPressCancel: onDragEnd,
-              child: card,
-            ),
-          ),
-          // Tirador de duración. Solo aparece si el bloque tiene alto para
-          // mostrarlo sin taparse a sí mismo.
-          if (height >= 40)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 16,
+      curve: Curves.easeOut,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isDragging ? BentoTheme.neuFloating(elevation: 18) : const [],
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
               child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onVerticalDragStart: (_) => onResizeStart(),
-                onVerticalDragUpdate: (d) => onDragUpdate(d.delta.dy),
-                onVerticalDragEnd: (_) => onDragEnd(),
-                onVerticalDragCancel: onDragEnd,
-                child: Center(
-                  child: Container(
-                    width: 26,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: BentoTheme.creamAlpha(isDragging ? 0.5 : 0.18),
-                      borderRadius: BorderRadius.circular(100),
+                onLongPressStart: (_) => onMoveStart(),
+                onLongPressMoveUpdate: (d) => onDragUpdate(d.offsetFromOrigin.dy),
+                onLongPressEnd: (_) => onDragEnd(),
+                onLongPressCancel: onDragEnd,
+                child: card,
+              ),
+            ),
+            // Tirador de duración. Solo aparece si el bloque tiene alto para
+            // mostrarlo sin taparse a sí mismo.
+            if (height >= 40)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 16,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragStart: (_) => onResizeStart(),
+                  onVerticalDragUpdate: (d) => onDragUpdate(d.delta.dy),
+                  onVerticalDragEnd: (_) => onDragEnd(),
+                  onVerticalDragCancel: onDragEnd,
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      width: isDragging ? 34 : 24,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: BentoTheme.creamAlpha(isDragging ? 0.55 : 0.16),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -43,6 +43,11 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Atajos al mantener pulsado el icono. Van colgados de la
+                 activity LAUNCHER porque es de donde el launcher los lee. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts"/>
             <!-- "Abrir con" y "Compartir con" para libros. Los tipos van
                  acotados a EPUB y PDF a propósito: con `*/*` la app aparecería
                  como destino de cualquier archivo del sistema.
@@ -68,6 +73,63 @@
                 <data android:mimeType="application/pdf"/>
             </intent-filter>
         </activity>
+        <!-- ─── Captura rápida ───
+             Modal para anotar un gasto, una tarea o una nota sin entrar en la
+             app. Se lanza desde tres sitios: el tile del desplegable, el widget
+             de escritorio y los atajos del icono.
+
+             taskAffinity propia (MainActivity usa "") para que el modal NO se
+             meta en la pila de la app: debe aparecer sobre lo que el usuario
+             tuviera delante y, al cerrarse, devolverlo justo ahí.
+
+             excludeFromRecents porque es una acción de dos segundos, no una
+             pantalla a la que volver desde el multitarea.
+
+             exported=true es necesario: quien lanza los atajos es el launcher,
+             que es otro proceso. Lo único que puede provocar un tercero es
+             abrir un campo de texto vacío, sin acceso a datos. -->
+        <activity
+            android:name=".QuickCaptureActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.sistemdaily.sistem_daily.quickcapture"
+            android:excludeFromRecents="true"
+            android:theme="@style/QuickCaptureTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize|stateVisible"/>
+
+        <!-- Tile de ajustes rápidos. El permiso BIND_QUICK_SETTINGS_TILE lo
+             exige el sistema para poder enlazar el servicio. -->
+        <service
+            android:name=".QuickCaptureTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_quick_capture"
+            android:label="@string/quick_capture_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+            <!-- Deja el tile activo mientras el panel está abierto sin tener
+                 que desbloquear el móvil; el desbloqueo se pide al pulsarlo. -->
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false"/>
+        </service>
+
+        <!-- Widget de escritorio con los cuatro botones de captura. -->
+        <receiver
+            android:name=".QuickCaptureWidgetProvider"
+            android:exported="false"
+            android:label="@string/quick_capture_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_capture_info"/>
+        </receiver>
+
         <!-- Requerido por el paquete `alarm` para la notificación de aviso
              cuando la app es cerrada mientras hay una alarma programada -->
         <service android:name="com.gdelataillade.alarm.services.NotificationOnKillService" />
