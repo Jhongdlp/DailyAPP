@@ -49,6 +49,7 @@ class RpgCounters {
   static const highlights = 'highlights';
   static const sleepNights = 'sleep_nights';
   static const sleepGoalNights = 'sleep_goal_nights';
+  static const focusMinutes = 'focus_minutes';
   // derivados (no viven en counters):
   static const level = 'level';
   static const cosmetics = 'cosmetics';
@@ -293,6 +294,40 @@ const List<AchievementDef> achievementCatalog = [
     target: 3,
     xpReward: 150,
     goldReward: 100,
+  ),
+  // ── Enfoque ──
+  AchievementDef(
+    id: 'primer-pomodoro',
+    title: 'Primer Pomodoro',
+    description: 'Acumula 25 minutos de enfoque',
+    emoji: '🍅',
+    tier: BadgeTier.bronce,
+    counterKey: RpgCounters.focusMinutes,
+    target: 25,
+    xpReward: 30,
+    goldReward: 15,
+  ),
+  AchievementDef(
+    id: 'estado-de-flujo',
+    title: 'Estado de Flujo',
+    description: 'Acumula 10 horas de enfoque',
+    emoji: '🌊',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.focusMinutes,
+    target: 600,
+    xpReward: 90,
+    goldReward: 60,
+  ),
+  AchievementDef(
+    id: 'mente-de-acero',
+    title: 'Mente de Acero',
+    description: 'Acumula 50 horas de enfoque',
+    emoji: '🧠',
+    tier: BadgeTier.diamante,
+    counterKey: RpgCounters.focusMinutes,
+    target: 3000,
+    xpReward: 250,
+    goldReward: 180,
   ),
   // ── Economía y colección ──
   AchievementDef(

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.1.1+17
+version: 2.3.0+20300
 
 environment:
   sdk: ^3.12.2
@@ -66,6 +66,14 @@ dependencies:
   flutter_tts: ^4.2.5
   receive_sharing_intent: ^1.9.0
   collection: ^1.19.1
+  # El digest de noticias se exporta como periódico maquetado; se usan las
+  # fuentes Times integradas del paquete, así que no hace falta `printing`
+  # (el PDF se abre con open_filex, que ya está arriba).
+  # Anclado por debajo de 3.11: a partir de ahí `pdf` exige `image ^4`, y
+  # `epubx` (lector EPUB) fija `image ^3`. El solver elige la 3.10.x.
+  pdf: ^3.8.4
+  # Abrir la fuente original de cada noticia en el navegador.
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

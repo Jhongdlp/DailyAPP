@@ -22,6 +22,9 @@ class CacheService {
     'book_bookmarks',
     'book_highlights',
     'reading_stats',
+    'focus_stats',
+    'pomodoro_prefs',
+    'news_digest',
   ];
 
   static Future<SharedPreferences> _instance() async {

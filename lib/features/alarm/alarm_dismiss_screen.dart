@@ -8,6 +8,7 @@ import '../../core/models/alarm_model.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/rpg_provider.dart';
+import '../../core/providers/sleep_provider.dart';
 import '../../core/models/achievement_catalog.dart';
 import '../../core/widgets/rpg_celebration.dart';
 import '../../core/services/alarm_service.dart';
@@ -15,6 +16,7 @@ import '../../core/services/cache_service.dart';
 import '../../core/services/lock_task_service.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/utils/error_snackbar.dart';
+import 'sleep/sleep_check_in_screen.dart';
 import 'widgets/camera_capture_screen.dart';
 
 class AlarmDismissScreen extends ConsumerStatefulWidget {
@@ -128,7 +130,13 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
         await _logDismissal(validated: true);
         final idInt = _alarm!.id.hashCode.abs() % 100000;
         await Alarm.stop(idInt);
-        
+
+        // Cierra la noche en el registro de sueño: el par lightsOut → wokeAt es
+        // lo que da duración, eficiencia y minutos de snooze.
+        final session = await ref
+            .read(sleepProvider.notifier)
+            .registerWake(dismissAttempts: _attempts);
+
         // Otorgar recompensa RPG por levantarse a tiempo.
         // Madrugar (antes de las 8am) da bonus y cuenta para el logro Alondra.
         final early = DateTime.now().hour < 8;
@@ -155,6 +163,18 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
         // Solo aquí (foto validada) liberamos la pantalla y salimos.
         await LockTaskService.disable();
         await LockTaskService.showOverLockscreen(false);
+
+        // El check-in va DESPUÉS de soltar el modo pantalla fijada: si no,
+        // quedaría atrapado en él y el usuario no podría salir.
+        if (mounted && session?.timeInBed != null) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SleepCheckInScreen(nightKey: session!.nightKey),
+            ),
+          );
+        }
+
         if (mounted) Navigator.pop(context);
       }
     } catch (e) {
@@ -167,6 +187,9 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
     }
   }
 
+  /// Log histórico en Supabase. El registro que de verdad alimenta el panel de
+  /// sueño es el local (`sleepProvider`); esto se conserva por si algún día
+  /// las alarmas dejan de ser solo locales.
   Future<void> _logDismissal({required bool validated}) async {
     try {
       final user = Supabase.instance.client.auth.currentUser;

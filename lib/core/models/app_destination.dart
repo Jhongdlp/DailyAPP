@@ -13,7 +13,8 @@ enum AppDestination {
   finance('Finanzas', Icons.account_balance_wallet_outlined),
   chat('Copiloto', Icons.chat_bubble_outline),
   agenda('Agenda', Icons.view_timeline_outlined),
-  reading('Biblioteca', Icons.auto_stories_outlined);
+  reading('Biblioteca', Icons.auto_stories_outlined),
+  news('Noticias', Icons.newspaper_outlined);
 
   const AppDestination(this.label, this.icon);
 
@@ -33,6 +34,7 @@ enum AppDestination {
         AppDestination.chat => BentoTheme.accentChat,
         AppDestination.agenda => BentoTheme.accentLime,
         AppDestination.reading => BentoTheme.accentPurple,
+        AppDestination.news => BentoTheme.accentBrain,
       };
 
   static AppDestination? byName(String name) {

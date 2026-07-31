@@ -24,7 +24,7 @@ import 'core/services/sleep_service.dart';
 import 'core/services/quick_capture_sync.dart';
 import 'features/agenda/night_planning/night_planning_screen.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
-import 'features/alarm/sleep/sleep_schedule_form.dart';
+import 'features/alarm/sleep/sleep_dashboard_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/quick_capture/quick_capture_app.dart';
 import 'features/auth/auth_screen.dart';
@@ -154,7 +154,7 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
       // confirmar sin volver a encender la pantalla entera.
       if (response.actionId == null) {
         navigatorKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => const SleepScheduleForm()),
+          MaterialPageRoute(builder: (_) => const SleepDashboardScreen()),
         );
       }
       return;

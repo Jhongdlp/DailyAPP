@@ -1,8 +1,10 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../pomodoro_screen.dart';
 import '../pomodoro_setup_sheet.dart';
+import '../providers/pomodoro_provider.dart';
 
-class TomatoButton extends StatefulWidget {
+class TomatoButton extends ConsumerStatefulWidget {
   final double size;
 
   const TomatoButton({
@@ -11,10 +13,10 @@ class TomatoButton extends StatefulWidget {
   });
 
   @override
-  State<TomatoButton> createState() => _TomatoButtonState();
+  ConsumerState<TomatoButton> createState() => _TomatoButtonState();
 }
 
-class _TomatoButtonState extends State<TomatoButton> with SingleTickerProviderStateMixin {
+class _TomatoButtonState extends ConsumerState<TomatoButton> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
 
@@ -51,6 +53,16 @@ class _TomatoButtonState extends State<TomatoButton> with SingleTickerProviderSt
   }
 
   void _openPomodoroSetup() {
+    // Con una sesión viva, volver a configurarla la mataría: el tomate es
+    // entonces la puerta de vuelta a la sesión, no un formulario nuevo.
+    final pom = ref.read(pomodoroProvider);
+    if (pom.isActive || pom.phaseStartedAt != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+      );
+      return;
+    }
     PomodoroSetupSheet.show(context);
   }
 

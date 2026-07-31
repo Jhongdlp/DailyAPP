@@ -8,6 +8,7 @@ import '../pomodoro/widgets/tomato_button.dart';
 import 'alarm_card.dart';
 import 'alarm_form.dart';
 import 'notification_diagnostics_sheet.dart';
+import 'sleep/sleep_summary_card.dart';
 
 class AlarmTab extends ConsumerWidget {
   const AlarmTab({super.key});
@@ -113,6 +114,10 @@ class AlarmTab extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildHeader(context),
+          // El sueño vive aquí y no en una pestaña propia: la hora de dormir y
+          // la de despertar son los dos extremos del mismo ciclo, y la alarma
+          // ya es el único punto donde el usuario piensa en él.
+          const SleepSummaryCard(),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

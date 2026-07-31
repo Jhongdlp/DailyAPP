@@ -93,13 +93,16 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
   double? _systemBrightness;
   String? _pendingSelection;
 
-  /// El `Scrollable` interno de la lista de `epub_view`.
+  /// Ancla para localizar el `Scrollable` interno de la lista de `epub_view`.
+  final GlobalKey _readerKey = GlobalKey();
+
+  /// El `Scrollable` interno de la lista de `epub_view`, una vez localizado.
   ///
   /// El paquete no expone ni su `ScrollController` ni la física, así que la
   /// única vía para mover el libro por píxeles (pasar página, auto-scroll) es
-  /// pescar el scrollable desde el contexto de un párrafo. Se recaptura en cada
-  /// construcción porque `ScrollablePositionedList` alterna entre dos listas
-  /// internas al animar saltos, y la anterior queda desmontada.
+  /// buscarlo en el árbol. Se vuelve a buscar cuando el que teníamos queda
+  /// desmontado, porque `ScrollablePositionedList` alterna entre dos listas
+  /// internas al animar saltos.
   ScrollableState? _listScrollable;
 
   /// Píxeles que el auto-scroll dejó a medias entre frames. Sin acumularlos, a
@@ -413,15 +416,38 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
   /// Posición de scroll viva de la lista interna, o `null` si aún no se ha
   /// montado (o si la que teníamos quedó desmontada tras un salto animado).
   ScrollPosition? get _scrollPosition {
-    final scrollable = _listScrollable;
-    if (scrollable == null || !scrollable.mounted) return null;
+    var scrollable = _listScrollable;
+    if (scrollable == null || !scrollable.mounted) {
+      scrollable = _listScrollable = _findListScrollable();
+    }
+    if (scrollable == null) return null;
     final position = scrollable.position;
     return position.hasPixels ? position : null;
   }
 
-  void _captureScrollable(BuildContext context) {
-    final scrollable = Scrollable.maybeOf(context);
-    if (scrollable != null) _listScrollable = scrollable;
+  /// Localiza el `Scrollable` de la lista recorriendo el árbol bajo el lector.
+  ///
+  /// No sirve `Scrollable.maybeOf` desde el `chapterBuilder`:
+  /// `ScrollablePositionedList` construye cada elemento con el contexto de su
+  /// propio `State`, que está **por encima** del `Scrollable`, así que desde ahí
+  /// siempre sale `null`. El primero que aparece en el recorrido es la lista
+  /// primaria; la secundaria solo existe mientras se anima un salto.
+  ScrollableState? _findListScrollable() {
+    final root = _readerKey.currentContext;
+    if (root == null) return null;
+
+    ScrollableState? found;
+    void visit(Element element) {
+      if (found != null) return;
+      if (element is StatefulElement && element.state is ScrollableState) {
+        found = element.state as ScrollableState;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    (root as Element).visitChildren(visit);
+    return found;
   }
 
   /// Pasa una pantalla de texto. Se deja un solapamiento para no cortar la
@@ -751,12 +777,18 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
   ///
   /// Va por fuera de la vista memoizada a propósito: cambiar la configuración
   /// solo repinta el `Scrollable`, no vuelve a inflar los párrafos.
+  ///
+  /// La `ScrollConfiguration` está **siempre** en el árbol y solo cambia la
+  /// física: si apareciera y desapareciera con el paginado, `EpubView` quedaría
+  /// en otra posición del árbol y Flutter lo remontaría. Al montarse el nuevo
+  /// `State` se engancha al `EpubController` y, acto seguido, el `dispose` del
+  /// viejo lo desengancha; la carga en curso se queda entonces sin `State` al
+  /// que volver y el lector se queda cargando para siempre.
   Widget _scrollLock({required bool paginated, required Widget child}) {
-    if (!paginated) return child;
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(
-        physics: const NeverScrollableScrollPhysics(),
-        scrollbars: false,
+        physics: paginated ? const NeverScrollableScrollPhysics() : null,
+        scrollbars: !paginated,
       ),
       child: child,
     );
@@ -827,6 +859,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
     final textStyle = prefs.textStyle(palette.textColor);
 
     final view = EpubView(
+      key: _readerKey,
       controller: controller,
       onDocumentLoaded: _onDocumentLoaded,
       onChapterChanged: _onChapterChanged,
@@ -855,9 +888,6 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen>
             _chapters = chapters;
             WidgetsBinding.instance.addPostFrameCallback((_) => _buildTextIndex());
           }
-
-          // Único punto desde el que se alcanza el scrollable de la lista.
-          _captureScrollable(context);
 
           return Column(
             children: [

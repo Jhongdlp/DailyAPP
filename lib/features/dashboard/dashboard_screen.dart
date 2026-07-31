@@ -11,6 +11,7 @@ import '../finance/finance_tab.dart';
 import '../reading/reading_tab.dart';
 import '../reading/shared_books_handler.dart';
 import '../agenda/agenda_tab.dart';
+import '../news/news_tab.dart';
 import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../settings/personalize_screen.dart';
@@ -45,6 +46,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     const ChatTab(),
     const AgendaTab(),
     const ReadingTab(),
+    const NewsTab(),
   ];
 
   SharedBooksHandler? _sharedBooks;

@@ -40,13 +40,29 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
 
+      # La versión del APK sale SIEMPRE del tag, no del pubspec.yaml. Si se
+      # desincronizan, la app instalada se reporta con una versión vieja y el
+      # UpdateService la sigue viendo como desactualizada para siempre.
+      - name: Derive version from tag
+        run: |
+          BUILD_NAME="${GITHUB_REF_NAME#v}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$BUILD_NAME"
+          # versionCode monótono derivado del tag: 2.2.0 -> 20200.
+          # Android rechaza instalar un versionCode menor que el ya instalado.
+          BUILD_NUMBER=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          echo "BUILD_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
       - name: Build release APK
         env:
           SIGNING_STORE_FILE: upload-keystore.jks
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release \
+            --build-name="$BUILD_NAME" \
+            --build-number="$BUILD_NUMBER"
 
       - name: Rename APK with version
         run: |
