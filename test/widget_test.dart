@@ -12,17 +12,19 @@ import 'package:sistem_daily/main.dart';
 
 void main() {
   testWidgets('SistemDailyApp smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: SistemDailyApp(),
-      ),
-    );
+    await tester.runAsync(() async {
+      // Build our app and trigger a frame.
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: SistemDailyApp(),
+        ),
+      );
 
-    // Verify that the title or base loading is present.
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      // Verify that the title or base loading is present.
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    // Allow initialization timer to complete
-    await tester.pump(const Duration(seconds: 1));
+      // Allow initialization timer to complete
+      await tester.pump(const Duration(seconds: 1));
+    });
   });
 }
