@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/providers/alarms_provider.dart';
 import '../../core/theme/bento_theme.dart';
 import '../habits/widgets/habit_blob_header.dart';
+import '../pomodoro/widgets/tomato_button.dart';
 import 'alarm_card.dart';
 import 'alarm_form.dart';
 import 'notification_diagnostics_sheet.dart';
@@ -69,6 +70,10 @@ class AlarmTab extends ConsumerWidget {
                   child: Icon(Icons.health_and_safety_outlined,
                       size: 20, color: BentoTheme.creamAlpha(0.55)),
                 ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(right: 14),
+                child: TomatoButton(size: 26),
               ),
               GestureDetector(
                 onTap: () => Navigator.push(

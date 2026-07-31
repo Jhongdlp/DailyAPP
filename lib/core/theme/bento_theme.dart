@@ -282,6 +282,8 @@ class BentoTheme {
         accent: _palette.dark.lime,
       );
 
+
+
   /// Ambos modos comparten la misma anatomía: superficie única, inputs
   /// hundidos sin borde (el hueco lo dibujan las sombras interiores de
   /// NeuPressed en pantallas rediseñadas; el fill oscuro es el fallback

@@ -14,6 +14,7 @@ class AlarmService {
   static const habitsChannelId = 'sistdaily_habits_v1';
   static const tasksChannelId = 'sistdaily_tasks_v1';
   static const sleepChannelId = 'sistdaily_sleep_v1';
+  static const pomodoroChannelId = 'sistdaily_pomodoro_v1';
   static const testChannelId = 'sistdaily_test_v1';
 
   /// Nombre del drawable (res/drawable/notification_icon.png) usado como icono
@@ -120,6 +121,14 @@ class AlarmService {
         sleepChannelId,
         'Rutina de Sueño',
         description: 'Aviso de hora de dormir y recordatorios de la rutina nocturna',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      ),
+      AndroidNotificationChannel(
+        pomodoroChannelId,
+        'Temporizador Pomodoro',
+        description: 'Notificaciones del estado y finalización de tus sesiones Pomodoro',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
