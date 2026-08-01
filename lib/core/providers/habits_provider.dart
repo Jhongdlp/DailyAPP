@@ -267,6 +267,12 @@ class HabitsNotifier extends Notifier<List<Habit>> {
   /// Sin conexión la escritura acaba en el outbox en vez de perderse: marcar un
   /// hábito en el metro y que el check se esfume al llegar a casa era
   /// exactamente el fallo que esto arregla.
+  ///
+  /// Si el servidor la **rechaza** no hay reintento detrás, así que el estado
+  /// optimista que ya se pintó es mentira. En vez de dejarlo hasta la siguiente
+  /// recarga (donde el check desaparecía sin explicación), se recarga en el
+  /// acto: es feo ver el check saltar hacia atrás, pero mucho menos que creer
+  /// durante horas que el día quedó marcado.
   Future<void> _persistLog({
     required String habitId,
     required DateTime day,
@@ -283,8 +289,9 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     final user = client.auth.currentUser!;
     final match = {'habit_id': habitId, 'completed_on': _fmt(day)};
 
+    final WriteOutcome outcome;
     if (remove) {
-      await syncedWrite(
+      outcome = await syncedWrite(
         write: () => client
             .from('habit_logs')
             .delete()
@@ -296,22 +303,27 @@ class HabitsNotifier extends Notifier<List<Habit>> {
           match: match,
         ),
       );
-      return;
+    } else {
+      final payload = {...match, 'user_id': user.id, 'progress_value': progress};
+      outcome = await syncedWrite(
+        write: () => client
+            .from('habit_logs')
+            .upsert(payload, onConflict: 'habit_id,completed_on'),
+        fallback: () => OutboxOp.create(
+          table: 'habit_logs',
+          kind: OutboxOpKind.upsert,
+          payload: payload,
+          match: match,
+          onConflict: 'habit_id,completed_on',
+        ),
+      );
     }
 
-    final payload = {...match, 'user_id': user.id, 'progress_value': progress};
-    await syncedWrite(
-      write: () => client
-          .from('habit_logs')
-          .upsert(payload, onConflict: 'habit_id,completed_on'),
-      fallback: () => OutboxOp.create(
-        table: 'habit_logs',
-        kind: OutboxOpKind.upsert,
-        payload: payload,
-        match: match,
-        onConflict: 'habit_id,completed_on',
-      ),
-    );
+    if (outcome.isRejected) {
+      // `force` es imprescindible: el TTL de caché se acaba de refrescar y sin
+      // él la recarga no llegaría a tocar el servidor.
+      await refresh(force: true);
+    }
   }
 
   Future<void> updateHabitProgress(String habitId, DateTime date, double increment) async {

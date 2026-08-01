@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/models/alarm_model.dart';
 import '../../../core/models/sleep_model.dart';
+import '../../../core/providers/alarms_provider.dart';
 import '../../../core/providers/sleep_provider.dart';
 import '../../../core/theme/bento_theme.dart';
 import 'sleep_dashboard_screen.dart';
-import 'sleep_schedule_form.dart';
+import 'sleep_alarm_form.dart';
 import 'widgets/sleep_chart_shell.dart';
 
 /// Resumen de sueño dentro de la pestaña Alarma: en qué punto del ciclo estás
@@ -23,8 +25,11 @@ class SleepSummaryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(sleepProvider);
     final analytics = ref.watch(sleepAnalyticsProvider);
+    final sleepAlarm = ref.watch(sleepAlarmProvider);
 
-    if (!data.schedule.enabled && !analytics.hasData) {
+    // El horario existe si existe su alarma. Quien viniera de la versión con
+    // horario suelto verá el CTA, y al abrirlo se encuentra su hora ya puesta.
+    if (sleepAlarm == null && !analytics.hasData) {
       return const _SetupPrompt();
     }
 
@@ -60,7 +65,7 @@ class SleepSummaryCard extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _statusText(data, analytics),
+                      _statusText(data, sleepAlarm),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.montserrat(
@@ -123,7 +128,7 @@ class SleepSummaryCard extends ConsumerWidget {
     );
   }
 
-  String _statusText(SleepData data, SleepAnalytics analytics) {
+  String _statusText(SleepData data, AlarmModel? sleepAlarm) {
     // La vigilancia manda sobre todo lo demás: si hay una comprobación en pie,
     // el estado del usuario es "acabo de levantarme y aún no está claro".
     final check = data.wakeCheck;
@@ -150,7 +155,7 @@ class SleepSummaryCard extends ConsumerWidget {
           '${quality == null ? '' : ' · calidad $quality/5'}';
     }
 
-    final next = data.schedule.nextBedtime();
+    final next = sleepAlarm?.nextBedtime();
     if (next != null) {
       final diff = next.difference(DateTime.now());
       final hours = diff.inHours;
@@ -198,10 +203,7 @@ class _SetupPrompt extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
       child: GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SleepScheduleForm()),
-        ),
+        onTap: () => SleepAlarmForm.open(context),
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           decoration: BoxDecoration(

@@ -75,45 +75,56 @@ class AlarmCard extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         if (alarm.enabled)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 10, bottom: 4),
-                            child: _RingingBellIcon(),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10, bottom: 4),
+                            child: alarm.isSleepAlarm
+                                ? Icon(Icons.bedtime,
+                                    size: 24, color: BentoTheme.accentAlarm)
+                                : const _RingingBellIcon(),
                           )
                         else
                           Padding(
                             padding: const EdgeInsets.only(right: 10, bottom: 4),
                             child: Icon(
-                              Icons.notifications_none_outlined,
+                              alarm.isSleepAlarm
+                                  ? Icons.bedtime_outlined
+                                  : Icons.notifications_none_outlined,
                               size: 24,
                               color: BentoTheme.creamAlpha(0.24),
                             ),
                           ),
-                        Text(
-                          alarm.time12,
-                          style: GoogleFonts.montserrat(
-                            fontSize: 40,
-                            fontWeight: FontWeight.w700,
-                            height: 1,
-                            letterSpacing: -0.5,
-                            color: alarm.enabled
-                                ? BentoTheme.cream
-                                : BentoTheme.creamAlpha(0.35),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            alarm.amPm,
+                        // La alarma de sueño enseña el rango entero: para el
+                        // usuario es "de 11 a 7", una sola cosa.
+                        if (alarm.isSleepAlarm)
+                          Expanded(child: _SleepRange(alarm: alarm))
+                        else ...[
+                          Text(
+                            alarm.time12,
                             style: GoogleFonts.montserrat(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                              letterSpacing: -0.5,
                               color: alarm.enabled
-                                  ? BentoTheme.accentOrange
+                                  ? BentoTheme.cream
                                   : BentoTheme.creamAlpha(0.35),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              alarm.amPm,
+                              style: GoogleFonts.montserrat(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: alarm.enabled
+                                    ? BentoTheme.accentOrange
+                                    : BentoTheme.creamAlpha(0.35),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -129,7 +140,9 @@ class AlarmCard extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      alarm.daysLabel,
+                      alarm.isSleepAlarm
+                          ? '${alarm.daysLabel} · ${alarm.sleepWindowLabel} en la cama'
+                          : alarm.daysLabel,
                       style: GoogleFonts.montserrat(
                           fontSize: 12, color: BentoTheme.creamAlpha(0.45)),
                     ),
@@ -187,6 +200,57 @@ class AlarmCard extends ConsumerWidget {
           ),
         ),
       );
+  }
+}
+
+/// "11:00 PM → 7:00 AM" con la hora del despertar destacada: es la única de
+/// las dos que suena.
+class _SleepRange extends StatelessWidget {
+  final AlarmModel alarm;
+
+  const _SleepRange({required this.alarm});
+
+  @override
+  Widget build(BuildContext context) {
+    final on = alarm.enabled;
+    final dim = BentoTheme.creamAlpha(on ? 0.5 : 0.28);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            '${alarm.bedtime12} ${alarm.bedtimeAmPm}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.montserrat(
+              fontSize: 19,
+              height: 1.1,
+              fontWeight: FontWeight.w700,
+              color: dim,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Icon(Icons.arrow_forward, size: 13, color: dim),
+        ),
+        Flexible(
+          child: Text(
+            '${alarm.time12} ${alarm.amPm}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.montserrat(
+              fontSize: 26,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              color: on ? BentoTheme.cream : BentoTheme.creamAlpha(0.35),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

@@ -110,6 +110,16 @@ create policy "Usuarios pueden crear sus propios logs de hábitos"
   to authenticated
   with check ((select auth.uid()) = user_id);
 
+-- Imprescindible: los checks se guardan con upsert (onConflict habit_id,completed_on).
+-- Sin política de UPDATE, volver a marcar un día que ya tenía fila (progreso
+-- parcial, o re-marcar un día antiguo) se rechaza con 42501 y el check se
+-- pierde al recargar desde el servidor.
+create policy "Usuarios pueden actualizar sus propios logs de hábitos"
+  on public.habit_logs for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
 create policy "Usuarios pueden eliminar sus propios logs de hábitos"
   on public.habit_logs for delete
   to authenticated

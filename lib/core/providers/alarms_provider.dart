@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/alarm_model.dart';
 import '../services/alarm_service.dart';
 import '../services/cache_service.dart';
+import 'sleep_provider.dart';
 
 /// Almacenamiento 100% local de las alarmas.
 ///
@@ -52,7 +53,41 @@ class AlarmsNotifier extends AsyncNotifier<List<AlarmModel>> {
     return '${DateTime.now().microsecondsSinceEpoch}-$rnd';
   }
 
-  Future<void> addAlarm(AlarmModel alarm) async {
+  /// Mantiene el horario de sueño alineado con la alarma que lo representa.
+  ///
+  /// Vive aquí y no en cada pantalla porque la alarma de sueño se toca desde
+  /// varios sitios —el interruptor de la tarjeta, el deslizar para borrar, el
+  /// formulario— y olvidarlo en uno solo dejaría los avisos de "hora de dormir"
+  /// sonando para una alarma ya apagada.
+  void _syncSleepSchedule() {
+    final current = _current;
+    AlarmModel? sleepAlarm;
+    for (final alarm in current) {
+      if (alarm.isSleepAlarm) {
+        sleepAlarm = alarm;
+        break;
+      }
+    }
+    unawaited(ref.read(sleepProvider.notifier).syncFromAlarm(sleepAlarm));
+  }
+
+  /// Solo puede haber un horario de sueño: degrada a alarma normal cualquier
+  /// otra que lo fuera. Dos horarios peleando por la misma noche darían dos
+  /// avisos de "hora de dormir" y un registro imposible de interpretar.
+  List<AlarmModel> _demoteOtherSleepAlarms(
+    List<AlarmModel> list,
+    String keepId,
+  ) {
+    return [
+      for (final alarm in list)
+        if (alarm.id != keepId && alarm.isSleepAlarm)
+          alarm.copyWith(clearBedtime: true)
+        else
+          alarm,
+    ];
+  }
+
+  Future<AlarmModel> addAlarm(AlarmModel alarm) async {
     final newAlarm = AlarmModel(
       id: _newId(),
       userId: alarm.userId,
@@ -63,21 +98,32 @@ class AlarmsNotifier extends AsyncNotifier<List<AlarmModel>> {
       label: alarm.label,
       daysOfWeek: alarm.daysOfWeek,
       createdAt: DateTime.now(),
+      bedtimeHour: alarm.bedtimeHour,
+      bedtimeMinute: alarm.bedtimeMinute,
     );
 
-    final list = [..._current, newAlarm];
+    var list = [..._current, newAlarm];
+    if (newAlarm.isSleepAlarm) {
+      list = _demoteOtherSleepAlarms(list, newAlarm.id);
+    }
     await _persist(list);
     state = AsyncData(list);
     unawaited(AlarmService.scheduleAlarm(newAlarm));
+    _syncSleepSchedule();
+    return newAlarm;
   }
 
   Future<void> updateAlarm(AlarmModel alarm) async {
-    final list = [..._current];
+    var list = [..._current];
     final idx = list.indexWhere((a) => a.id == alarm.id);
     if (idx != -1) list[idx] = alarm;
+    if (alarm.isSleepAlarm) {
+      list = _demoteOtherSleepAlarms(list, alarm.id);
+    }
     await _persist(list);
     state = AsyncData(list);
     unawaited(AlarmService.scheduleAlarm(alarm));
+    _syncSleepSchedule();
   }
 
   /// Actualiza el switch al instante (optimistic) y persiste en segundo plano;
@@ -94,6 +140,7 @@ class AlarmsNotifier extends AsyncNotifier<List<AlarmModel>> {
     try {
       await _persist(optimisticList);
       unawaited(AlarmService.scheduleAlarm(updated));
+      if (updated.isSleepAlarm) _syncSleepSchedule();
     } catch (e) {
       state = AsyncData(previous);
       rethrow;
@@ -108,6 +155,7 @@ class AlarmsNotifier extends AsyncNotifier<List<AlarmModel>> {
     try {
       await _persist(next);
       unawaited(AlarmService.cancelAlarm(id));
+      _syncSleepSchedule();
     } catch (e) {
       state = AsyncData(previous);
       rethrow;
@@ -117,3 +165,13 @@ class AlarmsNotifier extends AsyncNotifier<List<AlarmModel>> {
 
 final alarmsProvider =
     AsyncNotifierProvider<AlarmsNotifier, List<AlarmModel>>(AlarmsNotifier.new);
+
+/// El horario de sueño vigente, si lo hay. Es la alarma que la pestaña de
+/// sueño trata como "mi horario", y la que sabe a qué hora toca acostarse.
+final sleepAlarmProvider = Provider<AlarmModel?>((ref) {
+  final alarms = ref.watch(alarmsProvider).value ?? const <AlarmModel>[];
+  for (final alarm in alarms) {
+    if (alarm.isSleepAlarm) return alarm;
+  }
+  return null;
+});

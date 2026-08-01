@@ -206,7 +206,7 @@ class NotesNotifier extends Notifier<List<Note>> {
         ...draft.toInsertJson(client.auth.currentUser!.id, validUuids),
       };
 
-      final confirmed = await syncedWrite(
+      final outcome = await syncedWrite(
         write: () => client.from('notes').insert(payload),
         fallback: () => OutboxOp.create(
           table: 'notes',
@@ -219,7 +219,7 @@ class NotesNotifier extends Notifier<List<Note>> {
       // El embedding necesita Ollama, así que sin red se queda pendiente. No
       // hace falta encolarlo: `_backfillEmbeddings` recorre en cada carga las
       // notas que aún no tienen vector y las rellena.
-      if (confirmed) unawaited(_embedNote(saved.id, title, content));
+      if (outcome.isConfirmed) unawaited(_embedNote(saved.id, title, content));
     }
 
     state = _sorted([saved, ...state]);
@@ -294,7 +294,7 @@ class NotesNotifier extends Notifier<List<Note>> {
       'vault_id': clearVaultId ? null : (vaultId ?? updatedNote.vaultId),
     };
 
-    final confirmed = await syncedWrite(
+    final outcome = await syncedWrite(
       write: () => Supabase.instance.client.from('notes').update(payload).eq('id', id),
       fallback: () => OutboxOp.create(
         table: 'notes',
@@ -305,7 +305,7 @@ class NotesNotifier extends Notifier<List<Note>> {
     );
 
     // Reembeber: el contenido pudo haber cambiado.
-    if (confirmed) unawaited(_embedNote(id, title, content));
+    if (outcome.isConfirmed) unawaited(_embedNote(id, title, content));
   }
 
   Future<void> deleteNote(String id) async {

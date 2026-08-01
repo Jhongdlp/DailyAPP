@@ -8,6 +8,8 @@ import '../pomodoro/widgets/tomato_button.dart';
 import 'alarm_card.dart';
 import 'alarm_form.dart';
 import 'notification_diagnostics_sheet.dart';
+import 'sleep/sleep_action_button.dart';
+import 'sleep/sleep_alarm_form.dart';
 import 'sleep/sleep_summary_card.dart';
 
 class AlarmTab extends ConsumerWidget {
@@ -77,10 +79,7 @@ class AlarmTab extends ConsumerWidget {
                 child: TomatoButton(size: 26),
               ),
               GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AlarmForm()),
-                ),
+                onTap: () => _pickNewAlarmKind(context, ref),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
                   decoration: BoxDecoration(color: BentoTheme.accentAlarm, borderRadius: BorderRadius.circular(100)),
@@ -104,6 +103,67 @@ class AlarmTab extends ConsumerWidget {
     );
   }
 
+  /// Al crear hay que elegir entre las dos cosas que "Nueva" puede significar.
+  /// Sin este paso, el horario de sueño solo se podría crear desde su panel y
+  /// quedaría escondido para quien vive en esta pestaña.
+  void _pickNewAlarmKind(BuildContext context, WidgetRef ref) {
+    final hasSleepAlarm = ref.read(sleepAlarmProvider) != null;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        decoration: BoxDecoration(
+          color: BentoTheme.darkCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: BentoTheme.creamAlpha(0.18),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _NewAlarmOption(
+              icon: Icons.alarm,
+              title: 'Alarma',
+              subtitle: 'Suena a una hora y se apaga con una foto.',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AlarmForm()),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            _NewAlarmOption(
+              icon: Icons.bedtime_outlined,
+              title: 'Horario de sueño',
+              subtitle: hasSleepAlarm
+                  ? 'Ya tienes uno: se abrirá para editarlo.'
+                  : 'De la hora de dormir a la de despertar. Solo suena por '
+                      'la mañana y registra cuánto duermes.',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                SleepAlarmForm.open(context, alarm: ref.read(sleepAlarmProvider));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final alarmsAsync = ref.watch(alarmsProvider);
@@ -118,6 +178,10 @@ class AlarmTab extends ConsumerWidget {
           // la de despertar son los dos extremos del mismo ciclo, y la alarma
           // ya es el único punto donde el usuario piensa en él.
           const SleepSummaryCard(),
+          // Justo debajo de la tarjeta: "Voy a dormir" cuando se acerca la hora
+          // y "Ya desperté" mientras haya una noche abierta. Es la vía que no
+          // depende de que la notificación siga en la bandeja.
+          const SleepActionButton(),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -197,12 +261,14 @@ class AlarmTab extends ConsumerWidget {
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (ctx, i) => AlarmCard(
                           alarm: alarms[i],
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AlarmForm(alarm: alarms[i]),
-                            ),
-                          ),
+                          onTap: () => alarms[i].isSleepAlarm
+                              ? SleepAlarmForm.open(context, alarm: alarms[i])
+                              : Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AlarmForm(alarm: alarms[i]),
+                                  ),
+                                ),
                         ),
                       );
                     },
@@ -212,6 +278,68 @@ class AlarmTab extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Una de las dos cosas que puede crear el botón "Nueva".
+class _NewAlarmOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _NewAlarmOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BentoTheme.darkCardAlt,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Icon(icon, size: 24, color: BentoTheme.accentAlarm),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.montserrat(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: BentoTheme.cream,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.montserrat(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: BentoTheme.creamAlpha(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  size: 18, color: BentoTheme.creamAlpha(0.35)),
+            ],
+          ),
+        ),
       ),
     );
   }

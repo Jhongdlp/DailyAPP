@@ -184,7 +184,7 @@ class TasksNotifier extends Notifier<List<Task>> {
     final user = client.auth.currentUser!;
     final payload = {'id': localTask.id, ...localTask.toInsertJson(user.id)};
 
-    final confirmed = await syncedWrite(
+    final outcome = await syncedWrite(
       write: () => client.from('tasks').insert(payload),
       fallback: () => OutboxOp.create(
         table: 'tasks',
@@ -194,13 +194,22 @@ class TasksNotifier extends Notifier<List<Task>> {
       ),
     );
 
-    if (!confirmed) lastSyncError = _queuedMessage;
+    if (outcome.isRejected) {
+      lastSyncError = _rejectedMessage;
+    } else if (!outcome.isConfirmed) {
+      lastSyncError = _queuedMessage;
+    }
   }
 
   /// Lo que se le dice al usuario cuando la escritura se quedó en el outbox. Ya
   /// no es una advertencia de pérdida: el cambio está a salvo y se subirá solo.
   static const _queuedMessage =
       'Sin conexión: el cambio se guardó y se sincronizará solo.';
+
+  /// Un rechazo del servidor sí es una pérdida: no hay reintento detrás, así
+  /// que hay que decirlo en vez de dejar la UI mostrando algo que no se guardó.
+  static const _rejectedMessage =
+      'El servidor rechazó el cambio. Vuelve a intentarlo.';
 
   /// Clona en [to] todos los bloques de [from], conservando horas y duración.
   ///
@@ -279,7 +288,7 @@ class TasksNotifier extends Notifier<List<Task>> {
     if (!canWriteToSupabase) return;
 
     final payload = updated.toUpdateJson();
-    final confirmed = await syncedWrite(
+    final outcome = await syncedWrite(
       write: () =>
           Supabase.instance.client.from('tasks').update(payload).eq('id', updated.id),
       fallback: () => OutboxOp.create(
@@ -290,7 +299,11 @@ class TasksNotifier extends Notifier<List<Task>> {
       ),
     );
 
-    if (!confirmed) lastSyncError = _queuedMessage;
+    if (outcome.isRejected) {
+      lastSyncError = _rejectedMessage;
+    } else if (!outcome.isConfirmed) {
+      lastSyncError = _queuedMessage;
+    }
   }
 
   Future<void> toggleComplete(String taskId) async {

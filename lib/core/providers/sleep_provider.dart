@@ -78,6 +78,32 @@ class SleepNotifier extends Notifier<SleepData> {
     await SleepService.reschedule(schedule);
   }
 
+  /// Alinea el horario con la alarma de sueño, que es quien manda sobre la hora
+  /// de acostarse y los días.
+  ///
+  /// La alarma es lo que el usuario ve y edita; el [SleepSchedule] guarda lo
+  /// que no cabe en una alarma (meta, avisos, verificación de vigilia). Tener
+  /// dos fuentes para la misma hora sería garantía de que se desincronizan.
+  Future<void> syncFromAlarm(AlarmModel? alarm) async {
+    await _ensureLoaded();
+    if (alarm == null || !alarm.isSleepAlarm) {
+      if (!state.schedule.enabled) return;
+      final off = state.schedule.copyWith(enabled: false);
+      _write(state.copyWith(schedule: off));
+      await SleepService.reschedule(off);
+      return;
+    }
+
+    final next = state.schedule.copyWith(
+      enabled: alarm.enabled,
+      bedtimeHour: alarm.bedtimeHour,
+      bedtimeMinute: alarm.bedtimeMinute,
+      daysOfWeek: alarm.daysOfWeek,
+    );
+    _write(state.copyWith(schedule: next));
+    await SleepService.reschedule(next);
+  }
+
   // ── Registro del ciclo ─────────────────────────────────────────────────
 
   /// Marca el inicio del ciclo de sueño. Idempotente: tocar la notificación,

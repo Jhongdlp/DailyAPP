@@ -172,7 +172,7 @@ class DayPlansNotifier extends Notifier<List<DayPlan>> {
     final user = client.auth.currentUser!;
     final payload = {'id': merged.id, ...merged.toUpsertJson(user.id)};
 
-    final confirmed = await syncedWrite(
+    final outcome = await syncedWrite(
       write: () =>
           client.from('day_plans').upsert(payload, onConflict: 'user_id,plan_date'),
       fallback: () => OutboxOp.create(
@@ -186,7 +186,9 @@ class DayPlansNotifier extends Notifier<List<DayPlan>> {
       ),
     );
 
-    if (!confirmed) {
+    if (outcome.isRejected) {
+      lastSyncError = 'El servidor rechazó el plan. Vuelve a intentarlo.';
+    } else if (!outcome.isConfirmed) {
       lastSyncError = 'Sin conexión: el plan se guardó y se sincronizará solo.';
     }
     return merged;

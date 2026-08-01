@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/sleep_model.dart';
+import '../../../core/providers/alarms_provider.dart';
 import '../../../core/providers/sleep_provider.dart';
 import '../../../core/theme/bento_theme.dart';
-import 'sleep_schedule_form.dart';
+import 'sleep_action_button.dart';
+import 'sleep_alarm_form.dart';
 import 'widgets/consistency_chart.dart';
 import 'widgets/duration_quality_scatter.dart';
 import 'widgets/sleep_chart_shell.dart';
@@ -51,9 +53,9 @@ class SleepDashboardScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Horario de sueño',
             icon: Icon(Icons.tune, color: BentoTheme.cream),
-            onPressed: () => Navigator.push(
+            onPressed: () => SleepAlarmForm.open(
               context,
-              MaterialPageRoute(builder: (_) => const SleepScheduleForm()),
+              alarm: ref.read(sleepAlarmProvider),
             ),
           ),
         ],
@@ -61,6 +63,10 @@ class SleepDashboardScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(top: 8, bottom: 40),
         children: [
+          // Arriba del todo y siempre visible: aquí es donde alguien entra
+          // cuando quiere acostarse antes de su hora, sin esperar al aviso.
+          const SleepActionButton(alwaysVisible: true),
+          const SizedBox(height: 12),
           _TonightBanner(data: data),
           SleepKpiRow(analytics: analytics),
           SleepWindowChart(analytics: analytics, nights: nights),
