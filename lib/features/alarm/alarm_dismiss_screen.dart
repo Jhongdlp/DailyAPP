@@ -133,9 +133,12 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
 
         // Cierra la noche en el registro de sueño: el par lightsOut → wokeAt es
         // lo que da duración, eficiencia y minutos de snooze.
-        final session = await ref
-            .read(sleepProvider.notifier)
-            .registerWake(dismissAttempts: _attempts);
+        // Pasar el alarmId arranca la verificación de vigilia: sin él, apagar
+        // la alarma cerraría la mañana y volverse a la cama saldría gratis.
+        final session = await ref.read(sleepProvider.notifier).registerWake(
+              alarmId: _alarm!.id,
+              dismissAttempts: _attempts,
+            );
 
         // Otorgar recompensa RPG por levantarse a tiempo.
         // Madrugar (antes de las 8am) da bonus y cuenta para el logro Alondra.

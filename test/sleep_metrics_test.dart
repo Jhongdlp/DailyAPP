@@ -121,6 +121,82 @@ void main() {
     });
   });
 
+  group('volver a dormirse', () {
+    test('la duración se mide hasta el despertar real, no hasta la alarma', () {
+      // Alarma apagada a las 07:00, levantado de verdad a las 08:30.
+      final s = night(day).copyWith(
+        finalWakeAt: DateTime(day.year, day.month, day.day, 8, 30),
+      );
+      expect(s.wentBackToSleep, isTrue);
+      expect(s.backToSleepMinutes, 90);
+      expect(s.timeInBed, const Duration(hours: 9, minutes: 30));
+      // 570 en cama menos los 8 min del corte que supone volver a dormirse.
+      expect(s.sleepMinutes, 570 - minutesPerAwakening);
+    });
+
+    test('el corte cuenta como un despertar más, sumado a los reportados', () {
+      final plain = night(day, awakenings: 1);
+      final broken = night(day, awakenings: 1).copyWith(
+        finalWakeAt: DateTime(day.year, day.month, day.day, 7, 30),
+      );
+      // Media hora más en cama, pero un despertar extra que descontar.
+      expect(broken.sleepMinutes, plain.sleepMinutes! + 30 - minutesPerAwakening);
+    });
+
+    test('el snooze sigue midiéndose contra el primer despertar', () {
+      final s = night(day, alarmHour: 6, alarmMinute: 30).copyWith(
+        finalWakeAt: DateTime(day.year, day.month, day.day, 9),
+      );
+      // No son las 2h30 hasta levantarse de verdad: el snooze es la reacción
+      // a la alarma, no lo que pasó después.
+      expect(s.snoozeMinutes, 30);
+    });
+
+    test('sin finalWakeAt nada cambia', () {
+      final s = night(day);
+      expect(s.wentBackToSleep, isFalse);
+      expect(s.backToSleepMinutes, isNull);
+      expect(s.effectiveWakeAt, s.wokeAt);
+    });
+
+    test('clearFinalWake deshace la anotación', () {
+      final s = night(day).copyWith(
+        finalWakeAt: DateTime(day.year, day.month, day.day, 8, 30),
+      );
+      expect(s.copyWith(clearFinalWake: true).wentBackToSleep, isFalse);
+    });
+
+    test('round-trip de JSON conserva el despertar real', () {
+      final original = night(day).copyWith(
+        finalWakeAt: DateTime(day.year, day.month, day.day, 8, 30),
+        wakeChecksPassed: 3,
+      );
+      final copy = SleepSession.fromJson(original.toJson());
+      expect(copy.finalWakeAt, original.finalWakeAt);
+      expect(copy.wakeChecksPassed, 3);
+      expect(copy.sleepMinutes, original.sleepMinutes);
+    });
+  });
+
+  group('PendingWakeCheck', () {
+    test('round-trip de JSON', () {
+      final original = PendingWakeCheck(
+        alarmId: 'abc-123',
+        nativeId: 4242,
+        nightKey: sleepDayKey(day),
+        dueAt: DateTime(2026, 7, 20, 7, 10),
+        wokeAt: DateTime(2026, 7, 20, 7),
+        round: 2,
+      );
+      final copy = PendingWakeCheck.fromJson(original.toJson());
+      expect(copy.alarmId, 'abc-123');
+      expect(copy.nativeId, 4242);
+      expect(copy.dueAt, original.dueAt);
+      expect(copy.wokeAt, original.wokeAt);
+      expect(copy.round, 2);
+    });
+  });
+
   group('SleepAnalytics', () {
     SleepAnalytics analytics(List<SleepSession> nights, {int goal = 480}) =>
         SleepAnalytics(nights: nights, goalMinutes: goal);

@@ -124,6 +124,16 @@ class SleepSummaryCard extends ConsumerWidget {
   }
 
   String _statusText(SleepData data, SleepAnalytics analytics) {
+    // La vigilancia manda sobre todo lo demás: si hay una comprobación en pie,
+    // el estado del usuario es "acabo de levantarme y aún no está claro".
+    final check = data.wakeCheck;
+    if (check != null) {
+      final mins = check.dueAt.difference(DateTime.now()).inMinutes;
+      return mins > 0
+          ? 'Comprobación de vigilia en $mins min'
+          : 'Comprobación de vigilia en marcha';
+    }
+
     final open = data.openNight;
     if (open?.lightsOutAt != null) {
       final at = open!.lightsOutAt!;

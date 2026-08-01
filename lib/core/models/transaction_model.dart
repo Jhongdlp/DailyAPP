@@ -134,6 +134,26 @@ class TransactionModel {
         'occurred_at': DateFormat('yyyy-MM-dd').format(occurredAt),
       };
 
+  /// Rellena los campos que antes ponía Supabase al insertar, para que el
+  /// movimiento sea una fila completa desde que se crea (ver [AccountModel]).
+  TransactionModel withIdentity({
+    required String id,
+    required String userId,
+    required DateTime createdAt,
+  }) =>
+      TransactionModel(
+        id: id,
+        userId: userId,
+        accountId: accountId,
+        transferAccountId: transferAccountId,
+        type: type,
+        amount: amount,
+        category: category,
+        description: description,
+        occurredAt: occurredAt,
+        createdAt: createdAt,
+      );
+
   FinanceCategory get categoryInfo => FinanceCategories.byId(category);
 
   /// Monto con signo: positivo para ingresos, negativo para gastos.

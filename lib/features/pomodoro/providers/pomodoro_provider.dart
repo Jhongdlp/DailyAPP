@@ -219,7 +219,13 @@ class PomodoroState {
 
 class PomodoroNotifier extends Notifier<PomodoroState> {
   static const _prefsCacheKey = 'pomodoro_prefs';
-  static const _notificationId = 500000;
+
+  /// Bloque 700000–799999. Estaba en 500000, el mismo id exacto que
+  /// `NightPlanningService`: como los servicios cancelan **recalculando** ids y
+  /// no leyendo la cola, cada aviso nocturno programado borraba la notificación
+  /// de fin de pomodoro y viceversa. Este es el siguiente bloque libre tras
+  /// `WeeklyReviewService` (600000–699999).
+  static const _notificationId = 700000;
 
   Timer? _timer;
   Timer? _carouselTimer;

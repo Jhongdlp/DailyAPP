@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sistem_daily/features/pomodoro/pomodoro_screen.dart';
 import 'package:sistem_daily/features/pomodoro/providers/pomodoro_provider.dart';
+import 'package:sistem_daily/features/pomodoro/widgets/break_panels.dart';
+import 'package:sistem_daily/features/pomodoro/widgets/focus_dial.dart';
 
 /// El pomodoro no toca Supabase para pintarse (las estadísticas y las tareas
 /// caen a vacío sin credenciales), así que la pantalla sí se puede montar de
@@ -68,9 +70,37 @@ void main() {
           // saliera de la pantalla, esto dejaría de ser null.
           expect(tester.takeException(), isNull);
           expect(find.byType(PomodoroScreen), findsOneWidget);
+
+          // Y la promesa fuerte: la estructura entra entera, sin deslizar. Un
+          // panel puede tener scroll propio (la agenda es una lista), pero el
+          // esqueleto —reloj, controles, tira del día— no puede estar dentro
+          // de uno: era exactamente el síntoma reportado en horizontal.
+          for (final anchor in [
+            find.byType(FocusDial),
+            find.byType(BreakPanelTabs),
+          ]) {
+            if (anchor.evaluate().isEmpty) continue;
+            expect(
+              find.ancestor(
+                of: anchor,
+                matching: find.byType(SingleChildScrollView),
+              ),
+              findsNothing,
+              reason: 'la pantalla no debe necesitar scroll para caber',
+            );
+          }
         });
       }
     }
+
+    testWidgets('en horizontal el reloj sigue siendo grande, no un residuo',
+        (tester) async {
+      await pumpAt(tester, const Size(844, 390), onBreak: false);
+      // Ceder el sitio sobrante no puede degenerar en un dial diminuto: si
+      // esto baja, es que el resto de la columna ha engordado de más.
+      expect(tester.getSize(find.byType(FocusDial)).width,
+          greaterThanOrEqualTo(200));
+    });
 
     for (final onBreak in [false, true]) {
       testWidgets(

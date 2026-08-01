@@ -12,6 +12,7 @@ import '../reading/reading_tab.dart';
 import '../reading/shared_books_handler.dart';
 import '../agenda/agenda_tab.dart';
 import '../news/news_tab.dart';
+import '../analytics/analytics_tab.dart';
 import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../settings/personalize_screen.dart';
@@ -24,6 +25,7 @@ import '../../core/providers/books_provider.dart';
 import '../../core/providers/book_bookmarks_provider.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/widgets/lazy_indexed_stack.dart';
+import '../../core/widgets/sync_indicator.dart';
 import '../update/update_checker.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -47,6 +49,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     const AgendaTab(),
     const ReadingTab(),
     const NewsTab(),
+    const AnalyticsTab(),
   ];
 
   SharedBooksHandler? _sharedBooks;
@@ -99,6 +102,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: LazyIndexedStack(
                   index: _currentIndex,
                   children: _tabs,
+                ),
+              ),
+            ),
+
+            // Aviso de sincronización pendiente. Va en el stack y no dentro de
+            // cada tab porque la cola es de toda la app: da igual en qué
+            // pantalla estés cuando se cae la red.
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SyncIndicator(),
                 ),
               ),
             ),

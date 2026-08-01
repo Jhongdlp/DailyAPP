@@ -14,7 +14,8 @@ enum AppDestination {
   chat('Copiloto', Icons.chat_bubble_outline),
   agenda('Agenda', Icons.view_timeline_outlined),
   reading('Biblioteca', Icons.auto_stories_outlined),
-  news('Noticias', Icons.newspaper_outlined);
+  news('Noticias', Icons.newspaper_outlined),
+  analytics('Analíticas', Icons.insights_outlined);
 
   const AppDestination(this.label, this.icon);
 
@@ -35,6 +36,7 @@ enum AppDestination {
         AppDestination.agenda => BentoTheme.accentLime,
         AppDestination.reading => BentoTheme.accentPurple,
         AppDestination.news => BentoTheme.accentBrain,
+        AppDestination.analytics => BentoTheme.accentBlue,
       };
 
   static AppDestination? byName(String name) {

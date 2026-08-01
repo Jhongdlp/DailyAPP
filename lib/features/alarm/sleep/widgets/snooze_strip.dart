@@ -32,6 +32,9 @@ class SnoozeStrip extends StatelessWidget {
       (max, n) => (n.snoozeMinutes ?? 0) > max ? n.snoozeMinutes! : max,
     );
 
+    final backToSleep = analytics.backToSleepRate;
+    final backToSleepMinutes = analytics.avgBackToSleepMinutes;
+
     return SleepChartShell(
       title: 'CUÁNTO TARDAS EN LEVANTARTE',
       subtitle: 'Minutos entre que suena la alarma y que validas la foto.',
@@ -89,6 +92,21 @@ class SnoozeStrip extends StatelessWidget {
                 ),
             ],
           ),
+          // Apagar la alarma no es levantarse: esta línea es la que separa el
+          // dato honesto del que te gustaría creer.
+          if (backToSleep != null && backToSleep > 0) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Te volviste a dormir en el ${(backToSleep * 100).round()} % de '
+              'las mañanas'
+              '${backToSleepMinutes == null ? '' : ', ${backToSleepMinutes.round()} min de media'}.',
+              style: GoogleFonts.montserrat(
+                fontSize: 11,
+                height: 1.4,
+                color: BentoTheme.creamAlpha(0.6),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -8,12 +8,14 @@ import '../../../core/theme/bento_theme.dart';
 import '../pomodoro_palette.dart';
 import '../providers/pomodoro_provider.dart';
 
-/// El reloj de la sesión: plato neumórfico hundido, corona de marcas de minuto
-/// que se van encendiendo y arco de progreso con halo.
+/// El reloj de la sesión: un aro fino y la hora. Nada más.
 ///
-/// Es el único widget que se reconstruye cada segundo — por eso escucha solo
-/// los campos del tic y no el estado entero, y por eso el resto de la pantalla
-/// puede permitirse sombras caras sin repintarlas 60 veces por minuto.
+/// Deliberadamente austero — sin plato, sin corona de marcas, sin halo. Lo que
+/// se mira durante 25 minutos seguidos no debería tener nada que mirar: cuanto
+/// menos dibujo, menos engancha la vista y más se queda en el trabajo.
+///
+/// Es el único widget que se reconstruye cada segundo, por eso escucha solo los
+/// campos del tic y no el estado entero.
 class FocusDial extends ConsumerWidget {
   final double size;
 
@@ -33,10 +35,10 @@ class FocusDial extends ConsumerWidget {
     final minutes = (tick.timeLeft ~/ 60).toString().padLeft(2, '0');
     final seconds = (tick.timeLeft % 60).toString().padLeft(2, '0');
 
-    // Todo el interior escala con el diámetro: así el mismo dial sirve para un
+    // Todo el interior sale del diámetro, así que el mismo dial sirve para un
     // móvil en horizontal y para una tablet sin ajustes por caso.
-    final timeFont = size * 0.235;
-    final hintFont = (size * 0.055).clamp(9.0, 13.0);
+    final timeFont = size * 0.26;
+    final hintFont = (size * 0.052).clamp(8.5, 12.0).toDouble();
 
     return Semantics(
       label: '${tick.phase.label}, quedan $minutes minutos $seconds segundos',
@@ -49,15 +51,6 @@ class FocusDial extends ConsumerWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Plato hundido: el tiempo ocurre DENTRO de la superficie.
-              Positioned.fill(
-                child: NeuPressed(
-                  borderRadius: size / 2,
-                  distance: size * 0.02,
-                  blur: size * 0.05,
-                  child: const SizedBox.shrink(),
-                ),
-              ),
               Positioned.fill(
                 child: IgnorePointer(
                   child: CustomPaint(
@@ -65,48 +58,55 @@ class FocusDial extends ConsumerWidget {
                       progress: tick.progress,
                       color: color,
                       running: tick.isActive,
-                      trackColor: BentoTheme.neuShadowDark.withValues(alpha: 0.35),
-                      tickColor: BentoTheme.creamAlpha(0.14),
+                      trackColor: BentoTheme.creamAlpha(0.09),
                     ),
                   ),
                 ),
               ),
-              // El reloj es un elemento gráfico: su tamaño ya sale del diámetro
-              // del plato, así que el escalado de fuente del sistema aquí solo
-              // conseguiría reventar el círculo. Los dígitos son, de lejos, el
-              // texto más grande de la pantalla.
+              // El reloj es un elemento gráfico: su tamaño ya sale del aro, así
+              // que el escalado de fuente del sistema aquí solo conseguiría
+              // reventar el círculo. Los dígitos son, de lejos, el texto más
+              // grande de la pantalla.
               MediaQuery.withNoTextScaling(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$minutes:$seconds',
-                      style: GoogleFonts.shareTechMono(
-                        fontSize: timeFont,
-                        height: 1.0,
-                        color: BentoTheme.cream,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -1.0,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: size * 0.14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Por si una fuente sustituta midiera más de lo previsto:
+                      // encoge antes que desbordar.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '$minutes:$seconds',
+                          style: GoogleFonts.shareTechMono(
+                            fontSize: timeFont,
+                            height: 1.0,
+                            color: BentoTheme.creamAlpha(0.92),
+                            letterSpacing: -1.0,
+                          ),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: size * 0.045),
-                    // Saber a qué hora acaba quita la necesidad de volver a
-                    // mirar: el bloque deja de ser una cuenta atrás y pasa a
-                    // ser una cita.
-                    Text(
-                      tick.isActive && tick.endsAt != null
-                          ? 'termina ${formatClock(tick.endsAt!)}'
-                          : 'en pausa',
-                      style: GoogleFonts.montserrat(
-                        fontSize: hintFont,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
-                        color: tick.isActive
-                            ? BentoTheme.creamAlpha(0.38)
-                            : color.withValues(alpha: 0.8),
+                      SizedBox(height: size * 0.05),
+                      // Saber a qué hora acaba quita la necesidad de volver a
+                      // mirar: el bloque deja de ser una cuenta atrás y pasa a
+                      // ser una cita.
+                      Text(
+                        tick.isActive && tick.endsAt != null
+                            ? formatClock(tick.endsAt!)
+                            : 'en pausa',
+                        maxLines: 1,
+                        style: GoogleFonts.montserrat(
+                          fontSize: hintFont,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 2.0,
+                          color: tick.isActive
+                              ? BentoTheme.creamAlpha(0.3)
+                              : color.withValues(alpha: 0.75),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -117,115 +117,54 @@ class FocusDial extends ConsumerWidget {
   }
 }
 
+/// Dos círculos: el carril y lo recorrido. El arco avanza en vez de vaciarse
+/// porque ver crecer lo hecho sostiene mejor que ver menguar lo que queda.
 class _DialPainter extends CustomPainter {
   final double progress;
   final Color color;
   final bool running;
   final Color trackColor;
-  final Color tickColor;
 
   _DialPainter({
     required this.progress,
     required this.color,
     required this.running,
     required this.trackColor,
-    required this.tickColor,
   });
-
-  static const int _tickCount = 60;
 
   @override
   void paint(Canvas canvas, Size size) {
     final radius = size.width / 2;
     final center = Offset(radius, size.height / 2);
 
-    final strokeWidth = (size.width * 0.028).clamp(3.0, 7.0);
-    final arcRadius = radius - strokeWidth * 1.6;
-    final rect = Rect.fromCircle(center: center, radius: arcRadius);
+    // Un aro fino a secas: engorda un poco en pantallas grandes para no
+    // desaparecer, pero nunca llega a ser una barra.
+    final stroke = (size.width * 0.014).clamp(2.0, 4.0).toDouble();
+    final arcRadius = radius - stroke;
 
-    // Corona de marcas: da lectura analógica del avance sin tener que
-    // interpretar el arco, y le pone cara de instrumento al plato.
-    final tickOuter = arcRadius - strokeWidth * 1.6;
-    final tickInner = tickOuter - size.width * 0.035;
-    final passed = (progress * _tickCount).floor();
-
-    for (var i = 0; i < _tickCount; i++) {
-      final angle = -math.pi / 2 + (2 * math.pi * i / _tickCount);
-      final isMajor = i % 5 == 0;
-      final lit = i < passed;
-
-      final paint = Paint()
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = isMajor ? 2.2 : 1.2
-        ..color = lit
-            ? color.withValues(alpha: isMajor ? 0.75 : 0.45)
-            : (isMajor ? tickColor.withValues(alpha: 0.9) : tickColor);
-
-      final from = tickInner + (isMajor ? 0 : size.width * 0.012);
-      canvas.drawLine(
-        center + Offset(math.cos(angle) * from, math.sin(angle) * from),
-        center + Offset(math.cos(angle) * tickOuter, math.sin(angle) * tickOuter),
-        paint,
-      );
-    }
-
-    // Carril del arco
     canvas.drawCircle(
       center,
       arcRadius,
       Paint()
         ..color = trackColor
-        ..strokeWidth = strokeWidth
+        ..strokeWidth = stroke
         ..style = PaintingStyle.stroke,
     );
 
     if (progress <= 0) return;
 
-    final sweep = 2 * math.pi * progress;
-
-    // Halo. En pausa se apaga: la pantalla deja de "respirar" y se nota que el
-    // reloj está parado incluso de reojo.
-    if (running) {
-      canvas.drawArc(
-        rect,
-        -math.pi / 2,
-        sweep,
-        false,
-        Paint()
-          ..color = color.withValues(alpha: 0.28)
-          ..strokeWidth = strokeWidth * 2.4
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, strokeWidth),
-      );
-    }
-
     canvas.drawArc(
-      rect,
+      Rect.fromCircle(center: center, radius: arcRadius),
       -math.pi / 2,
-      sweep,
+      2 * math.pi * progress,
       false,
       Paint()
-        ..color = running ? color : color.withValues(alpha: 0.5)
-        ..strokeWidth = strokeWidth
+        // En pausa el aro se apaga a medias: se nota que el reloj está parado
+        // sin necesidad de leer nada.
+        ..color = running ? color : color.withValues(alpha: 0.4)
+        ..strokeWidth = stroke
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round,
-    );
-
-    // Cabeza del arco: el punto que avanza es lo que hace el progreso legible
-    // en un vistazo de medio segundo.
-    final headAngle = -math.pi / 2 + sweep;
-    final head = center +
-        Offset(math.cos(headAngle) * arcRadius, math.sin(headAngle) * arcRadius);
-    canvas.drawCircle(
-      head,
-      strokeWidth * 0.95,
-      Paint()..color = running ? color : color.withValues(alpha: 0.5),
-    );
-    canvas.drawCircle(
-      head,
-      strokeWidth * 0.42,
-      Paint()..color = Colors.white.withValues(alpha: running ? 0.9 : 0.4),
     );
   }
 
@@ -234,6 +173,5 @@ class _DialPainter extends CustomPainter {
       old.progress != progress ||
       old.color != color ||
       old.running != running ||
-      old.trackColor != trackColor ||
-      old.tickColor != tickColor;
+      old.trackColor != trackColor;
 }

@@ -5,6 +5,8 @@ import '../models/note_model.dart';
 import '../network/local_ai_client.dart';
 import '../services/note_reminder_service.dart';
 import '../services/cache_service.dart';
+import '../services/outbox_service.dart';
+import '../services/synced_write.dart';
 import 'settings_provider.dart';
 
 final _uuidRegex = RegExp(
@@ -66,8 +68,14 @@ class NotesNotifier extends Notifier<List<Note>> {
           .select(_noteColumns)
           .order('created_at', ascending: false);
 
-      final allNotes =
-          (response as List).map((json) => Note.fromJson(json)).toList();
+      // Las notas escritas sin conexión siguen en el outbox: se reaplican
+      // encima para que no desaparezcan al recargar.
+      final rows = OutboxService.reconcileRows(
+        [for (final row in response as List) Map<String, dynamic>.from(row as Map)],
+        await OutboxService.pendingFor('notes'),
+      );
+
+      final allNotes = rows.map(Note.fromJson).toList();
 
       // Autodestrucción: eliminar notas cuyo recordatorio ya pasó
       final expired = allNotes.where((n) => n.isExpired).toList();
@@ -172,7 +180,9 @@ class NotesNotifier extends Notifier<List<Note>> {
     int? reminderMinute,
   }) async {
     final draft = Note(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      // Id definitivo desde el cliente: la nota creada sin conexión ya es una
+      // fila válida y sus enlaces apuntan a algo que existirá al sincronizar.
+      id: newRowId(),
       title: title,
       content: content,
       linkedNoteIds: linkedNoteIds ?? [],
@@ -187,22 +197,29 @@ class NotesNotifier extends Notifier<List<Note>> {
       reminderMinute: reminderMinute,
     );
 
-    Note saved = draft;
-    try {
-      if (_hasSupabase) {
-        final client = Supabase.instance.client;
-        final validUuids =
-            draft.linkedNoteIds.where(_uuidRegex.hasMatch).toList();
-        final response = await client
-            .from('notes')
-            .insert(draft.toInsertJson(client.auth.currentUser!.id, validUuids))
-            .select(_noteColumns)
-            .single();
-        saved = Note.fromJson(response);
-        unawaited(_embedNote(saved.id, title, content));
-      }
-    } catch (e) {
-      // Mantener la nota local si falla el guardado remoto
+    final saved = draft;
+    if (_hasSupabase && canWriteToSupabase) {
+      final client = Supabase.instance.client;
+      final validUuids = draft.linkedNoteIds.where(_uuidRegex.hasMatch).toList();
+      final payload = {
+        'id': draft.id,
+        ...draft.toInsertJson(client.auth.currentUser!.id, validUuids),
+      };
+
+      final confirmed = await syncedWrite(
+        write: () => client.from('notes').insert(payload),
+        fallback: () => OutboxOp.create(
+          table: 'notes',
+          kind: OutboxOpKind.insert,
+          payload: payload,
+          match: {'id': draft.id},
+        ),
+      );
+
+      // El embedding necesita Ollama, así que sin red se queda pendiente. No
+      // hace falta encolarlo: `_backfillEmbeddings` recorre en cada carga las
+      // notas que aún no tienen vector y las rellena.
+      if (confirmed) unawaited(_embedNote(saved.id, title, content));
     }
 
     state = _sorted([saved, ...state]);
@@ -264,24 +281,31 @@ class NotesNotifier extends Notifier<List<Note>> {
       await NoteReminderService.cancelReminder(id);
     }
 
-    try {
-      if (_hasSupabase && _uuidRegex.hasMatch(id)) {
-        final validUuids = linkedNoteIds.where(_uuidRegex.hasMatch).toList();
-        await Supabase.instance.client.from('notes').update({
-          'title': title,
-          'content': updatedNote.serializedContent,
-          'linked_note_ids': validUuids,
-          'priority': updatedNote.priority.value,
-          'remind_at': updatedNote.remindAt?.toUtc().toIso8601String(),
-          'self_destruct': updatedNote.selfDestruct,
-          'vault_id': clearVaultId ? null : (vaultId ?? updatedNote.vaultId),
-        }).eq('id', id);
-        // Reembeber: el contenido pudo haber cambiado
-        unawaited(_embedNote(id, title, content));
-      }
-    } catch (e) {
-      // Ignorar
-    }
+    if (!_hasSupabase || !_uuidRegex.hasMatch(id) || !canWriteToSupabase) return;
+
+    final validUuids = linkedNoteIds.where(_uuidRegex.hasMatch).toList();
+    final payload = {
+      'title': title,
+      'content': updatedNote.serializedContent,
+      'linked_note_ids': validUuids,
+      'priority': updatedNote.priority.value,
+      'remind_at': updatedNote.remindAt?.toUtc().toIso8601String(),
+      'self_destruct': updatedNote.selfDestruct,
+      'vault_id': clearVaultId ? null : (vaultId ?? updatedNote.vaultId),
+    };
+
+    final confirmed = await syncedWrite(
+      write: () => Supabase.instance.client.from('notes').update(payload).eq('id', id),
+      fallback: () => OutboxOp.create(
+        table: 'notes',
+        kind: OutboxOpKind.update,
+        payload: payload,
+        match: {'id': id},
+      ),
+    );
+
+    // Reembeber: el contenido pudo haber cambiado.
+    if (confirmed) unawaited(_embedNote(id, title, content));
   }
 
   Future<void> deleteNote(String id) async {
@@ -289,13 +313,16 @@ class NotesNotifier extends Notifier<List<Note>> {
     state = state.where((n) => n.id != id).toList();
     unawaited(CacheService.save('notes', state.map((n) => n.toCacheJson()).toList()));
 
-    try {
-      if (_hasSupabase && _uuidRegex.hasMatch(id)) {
-        await Supabase.instance.client.from('notes').delete().eq('id', id);
-      }
-    } catch (e) {
-      // Ignorar
-    }
+    if (!_hasSupabase || !_uuidRegex.hasMatch(id) || !canWriteToSupabase) return;
+
+    await syncedWrite(
+      write: () => Supabase.instance.client.from('notes').delete().eq('id', id),
+      fallback: () => OutboxOp.create(
+        table: 'notes',
+        kind: OutboxOpKind.delete,
+        match: {'id': id},
+      ),
+    );
   }
 
   Future<void> linkNotes(String id1, String id2) async {
@@ -310,22 +337,29 @@ class NotesNotifier extends Notifier<List<Note>> {
     }).toList();
     unawaited(CacheService.save('notes', state.map((n) => n.toCacheJson()).toList()));
 
-    try {
-      if (_hasSupabase &&
-          _uuidRegex.hasMatch(id1) &&
-          _uuidRegex.hasMatch(id2)) {
-        final client = Supabase.instance.client;
-        final n1 = state.firstWhere((n) => n.id == id1);
-        final n2 = state.firstWhere((n) => n.id == id2);
-        await client
-            .from('notes')
-            .update({'linked_note_ids': n1.linkedNoteIds}).eq('id', id1);
-        await client
-            .from('notes')
-            .update({'linked_note_ids': n2.linkedNoteIds}).eq('id', id2);
-      }
-    } catch (e) {
-      // Ignorar
+    if (!_hasSupabase ||
+        !_uuidRegex.hasMatch(id1) ||
+        !_uuidRegex.hasMatch(id2) ||
+        !canWriteToSupabase) {
+      return;
+    }
+
+    // El enlace es recíproco: son dos filas y hacen falta dos escrituras, cada
+    // una encolable por su cuenta.
+    final client = Supabase.instance.client;
+    for (final id in [id1, id2]) {
+      final note = state.firstWhere((n) => n.id == id);
+      final payload = {'linked_note_ids': note.linkedNoteIds};
+
+      await syncedWrite(
+        write: () => client.from('notes').update(payload).eq('id', id),
+        fallback: () => OutboxOp.create(
+          table: 'notes',
+          kind: OutboxOpKind.update,
+          payload: payload,
+          match: {'id': id},
+        ),
+      );
     }
   }
 }

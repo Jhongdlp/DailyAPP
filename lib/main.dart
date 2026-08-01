@@ -11,6 +11,7 @@ import 'core/theme/bento_theme.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/appearance_provider.dart';
 import 'core/providers/alarms_provider.dart';
+import 'core/providers/connectivity_provider.dart';
 import 'core/providers/habits_provider.dart';
 import 'core/providers/night_planning_provider.dart';
 import 'core/providers/sleep_provider.dart';
@@ -20,11 +21,16 @@ import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
 import 'core/services/task_reminder_service.dart';
 import 'core/services/night_planning_service.dart';
+import 'core/models/alarm_model.dart';
 import 'core/services/sleep_service.dart';
+import 'core/services/wake_check_service.dart';
 import 'core/services/quick_capture_sync.dart';
+import 'core/services/weekly_review_service.dart';
+import 'features/analytics/weekly_review_screen.dart';
 import 'features/agenda/night_planning/night_planning_screen.dart';
 import 'features/alarm/alarm_dismiss_screen.dart';
 import 'features/alarm/sleep/sleep_dashboard_screen.dart';
+import 'features/alarm/sleep/wake_check_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/quick_capture/quick_capture_app.dart';
 import 'features/auth/auth_screen.dart';
@@ -66,6 +72,38 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
   String? _pendingAlarmId;
   String? _activeDismissAlarmId;
 
+  /// La comprobación "¿sigues despierto?" sonaba antes de que hubiera
+  /// navigator; se abre en cuanto lo haya.
+  bool _pendingWakeCheck = false;
+  bool _wakeCheckOpen = false;
+
+  /// Id nativo de la comprobación que sonaba antes de haber navigator.
+  int? _pendingWakeCheckId;
+
+  /// ¿Este id nativo es el de una verificación de vigilia?
+  ///
+  /// Se deriva de las alarmas y no del estado de sueño a propósito: en arranque
+  /// en frío el provider aún está leyendo la caché, así que consultarle daría
+  /// `null` y la comprobación se quedaría sonando sin pantalla que la pare.
+  bool _isWakeCheckId(int nativeId, List<AlarmModel> alarms) =>
+      alarms.any((a) => WakeCheckService.nativeIdFor(a.id) == nativeId);
+
+  void _openWakeCheck(int nativeId) {
+    if (_wakeCheckOpen) return;
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) {
+      _pendingWakeCheck = true;
+      _pendingWakeCheckId = nativeId;
+      return;
+    }
+    _wakeCheckOpen = true;
+    _pendingWakeCheck = false;
+    navigator
+        .push(MaterialPageRoute(
+            builder: (_) => WakeCheckScreen(nativeId: nativeId)))
+        .then((_) => _wakeCheckOpen = false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +133,10 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
     // modal del desplegable se abre y se cierra sin pasar por esta app.
     if (state == AppLifecycleState.resumed && !_initializing) {
       _drainQuickCaptures();
+      // Volver a primer plano también suele significar que hay red otra vez
+      // (el móvil sale del bolsillo, el wifi engancha): buen momento para
+      // subir las escrituras que se quedaron pendientes.
+      ref.read(syncStatusProvider.notifier).sync();
     }
   }
 
@@ -139,6 +181,15 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
     if (alarmId == NightPlanningService.payload) {
       navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => const NightPlanningScreen()),
+      );
+      return;
+    }
+
+    // El aviso semanal abre el ritual de revisión por la misma razón: si
+    // obligara a buscar la pantalla, se haría la primera semana y ya.
+    if (alarmId == WeeklyReviewService.payload) {
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const WeeklyReviewScreen()),
       );
       return;
     }
@@ -242,10 +293,18 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
       if (ringingAlarmId != null) {
         try {
           final alarms = await ref.read(alarmsProvider.future);
-          final alarm = alarms.where((a) => a.id.hashCode.abs() % 100000 == ringingAlarmId).firstOrNull;
-          if (alarm != null) {
-            _pendingAlarmId = alarm.id;
-            unawaited(ref.read(sleepProvider.notifier).registerRing(alarm));
+          // La verificación de vigilia se comprueba primero: su id nativo no
+          // corresponde a ninguna alarma del usuario, así que la búsqueda de
+          // abajo no la encontraría y se quedaría sonando sin pantalla.
+          if (_isWakeCheckId(ringingAlarmId, alarms)) {
+            _pendingWakeCheck = true;
+            _pendingWakeCheckId = ringingAlarmId;
+          } else {
+            final alarm = alarms.where((a) => a.id.hashCode.abs() % 100000 == ringingAlarmId).firstOrNull;
+            if (alarm != null) {
+              _pendingAlarmId = alarm.id;
+              unawaited(ref.read(sleepProvider.notifier).registerRing(alarm));
+            }
           }
         } catch (_) {}
       }
@@ -255,6 +314,10 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
         try {
           final alarms = await ref.read(alarmsProvider.future);
           for (final alarmSettings in alarmSet.alarms) {
+            if (_isWakeCheckId(alarmSettings.id, alarms)) {
+              _openWakeCheck(alarmSettings.id);
+              continue;
+            }
             final alarm = alarms.where((a) => a.id.hashCode.abs() % 100000 == alarmSettings.id).firstOrNull;
             if (alarm != null) {
               // Antes del guard de pantalla: aunque el dismiss ya esté abierto,
@@ -283,6 +346,7 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
         if (alarmId != null &&
             !alarmId.startsWith('test:') &&
             alarmId != NightPlanningService.payload &&
+            alarmId != WeeklyReviewService.payload &&
             !alarmId.startsWith(NoteReminderService.payloadPrefix) &&
             !alarmId.startsWith(HabitReminderService.payloadPrefix) &&
             !alarmId.startsWith(TaskReminderService.payloadPrefix)) {
@@ -297,12 +361,22 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
             );
           });
         }
+        if (alarmId == WeeklyReviewService.payload) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(builder: (_) => const WeeklyReviewScreen()),
+            );
+          });
+        }
       }
 
       // Leer el provider lo construye, y su `build` reprograma el aviso
       // nocturno. Hace falta en cada arranque: una notificación diaria se
       // pierde si el sistema mata la app o se reinicia el teléfono.
       ref.read(nightPlanningProvider);
+
+      // Lo mismo con el aviso semanal de revisión, por el mismo motivo.
+      unawaited(WeeklyReviewService.schedule());
 
       // El manifiesto declara showWhenLocked/turnScreenOn para que el
       // full-screen intent de la alarma se pinte sobre el bloqueo en arranque
@@ -328,6 +402,11 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
     // está esperando en una cola local: este es el momento de subirlo.
     _drainQuickCaptures();
 
+    // Y lo mismo con las escrituras que quedaron sin confirmar de la sesión
+    // anterior. Leer el provider aquí, además, arranca la escucha de
+    // conectividad que dispara el resto de drenajes.
+    ref.read(syncStatusProvider.notifier).sync();
+
     // Buscar actualizaciones en segundo plano (solo si hay sesión activa).
     // Silencioso: solo muestra diálogo si hay una versión nueva.
     if (Supabase.instance.client.auth.currentSession != null) {
@@ -348,6 +427,14 @@ class _SistemDailyAppState extends ConsumerState<SistemDailyApp>
           _activeDismissAlarmId = null;
         });
       });
+    }
+
+    // Lo mismo para la comprobación de vigilia que sonó antes de que la app
+    // tuviera navigator.
+    if (_pendingWakeCheck && _pendingWakeCheckId != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openWakeCheck(_pendingWakeCheckId!),
+      );
     }
   }
 

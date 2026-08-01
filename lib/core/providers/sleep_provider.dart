@@ -9,6 +9,7 @@ import '../models/alarm_model.dart';
 import '../models/sleep_model.dart';
 import '../services/cache_service.dart';
 import '../services/sleep_service.dart';
+import '../services/wake_check_service.dart';
 import 'rpg_provider.dart';
 
 /// Ciclo de sueño: horario configurado, registro de noches y métricas.
@@ -49,6 +50,7 @@ class SleepNotifier extends Notifier<SleepData> {
       // Caché corrupto: se arranca de cero en vez de dejar la pestaña rota.
     }
     _closeStaleNights();
+    unawaited(_dropStaleWakeCheck());
     unawaited(SleepService.reschedule(state.schedule));
   }
 
@@ -132,6 +134,7 @@ class SleepNotifier extends Notifier<SleepData> {
   /// Foto validada: la noche se cierra aquí. Devuelve la sesión resultante
   /// para que la pantalla de check-in la muestre.
   Future<SleepSession?> registerWake({
+    String? alarmId,
     DateTime? at,
     int dismissAttempts = 0,
   }) async {
@@ -147,7 +150,136 @@ class SleepNotifier extends Notifier<SleepData> {
       dismissAttempts: dismissAttempts,
     );
     _write(_withSession(session).copyWith(clearOpenNight: true));
+
+    if (alarmId != null) {
+      await _scheduleWakeCheck(
+        alarmId: alarmId,
+        nightKey: key,
+        wokeAt: now,
+        round: 1,
+      );
+    }
     return session;
+  }
+
+  // ── Verificación de vigilia ────────────────────────────────────────────
+
+  /// Programa la siguiente comprobación de "¿sigues despierto?", salvo que ya
+  /// se haya agotado la ventana de vigilancia.
+  Future<void> _scheduleWakeCheck({
+    required String alarmId,
+    required String nightKey,
+    required DateTime wokeAt,
+    required int round,
+  }) async {
+    final schedule = state.schedule;
+    if (!schedule.wakeCheckEnabled) return;
+
+    // La ventana se mide desde que se apagó la alarma: pasada, se asume que ya
+    // estás en pie y se deja de insistir.
+    final elapsed = DateTime.now().difference(wokeAt).inMinutes;
+    if (elapsed + schedule.wakeCheckIntervalMinutes >
+        schedule.wakeCheckWindowMinutes) {
+      _write(state.copyWith(clearWakeCheck: true));
+      return;
+    }
+
+    final pending = await WakeCheckService.schedule(
+      alarmId: alarmId,
+      nightKey: nightKey,
+      wokeAt: wokeAt,
+      round: round,
+      interval: Duration(minutes: schedule.wakeCheckIntervalMinutes),
+    );
+
+    _write(pending == null
+        ? state.copyWith(clearWakeCheck: true)
+        : state.copyWith(wakeCheck: pending));
+  }
+
+  /// El usuario confirmó que sigue despierto: se apaga esta comprobación y se
+  /// encadena la siguiente hasta agotar la ventana.
+  Future<void> confirmAwake() async {
+    await _ensureLoaded();
+    final pending = state.wakeCheck;
+    if (pending == null) return;
+
+    await WakeCheckService.cancel(pending.nativeId);
+
+    final session = _sessionFor(pending.nightKey);
+    _write(_withSession(
+      session.copyWith(wakeChecksPassed: session.wakeChecksPassed + 1),
+    ).copyWith(clearWakeCheck: true));
+
+    await _scheduleWakeCheck(
+      alarmId: pending.alarmId,
+      nightKey: pending.nightKey,
+      wokeAt: pending.wokeAt,
+      round: pending.round + 1,
+    );
+  }
+
+  /// Descarta una comprobación que se quedó colgada (el móvil se apagó, la
+  /// alarma sonó sola hasta agotarse). Sin esto, al abrir la app horas después
+  /// el estado seguiría diciendo que hay una vigilancia activa.
+  Future<void> _dropStaleWakeCheck() async {
+    final pending = state.wakeCheck;
+    if (pending == null) return;
+    if (DateTime.now().difference(pending.dueAt) < const Duration(hours: 2)) {
+      return;
+    }
+    await WakeCheckService.cancel(pending.nativeId);
+    _write(state.copyWith(clearWakeCheck: true));
+  }
+
+  /// Cancela la vigilancia sin más (el usuario la descarta a mano).
+  Future<void> cancelWakeCheck() async {
+    await _ensureLoaded();
+    final pending = state.wakeCheck;
+    if (pending == null) return;
+    await WakeCheckService.cancel(pending.nativeId);
+    _write(state.copyWith(clearWakeCheck: true));
+  }
+
+  /// Anota que te volviste a dormir y a qué hora te levantaste de verdad.
+  ///
+  /// Corrige la duración de la noche hacia arriba: el tramo extra fue sueño,
+  /// aunque fragmentado.
+  Future<void> registerBackToSleep({
+    required DateTime finalWakeAt,
+    String? nightKey,
+  }) async {
+    await _ensureLoaded();
+    final key = nightKey ?? nightKeyFor(DateTime.now());
+    final session = _sessionFor(key);
+    final first = session.wokeAt;
+    // Sin un despertar previo no hay "volver a dormirse" que anotar, y una hora
+    // anterior a él sería un dato imposible.
+    if (first == null || !finalWakeAt.isAfter(first)) return;
+
+    _write(_withSession(session.copyWith(finalWakeAt: finalWakeAt)));
+    await cancelWakeCheck();
+  }
+
+  /// Corrige a mano las horas de una noche desde el panel.
+  Future<void> editNight({
+    required String nightKey,
+    DateTime? lightsOutAt,
+    DateTime? wokeAt,
+    DateTime? finalWakeAt,
+    bool clearFinalWake = false,
+  }) async {
+    await _ensureLoaded();
+    final session = _sessionFor(nightKey);
+    _write(_withSession(session.copyWith(
+      lightsOutAt: lightsOutAt,
+      wokeAt: wokeAt,
+      finalWakeAt: finalWakeAt,
+      clearFinalWake: clearFinalWake,
+      // Corregir a mano una noche que se había dado por ignorada implica que sí
+      // te levantaste; si no, la noche seguiría marcada en rojo con horas.
+      alarmIgnored: (wokeAt ?? session.wokeAt) != null ? false : null,
+    )));
   }
 
   /// Guarda las respuestas del check-in matutino y premia la noche.

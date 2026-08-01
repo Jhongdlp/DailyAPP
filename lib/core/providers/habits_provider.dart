@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/habit_model.dart';
 import '../services/habit_reminder_service.dart';
 import '../services/cache_service.dart';
+import '../services/outbox_service.dart';
+import '../services/synced_write.dart';
 import 'settings_provider.dart';
 
 final _uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
@@ -145,10 +147,28 @@ class HabitsNotifier extends Notifier<List<Habit>> {
             .eq('user_id', user.id) as List;
       }
 
+      // Lo que el servidor acaba de devolver no incluye las escrituras que
+      // siguen en el outbox. Sin este paso, recargar con una marca sin
+      // sincronizar haría desaparecer el check delante del usuario.
+      final habitRows = OutboxService.reconcileRows(
+        [for (final row in habitsResponse as List) Map<String, dynamic>.from(row as Map)],
+        await OutboxService.pendingFor('habits'),
+      )
+          // El archivado pendiente llega como un `archived: true` encima de una
+          // fila que el servidor todavía da por activa; el filtro de la consulta
+          // no puede saberlo, así que se aplica aquí.
+          .where((row) => row['archived'] != true)
+          .toList();
+
+      final logRows = OutboxService.reconcileRows(
+        [for (final row in logsResponse) Map<String, dynamic>.from(row as Map)],
+        await OutboxService.pendingFor('habit_logs'),
+      );
+
       final logsByHabit = <String, Set<DateTime>>{};
       final progressByHabit = <String, Map<DateTime, double>>{};
 
-      for (final row in logsResponse) {
+      for (final row in logRows) {
         final habitId = row['habit_id'] as String;
         final date = DateTime.parse(row['completed_on'] as String);
         final day = _dateOnly(date);
@@ -162,7 +182,7 @@ class HabitsNotifier extends Notifier<List<Habit>> {
         }
       }
 
-      final freshHabits = (habitsResponse as List).map((json) {
+      final freshHabits = habitRows.map((json) {
         final habitId = json['id'] as String;
         final goalValue = (json['goal_value'] as num?)?.toDouble();
         final hCompletedDates = <DateTime>{};
@@ -185,7 +205,7 @@ class HabitsNotifier extends Notifier<List<Habit>> {
         }
 
         return Habit.fromJson(
-          json as Map<String, dynamic>,
+          json,
           completedDates: hCompletedDates,
           dailyProgress: hProgress,
         );
@@ -239,30 +259,59 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     ];
     _scheduleCacheSave();
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      if (user == null) return;
+    await _persistLog(habitId: habitId, day: day, progress: newProgress, remove: wasCompleted);
+  }
 
-      if (wasCompleted) {
-        await client
+  /// Guarda el log de un día, o lo borra si el progreso volvió a cero.
+  ///
+  /// Sin conexión la escritura acaba en el outbox en vez de perderse: marcar un
+  /// hábito en el metro y que el check se esfume al llegar a casa era
+  /// exactamente el fallo que esto arregla.
+  Future<void> _persistLog({
+    required String habitId,
+    required DateTime day,
+    required double progress,
+    required bool remove,
+  }) async {
+    final settings = ref.read(settingsProvider);
+    // Los hábitos que solo existen en local (id no-UUID de versiones antiguas)
+    // no tienen fila en el servidor a la que colgar el log.
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
+    if (!canWriteToSupabase) return;
+
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser!;
+    final match = {'habit_id': habitId, 'completed_on': _fmt(day)};
+
+    if (remove) {
+      await syncedWrite(
+        write: () => client
             .from('habit_logs')
             .delete()
             .eq('habit_id', habitId)
-            .eq('completed_on', _fmt(day));
-      } else {
-        await client.from('habit_logs').upsert({
-          'habit_id': habitId,
-          'user_id': user.id,
-          'completed_on': _fmt(day),
-          'progress_value': newProgress,
-        }, onConflict: 'habit_id,completed_on');
-      }
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
+            .eq('completed_on', _fmt(day)),
+        fallback: () => OutboxOp.create(
+          table: 'habit_logs',
+          kind: OutboxOpKind.delete,
+          match: match,
+        ),
+      );
+      return;
     }
+
+    final payload = {...match, 'user_id': user.id, 'progress_value': progress};
+    await syncedWrite(
+      write: () => client
+          .from('habit_logs')
+          .upsert(payload, onConflict: 'habit_id,completed_on'),
+      fallback: () => OutboxOp.create(
+        table: 'habit_logs',
+        kind: OutboxOpKind.upsert,
+        payload: payload,
+        match: match,
+        onConflict: 'habit_id,completed_on',
+      ),
+    );
   }
 
   Future<void> updateHabitProgress(String habitId, DateTime date, double increment) async {
@@ -299,30 +348,12 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     ];
     _scheduleCacheSave();
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      if (user == null) return;
-
-      if (newProgress == 0.0) {
-        await client
-            .from('habit_logs')
-            .delete()
-            .eq('habit_id', habitId)
-            .eq('completed_on', _fmt(day));
-      } else {
-        await client.from('habit_logs').upsert({
-          'habit_id': habitId,
-          'user_id': user.id,
-          'completed_on': _fmt(day),
-          'progress_value': newProgress,
-        }, onConflict: 'habit_id,completed_on');
-      }
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
-    }
+    await _persistLog(
+      habitId: habitId,
+      day: day,
+      progress: newProgress,
+      remove: newProgress == 0.0,
+    );
   }
 
   Future<void> addHabit({
@@ -337,9 +368,11 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     int? reminderMinute,
     List<String>? reminderTimes,
   }) async {
-    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+    // El id se genera aquí y ya es el definitivo: no hay baile de id temporal
+    // a id de servidor, así que el hábito creado sin conexión conserva su
+    // identidad y sus logs cuadran cuando el alta llegue a Supabase.
     final localHabit = Habit(
-      id: tempId,
+      id: newRowId(),
       name: name,
       icon: icon,
       color: color,
@@ -358,40 +391,22 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     unawaited(HabitReminderService.scheduleReminder(localHabit));
     _lastReminderFingerprint = _reminderFingerprint(state);
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (settings.isSupabaseConfigured) {
-        final client = Supabase.instance.client;
-        final user = client.auth.currentUser;
-        if (user != null) {
-          final response = await client.from('habits').insert(localHabit.toInsertJson(user.id)).select().single();
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !canWriteToSupabase) return;
 
-          // Obtener el hábito con su ID real de base de datos
-          final serverHabit = Habit.fromJson(response);
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser!;
+    final payload = {'id': localHabit.id, ...localHabit.toInsertJson(user.id)};
 
-          // Reemplazar el hábito temporal en el estado, preservando cualquier
-          // progreso local que el usuario haya hecho en la UI mientras tanto
-          state = [
-            for (final h in state)
-              if (h.id == tempId)
-                serverHabit.copyWith(
-                  completedDates: h.completedDates,
-                  dailyProgress: h.dailyProgress,
-                )
-              else
-                h
-          ];
-          _scheduleCacheSave();
-
-          // Actualizar notificaciones con el ID real
-          unawaited(HabitReminderService.cancelReminder(tempId));
-          unawaited(HabitReminderService.scheduleReminder(serverHabit));
-          _lastReminderFingerprint = _reminderFingerprint(state);
-        }
-      }
-    } catch (e) {
-      // Si falla, se queda como hábito local.
-    }
+    await syncedWrite(
+      write: () => client.from('habits').insert(payload),
+      fallback: () => OutboxOp.create(
+        table: 'habits',
+        kind: OutboxOpKind.insert,
+        payload: payload,
+        match: {'id': localHabit.id},
+      ),
+    );
   }
 
   Future<void> updateHabit(Habit updated) async {
@@ -406,13 +421,21 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     unawaited(HabitReminderService.scheduleReminder(updated));
     _lastReminderFingerprint = _reminderFingerprint(state);
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(updated.id)) return;
-      await Supabase.instance.client.from('habits').update(updated.toUpdateJson()).eq('id', updated.id);
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
-    }
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(updated.id)) return;
+    if (!canWriteToSupabase) return;
+
+    final payload = updated.toUpdateJson();
+    await syncedWrite(
+      write: () =>
+          Supabase.instance.client.from('habits').update(payload).eq('id', updated.id),
+      fallback: () => OutboxOp.create(
+        table: 'habits',
+        kind: OutboxOpKind.update,
+        payload: payload,
+        match: {'id': updated.id},
+      ),
+    );
   }
 
   Future<void> archiveHabit(String habitId) async {
@@ -420,13 +443,21 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     _scheduleCacheSave();
     unawaited(HabitReminderService.cancelReminder(habitId));
     _lastReminderFingerprint = _reminderFingerprint(state);
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
-      await Supabase.instance.client.from('habits').update({'archived': true}).eq('id', habitId);
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
-    }
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
+    if (!canWriteToSupabase) return;
+
+    await syncedWrite(
+      write: () => Supabase.instance.client
+          .from('habits')
+          .update({'archived': true}).eq('id', habitId),
+      fallback: () => OutboxOp.create(
+        table: 'habits',
+        kind: OutboxOpKind.update,
+        payload: {'archived': true},
+        match: {'id': habitId},
+      ),
+    );
   }
 
   Future<void> deleteHabit(String habitId) async {
@@ -434,13 +465,18 @@ class HabitsNotifier extends Notifier<List<Habit>> {
     _scheduleCacheSave();
     unawaited(HabitReminderService.cancelReminder(habitId));
     _lastReminderFingerprint = _reminderFingerprint(state);
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
-      await Supabase.instance.client.from('habits').delete().eq('id', habitId);
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
-    }
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(habitId)) return;
+    if (!canWriteToSupabase) return;
+
+    await syncedWrite(
+      write: () => Supabase.instance.client.from('habits').delete().eq('id', habitId),
+      fallback: () => OutboxOp.create(
+        table: 'habits',
+        kind: OutboxOpKind.delete,
+        match: {'id': habitId},
+      ),
+    );
   }
 }
 

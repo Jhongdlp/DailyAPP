@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/models/sleep_model.dart';
 import '../../../../core/theme/bento_theme.dart';
+import '../night_edit_sheet.dart';
 import 'sleep_chart_shell.dart';
 
 /// Ventana de sueño: una barra por noche, del momento de apagar la luz al de
@@ -88,13 +89,21 @@ class _SleepWindowChartState extends State<SleepWindowChart> {
                   color: BentoTheme.accentOrange,
                   label: 'Sonó la alarma y seguiste'),
               SleepLegendDot(
+                  color: BentoTheme.accentAlarm.withValues(alpha: 0.45),
+                  label: 'Volviste a dormirte'),
+              SleepLegendDot(
                   color: BentoTheme.errorRed, label: 'Alarma ignorada'),
             ],
           ),
           const SizedBox(height: 10),
           // El detalle en texto es la vía accesible al valor exacto: el gráfico
           // no puede ser la única forma de leerlo.
-          _SelectedNightReadout(session: selected),
+          GestureDetector(
+            onTap: selected == null
+                ? null
+                : () => NightEditSheet.show(context, selected),
+            child: _SelectedNightReadout(session: selected),
+          ),
         ],
       ),
     );
@@ -117,9 +126,11 @@ class _SelectedNightReadout extends StatelessWidget {
     final text = s == null
         ? 'Toca una noche para ver sus horas.'
         : '${shortDayLabel(s.date)} · '
-            '${_time(s.lightsOutAt)} → ${_time(s.wokeAt)} · '
+            '${_time(s.lightsOutAt)} → ${_time(s.effectiveWakeAt)} · '
             '${formatSleepMinutes(s.sleepMinutes)}'
-            '${s.alarmIgnored ? ' · alarma ignorada' : ''}';
+            '${s.wentBackToSleep ? ' · volviste a dormirte ${s.backToSleepMinutes} min' : ''}'
+            '${s.alarmIgnored ? ' · alarma ignorada' : ''}'
+            ' · toca para corregir';
 
     return Container(
       width: double.infinity,
@@ -268,6 +279,19 @@ class _WindowPainter extends CustomPainter {
             ..color = night.alarmIgnored
                 ? BentoTheme.errorRed
                 : BentoTheme.accentOrange,
+        );
+      }
+
+      // Tramo de "me volví a dormir": va tras el despertar oficial, en el tono
+      // del sueño pero rebajado, porque fue sueño de verdad aunque partido.
+      final finalWake = _offset(night, night.finalWakeAt);
+      if (finalWake != null && finalWake > end) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTRB(x(end) + 2, barTop, x(finalWake), barTop + barHeight),
+            radius,
+          ),
+          Paint()..color = BentoTheme.accentAlarm.withValues(alpha: 0.45),
         );
       }
 

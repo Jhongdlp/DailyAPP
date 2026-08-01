@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task_model.dart';
 import '../services/task_reminder_service.dart';
 import '../services/cache_service.dart';
+import '../services/outbox_service.dart';
+import '../services/synced_write.dart';
 import 'settings_provider.dart';
 
 final _uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
@@ -99,9 +101,15 @@ class TasksNotifier extends Notifier<List<Task>> {
           .select()
           .order('start_at', ascending: true);
 
-      final freshTasks = (response as List)
-          .map((json) => Task.fromJson(json as Map<String, dynamic>))
-          .toList();
+      // Se reaplica lo que sigue en el outbox: si no, una tarea marcada como
+      // hecha sin conexión volvería a aparecer pendiente en la recarga.
+      final rows = OutboxService.reconcileRows(
+        [for (final row in response as List) Map<String, dynamic>.from(row as Map)],
+        await OutboxService.pendingFor('tasks'),
+      );
+
+      final freshTasks = rows.map(Task.fromJson).toList()
+        ..sort((a, b) => a.startAt.compareTo(b.startAt));
 
       state = freshTasks;
       _lastSyncedAt = DateTime.now();
@@ -145,9 +153,11 @@ class TasksNotifier extends Notifier<List<Task>> {
     // desaparezca de la lista aunque sí se haya insertado en Supabase.
     await _ensureLoaded();
 
-    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+    // Id definitivo desde el cliente: la tarea creada sin conexión conserva su
+    // identidad, así que sus recordatorios y sus ediciones posteriores siguen
+    // apuntando a la misma fila cuando el alta llegue al servidor.
     final localTask = Task(
-      id: tempId,
+      id: newRowId(),
       title: title,
       notes: notes,
       dueDate: DateTime(dueDate.year, dueDate.month, dueDate.day),
@@ -167,40 +177,30 @@ class TasksNotifier extends Notifier<List<Task>> {
     unawaited(TaskReminderService.scheduleReminder(localTask));
     _lastReminderFingerprint = _reminderFingerprint(state);
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (settings.isSupabaseConfigured) {
-        final client = Supabase.instance.client;
-        final user = client.auth.currentUser;
-        if (user != null) {
-          final response = await client.from('tasks').insert(localTask.toInsertJson(user.id)).select().single();
-          final serverTask = Task.fromJson(response);
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !canWriteToSupabase) return;
 
-          // Si algo recargó el estado mientras el insert estaba en vuelo, el
-          // temporal ya no está: en ese caso anexamos la versión del servidor
-          // en vez de descartarla silenciosamente.
-          final hasTemp = state.any((t) => t.id == tempId);
-          state = hasTemp
-              ? [
-                  for (final t in state)
-                    if (t.id == tempId) serverTask else t
-                ]
-              : [
-                  ...state.where((t) => t.id != serverTask.id),
-                  serverTask,
-                ];
-          _scheduleCacheSave();
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser!;
+    final payload = {'id': localTask.id, ...localTask.toInsertJson(user.id)};
 
-          unawaited(TaskReminderService.cancelReminder(tempId));
-          unawaited(TaskReminderService.scheduleReminder(serverTask));
-          _lastReminderFingerprint = _reminderFingerprint(state);
-        }
-      }
-    } catch (e) {
-      // La tarea sobrevive en local/caché; avisamos para que la UI lo muestre.
-      lastSyncError = 'No se pudo guardar en el servidor. Queda guardado en este dispositivo.';
-    }
+    final confirmed = await syncedWrite(
+      write: () => client.from('tasks').insert(payload),
+      fallback: () => OutboxOp.create(
+        table: 'tasks',
+        kind: OutboxOpKind.insert,
+        payload: payload,
+        match: {'id': localTask.id},
+      ),
+    );
+
+    if (!confirmed) lastSyncError = _queuedMessage;
   }
+
+  /// Lo que se le dice al usuario cuando la escritura se quedó en el outbox. Ya
+  /// no es una advertencia de pérdida: el cambio está a salvo y se subirá solo.
+  static const _queuedMessage =
+      'Sin conexión: el cambio se guardó y se sincronizará solo.';
 
   /// Clona en [to] todos los bloques de [from], conservando horas y duración.
   ///
@@ -274,13 +274,23 @@ class TasksNotifier extends Notifier<List<Task>> {
     unawaited(TaskReminderService.scheduleReminder(updated));
     _lastReminderFingerprint = _reminderFingerprint(state);
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(updated.id)) return;
-      await Supabase.instance.client.from('tasks').update(updated.toUpdateJson()).eq('id', updated.id);
-    } catch (e) {
-      lastSyncError = 'No se pudo actualizar en el servidor. El cambio quedó en este dispositivo.';
-    }
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(updated.id)) return;
+    if (!canWriteToSupabase) return;
+
+    final payload = updated.toUpdateJson();
+    final confirmed = await syncedWrite(
+      write: () =>
+          Supabase.instance.client.from('tasks').update(payload).eq('id', updated.id),
+      fallback: () => OutboxOp.create(
+        table: 'tasks',
+        kind: OutboxOpKind.update,
+        payload: payload,
+        match: {'id': updated.id},
+      ),
+    );
+
+    if (!confirmed) lastSyncError = _queuedMessage;
   }
 
   Future<void> toggleComplete(String taskId) async {
@@ -308,16 +318,24 @@ class TasksNotifier extends Notifier<List<Task>> {
     }
     _lastReminderFingerprint = _reminderFingerprint(state);
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(taskId)) return;
-      await Supabase.instance.client.from('tasks').update({
-        'completed': updated.completed,
-        'completed_at': updated.completedAt?.toUtc().toIso8601String(),
-      }).eq('id', taskId);
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
-    }
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(taskId)) return;
+    if (!canWriteToSupabase) return;
+
+    final payload = {
+      'completed': updated.completed,
+      'completed_at': updated.completedAt?.toUtc().toIso8601String(),
+    };
+    await syncedWrite(
+      write: () =>
+          Supabase.instance.client.from('tasks').update(payload).eq('id', taskId),
+      fallback: () => OutboxOp.create(
+        table: 'tasks',
+        kind: OutboxOpKind.update,
+        payload: payload,
+        match: {'id': taskId},
+      ),
+    );
   }
 
   Future<void> deleteTask(String taskId) async {
@@ -326,13 +344,18 @@ class TasksNotifier extends Notifier<List<Task>> {
     _scheduleCacheSave();
     unawaited(TaskReminderService.cancelReminder(taskId));
     _lastReminderFingerprint = _reminderFingerprint(state);
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(taskId)) return;
-      await Supabase.instance.client.from('tasks').delete().eq('id', taskId);
-    } catch (e) {
-      // Ignoramos error de red/actualización en UI
-    }
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !_uuidRegex.hasMatch(taskId)) return;
+    if (!canWriteToSupabase) return;
+
+    await syncedWrite(
+      write: () => Supabase.instance.client.from('tasks').delete().eq('id', taskId),
+      fallback: () => OutboxOp.create(
+        table: 'tasks',
+        kind: OutboxOpKind.delete,
+        match: {'id': taskId},
+      ),
+    );
   }
 }
 

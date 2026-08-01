@@ -9,11 +9,13 @@ import '../../core/providers/habits_provider.dart';
 import '../../core/providers/tasks_provider.dart';
 import '../../core/theme/bento_theme.dart';
 import 'quick_parse.dart';
+import 'reminder_dialog.dart';
 import 'timeline_scale.dart';
 import 'task_form_dialog.dart';
 import 'widgets/day_strip.dart';
 import 'widgets/day_timeline.dart';
 import 'widgets/habit_tray.dart';
+import 'widgets/month_calendar.dart';
 import 'night_planning/night_planning_screen.dart';
 import 'widgets/quick_add_bar.dart';
 
@@ -38,6 +40,11 @@ class AgendaTab extends ConsumerStatefulWidget {
 
 class _AgendaTabState extends ConsumerState<AgendaTab> {
   DateTime _selectedDay = _dateOnly(DateTime.now());
+
+  /// Vista de mes desplegada en lugar de la tira de días. Empieza cerrada: el
+  /// uso diario es "hoy y los dos siguientes", y el mes entero solo hace falta
+  /// cuando estás colocando algo lejos.
+  bool _calendarOpen = false;
 
   void _showMessage(String message) {
     if (!mounted) return;
@@ -240,15 +247,34 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
     }
   }
 
+  /// Resumen por día de todas las tareas, en una sola pasada.
+  ///
+  /// El calendario consulta 42 celdas por mes; resolver cada una filtrando la
+  /// lista completa sería cuadrático sobre un dato que ya cabe entero en
+  /// memoria.
+  Map<DateTime, DayStats> _statsByDay(List<Task> tasks) {
+    final map = <DateTime, DayStats>{};
+    for (final task in tasks) {
+      final day = _dateOnly(task.dueDate);
+      final current = map[day] ?? const DayStats();
+      map[day] = DayStats(
+        blocks: current.blocks + 1,
+        reminders: current.reminders + (task.hasReminder ? 1 : 0),
+      );
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
-    ref.watch(tasksProvider);
+    final allTasks = ref.watch(tasksProvider);
     // Se observa también para que marcar un hábito desde su propia pestaña
     // repinte aquí el bloque correspondiente.
     ref.watch(habitsProvider);
     final dayTasks = ref.read(tasksProvider.notifier).tasksForDay(_selectedDay);
     final pendingHabits = _pendingHabits(dayTasks);
     final accent = BentoTheme.accentLime;
+    final stats = _statsByDay(allTasks);
 
     return Container(
       color: Colors.transparent,
@@ -256,26 +282,47 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildHeader(dayTasks),
-          DayStrip(
-            selectedDay: _selectedDay,
-            accentColor: accent,
-            countFor: (day) => ref.read(tasksProvider.notifier).tasksForDay(day).length,
-            onSelect: (day) => setState(() => _selectedDay = day),
+          // Cambiar entre tira y mes conserva el mismo día seleccionado, así
+          // que el timeline de abajo no se mueve al abrir el calendario.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _calendarOpen
+                ? MonthCalendar(
+                    selectedDay: _selectedDay,
+                    accentColor: accent,
+                    statsFor: (day) => stats[day] ?? const DayStats(),
+                    onSelect: (day) => setState(() => _selectedDay = day),
+                    onAddReminder: () => showReminderDialog(context, ref, day: _selectedDay),
+                    onAddBlock: () => showTaskFormDialog(context, ref, day: _selectedDay),
+                  )
+                : DayStrip(
+                    selectedDay: _selectedDay,
+                    accentColor: accent,
+                    countFor: (day) => (stats[day] ?? const DayStats()).blocks,
+                    onSelect: (day) => setState(() => _selectedDay = day),
+                  ),
           ),
           ?_buildPlanTomorrowBanner(),
           _buildLoadBar(dayTasks),
-          HabitTray(
-            pending: pendingHabits,
-            withUsualTime: pendingHabits.where((h) => _usualMinutesOf(h) != null).length,
-            onPlace: (habit) => _placeHabit(habit),
-            onPlaceAll: _placeAllHabitsWithUsualTime,
-          ),
-          QuickAddBar(
-            // Sin hora explícita, el bloque cae en el siguiente cuarto de hora
-            // libre y no a medianoche.
-            fallbackStartMinutes: _suggestedStartMinutes(dayTasks),
-            onSubmit: _createFromQuickAdd,
-          ),
+          // Con el mes desplegado, la bandeja de hábitos y la barra rápida
+          // dejarían al timeline sin altura útil. Además el pie del calendario
+          // ya ofrece las dos formas de añadir, así que no se pierde nada.
+          if (!_calendarOpen) ...[
+            HabitTray(
+              pending: pendingHabits,
+              withUsualTime: pendingHabits.where((h) => _usualMinutesOf(h) != null).length,
+              onPlace: (habit) => _placeHabit(habit),
+              onPlaceAll: _placeAllHabitsWithUsualTime,
+            ),
+            QuickAddBar(
+              // Sin hora explícita, el bloque cae en el siguiente cuarto de hora
+              // libre y no a medianoche.
+              fallbackStartMinutes: _suggestedStartMinutes(dayTasks),
+              onSubmit: _createFromQuickAdd,
+            ),
+          ],
           Expanded(
             child: Stack(
               children: [
@@ -549,32 +596,57 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // La fecha es el mando del calendario: es lo que se mira para saber
+          // qué día estás viendo, así que es también donde se busca cambiarlo.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _dayHeadline(),
-                  style: GoogleFonts.montserrat(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 30,
-                    height: 1.0,
-                    letterSpacing: -1.0,
-                    color: BentoTheme.cream,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _calendarOpen = !_calendarOpen),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _dayHeadline(),
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 30,
+                            height: 1.0,
+                            letterSpacing: -1.0,
+                            color: BentoTheme.cream,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      AnimatedRotation(
+                        turns: _calendarOpen ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 24,
+                          color: BentoTheme.creamAlpha(0.5),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _daySubtitle(),
-                  style: GoogleFonts.montserrat(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.1,
-                    color: BentoTheme.creamAlpha(0.45),
+                  const SizedBox(height: 2),
+                  Text(
+                    _daySubtitle(),
+                    style: GoogleFonts.montserrat(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
+                      color: BentoTheme.creamAlpha(0.45),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           // Volver a hoy solo existe cuando hace falta. Un botón permanente
@@ -599,6 +671,16 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
                 ),
               ),
             ),
+          // Un aviso suelto ("llamar al dentista a las 5") es la mitad de lo
+          // que se apunta en una agenda y no merece pasar por el formulario de
+          // bloque entero, así que tiene su propio acceso.
+          GestureDetector(
+            onTap: () => showReminderDialog(context, ref, day: _selectedDay),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              child: Icon(Icons.notifications_none_rounded, size: 20, color: BentoTheme.creamAlpha(0.5)),
+            ),
+          ),
           PopupMenuButton<int>(
             tooltip: 'Copiar un día',
             color: BentoTheme.darkCard,

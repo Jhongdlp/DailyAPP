@@ -87,6 +87,26 @@ class AccountModel {
         'currency': currency,
       };
 
+  /// Rellena los campos que antes ponía Supabase al insertar.
+  ///
+  /// Los formularios construyen la cuenta sin id ni usuario porque hasta ahora
+  /// los devolvía el servidor; sin conexión hay que ponerlos en el cliente para
+  /// que la fila sea válida desde el primer momento.
+  AccountModel withIdentity({
+    required String id,
+    required String userId,
+    required DateTime createdAt,
+  }) =>
+      AccountModel(
+        id: id,
+        userId: userId,
+        name: name,
+        type: type,
+        initialBalance: initialBalance,
+        currency: currency,
+        createdAt: createdAt,
+      );
+
   AccountModel copyWith({
     String? name,
     AccountType? type,

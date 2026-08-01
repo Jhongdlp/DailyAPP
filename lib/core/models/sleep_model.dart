@@ -72,6 +72,17 @@ class SleepSession {
   /// Intentos fallidos de foto antes de acertar.
   final int dismissAttempts;
 
+  /// Hora a la que te levantaste **de verdad** si tras apagar la alarma te
+  /// volviste a dormir. Si es `null`, [wokeAt] ya era la definitiva.
+  ///
+  /// Sin este campo el registro mentiría justo en el caso que más importa:
+  /// apagar la alarma a las 6:30 y levantarse a las 8:00 se anotaría como un
+  /// despertar limpio a las 6:30.
+  final DateTime? finalWakeAt;
+
+  /// Verificaciones de vigilia superadas esa mañana.
+  final int wakeChecksPassed;
+
   const SleepSession({
     required this.nightKey,
     this.bedtimeTarget,
@@ -84,6 +95,8 @@ class SleepSession {
     this.awakenings,
     this.latencyMinutes,
     this.dismissAttempts = 0,
+    this.finalWakeAt,
+    this.wakeChecksPassed = 0,
   });
 
   /// Fecha (sin hora) a la que corresponde la noche.
@@ -91,10 +104,25 @@ class SleepSession {
 
   bool get isComplete => lightsOutAt != null && wokeAt != null;
 
+  /// Hora en la que dejaste la cama definitivamente.
+  DateTime? get effectiveWakeAt => finalWakeAt ?? wokeAt;
+
+  /// ¿Te volviste a dormir después de apagar la alarma?
+  bool get wentBackToSleep => finalWakeAt != null;
+
+  /// Minutos que estuviste de más en la cama tras apagar la alarma.
+  int? get backToSleepMinutes {
+    final first = wokeAt;
+    final last = finalWakeAt;
+    if (first == null || last == null) return null;
+    final diff = last.difference(first).inMinutes;
+    return diff < 0 ? 0 : diff;
+  }
+
   /// Tiempo entre apagar la luz y levantarse. `null` si falta algún extremo.
   Duration? get timeInBed {
     final start = lightsOutAt;
-    final end = wokeAt;
+    final end = effectiveWakeAt;
     if (start == null || end == null) return null;
     final diff = end.difference(start);
     // Una noche de más de 16 h o negativa es un registro corrupto (p.ej. se
@@ -110,8 +138,12 @@ class SleepSession {
   Duration? get estimatedSleep {
     final inBed = timeInBed;
     if (inBed == null) return null;
+    // Volver a dormirse cuenta como un despertar más: el tramo posterior es
+    // sueño real, pero el corte existió y hay que pagarlo como cualquier otro.
+    final extraAwakening = wentBackToSleep ? 1 : 0;
     final penalty = Duration(
-      minutes: (latencyMinutes ?? 0) + (awakenings ?? 0) * minutesPerAwakening,
+      minutes: (latencyMinutes ?? 0) +
+          ((awakenings ?? 0) + extraAwakening) * minutesPerAwakening,
     );
     final result = inBed - penalty;
     return result.isNegative ? Duration.zero : result;
@@ -170,6 +202,11 @@ class SleepSession {
     int? awakenings,
     int? latencyMinutes,
     int? dismissAttempts,
+    DateTime? finalWakeAt,
+    int? wakeChecksPassed,
+    /// Deshace un "me volví a dormir" mal anotado: sin esto, `copyWith` no
+    /// puede devolver [finalWakeAt] a `null`.
+    bool clearFinalWake = false,
   }) {
     return SleepSession(
       nightKey: nightKey,
@@ -183,6 +220,8 @@ class SleepSession {
       awakenings: awakenings ?? this.awakenings,
       latencyMinutes: latencyMinutes ?? this.latencyMinutes,
       dismissAttempts: dismissAttempts ?? this.dismissAttempts,
+      finalWakeAt: clearFinalWake ? null : (finalWakeAt ?? this.finalWakeAt),
+      wakeChecksPassed: wakeChecksPassed ?? this.wakeChecksPassed,
     );
   }
 
@@ -198,6 +237,8 @@ class SleepSession {
         'awakenings': awakenings,
         'latency_minutes': latencyMinutes,
         'dismiss_attempts': dismissAttempts,
+        'final_wake_at': finalWakeAt?.toIso8601String(),
+        'wake_checks_passed': wakeChecksPassed,
       };
 
   factory SleepSession.fromJson(Map<String, dynamic> json) {
@@ -219,8 +260,67 @@ class SleepSession {
       awakenings: (json['awakenings'] as num?)?.toInt(),
       latencyMinutes: (json['latency_minutes'] as num?)?.toInt(),
       dismissAttempts: (json['dismiss_attempts'] as num?)?.toInt() ?? 0,
+      finalWakeAt: parse('final_wake_at'),
+      wakeChecksPassed: (json['wake_checks_passed'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+/// Verificación de vigilia pendiente: la comprobación de "¿sigues despierto?"
+/// que vuelve a sonar si no la confirmas.
+///
+/// Vive en el estado persistido y no en memoria porque la app puede morir entre
+/// que se programa y que suena — que es justamente lo que pasa cuando dejas el
+/// móvil y te vuelves a dormir.
+class PendingWakeCheck {
+  /// Alarma que originó el despertar, para reprogramar y para el título.
+  final String alarmId;
+
+  /// Id nativo con el que está registrada en el paquete `alarm`.
+  final int nativeId;
+
+  /// Noche a la que pertenece.
+  final String nightKey;
+
+  /// Cuándo sonará.
+  final DateTime dueAt;
+
+  /// Cuándo se apagó la alarma original: la ventana de vigilancia se mide desde
+  /// aquí, no desde la última confirmación.
+  final DateTime wokeAt;
+
+  /// Número de comprobación (1 = la primera).
+  final int round;
+
+  const PendingWakeCheck({
+    required this.alarmId,
+    required this.nativeId,
+    required this.nightKey,
+    required this.dueAt,
+    required this.wokeAt,
+    required this.round,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'alarm_id': alarmId,
+        'native_id': nativeId,
+        'night_key': nightKey,
+        'due_at': dueAt.toIso8601String(),
+        'woke_at': wokeAt.toIso8601String(),
+        'round': round,
+      };
+
+  factory PendingWakeCheck.fromJson(Map<String, dynamic> json) =>
+      PendingWakeCheck(
+        alarmId: json['alarm_id'] as String? ?? '',
+        nativeId: (json['native_id'] as num?)?.toInt() ?? 0,
+        nightKey: json['night_key'] as String? ?? '',
+        dueAt: DateTime.tryParse(json['due_at'] as String? ?? '') ??
+            DateTime.now(),
+        wokeAt: DateTime.tryParse(json['woke_at'] as String? ?? '') ??
+            DateTime.now(),
+        round: (json['round'] as num?)?.toInt() ?? 1,
+      );
 }
 
 /// Horario de sueño configurado por el usuario.
@@ -241,6 +341,16 @@ class SleepSchedule {
   /// Repetir el aviso cada 15 min (hasta 3 veces) si no se confirma.
   final bool nagEnabled;
 
+  /// Comprobar que sigues despierto después de apagar la alarma.
+  final bool wakeCheckEnabled;
+
+  /// Cada cuánto vuelve a preguntar "¿sigues despierto?".
+  final int wakeCheckIntervalMinutes;
+
+  /// Cuánto rato después de apagar la alarma deja de vigilar. Pasada esta
+  /// ventana se asume que ya estás en pie de verdad.
+  final int wakeCheckWindowMinutes;
+
   const SleepSchedule({
     this.enabled = false,
     this.bedtimeHour = 23,
@@ -249,6 +359,9 @@ class SleepSchedule {
     this.goalMinutes = 480,
     this.daysOfWeek = const [1, 2, 3, 4, 5, 6, 7],
     this.nagEnabled = true,
+    this.wakeCheckEnabled = true,
+    this.wakeCheckIntervalMinutes = 10,
+    this.wakeCheckWindowMinutes = 40,
   });
 
   String get formattedBedtime =>
@@ -304,6 +417,9 @@ class SleepSchedule {
     int? goalMinutes,
     List<int>? daysOfWeek,
     bool? nagEnabled,
+    bool? wakeCheckEnabled,
+    int? wakeCheckIntervalMinutes,
+    int? wakeCheckWindowMinutes,
   }) {
     return SleepSchedule(
       enabled: enabled ?? this.enabled,
@@ -313,6 +429,11 @@ class SleepSchedule {
       goalMinutes: goalMinutes ?? this.goalMinutes,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,
       nagEnabled: nagEnabled ?? this.nagEnabled,
+      wakeCheckEnabled: wakeCheckEnabled ?? this.wakeCheckEnabled,
+      wakeCheckIntervalMinutes:
+          wakeCheckIntervalMinutes ?? this.wakeCheckIntervalMinutes,
+      wakeCheckWindowMinutes:
+          wakeCheckWindowMinutes ?? this.wakeCheckWindowMinutes,
     );
   }
 
@@ -324,6 +445,9 @@ class SleepSchedule {
         'goal_minutes': goalMinutes,
         'days_of_week': daysOfWeek,
         'nag_enabled': nagEnabled,
+        'wake_check_enabled': wakeCheckEnabled,
+        'wake_check_interval_minutes': wakeCheckIntervalMinutes,
+        'wake_check_window_minutes': wakeCheckWindowMinutes,
       };
 
   factory SleepSchedule.fromJson(Map<String, dynamic> json) => SleepSchedule(
@@ -336,6 +460,11 @@ class SleepSchedule {
             ? List<int>.from(json['days_of_week'] as List)
             : const [1, 2, 3, 4, 5, 6, 7],
         nagEnabled: json['nag_enabled'] as bool? ?? true,
+        wakeCheckEnabled: json['wake_check_enabled'] as bool? ?? true,
+        wakeCheckIntervalMinutes:
+            (json['wake_check_interval_minutes'] as num?)?.toInt() ?? 10,
+        wakeCheckWindowMinutes:
+            (json['wake_check_window_minutes'] as num?)?.toInt() ?? 40,
       );
 }
 
@@ -352,11 +481,15 @@ class SleepData {
   /// Noches que ya dieron XP. Evita volver a premiar si se reabre el check-in.
   final List<String> rewardedNights;
 
+  /// Comprobación de vigilia programada, si la hay.
+  final PendingWakeCheck? wakeCheck;
+
   const SleepData({
     this.schedule = const SleepSchedule(),
     this.sessions = const {},
     this.openNightKey,
     this.rewardedNights = const [],
+    this.wakeCheck,
   });
 
   SleepSession? get openNight =>
@@ -389,12 +522,15 @@ class SleepData {
     String? openNightKey,
     bool clearOpenNight = false,
     List<String>? rewardedNights,
+    PendingWakeCheck? wakeCheck,
+    bool clearWakeCheck = false,
   }) {
     return SleepData(
       schedule: schedule ?? this.schedule,
       sessions: sessions ?? this.sessions,
       openNightKey: clearOpenNight ? null : (openNightKey ?? this.openNightKey),
       rewardedNights: rewardedNights ?? this.rewardedNights,
+      wakeCheck: clearWakeCheck ? null : (wakeCheck ?? this.wakeCheck),
     );
   }
 
@@ -405,6 +541,7 @@ class SleepData {
         },
         'open_night_key': openNightKey,
         'rewarded_nights': rewardedNights,
+        'wake_check': wakeCheck?.toJson(),
       };
 
   factory SleepData.fromJson(Map<String, dynamic> json) => SleepData(
@@ -422,6 +559,10 @@ class SleepData {
           for (final key in (json['rewarded_nights'] as List? ?? []))
             key as String,
         ],
+        wakeCheck: json['wake_check'] is Map
+            ? PendingWakeCheck.fromJson(
+                Map<String, dynamic>.from(json['wake_check'] as Map))
+            : null,
       );
 }
 
@@ -546,6 +687,25 @@ class SleepAnalytics {
   double? get avgSnoozeMinutes {
     final values =
         _lastN(14).map((n) => n.snoozeMinutes).whereType<int>().toList();
+    if (values.isEmpty) return null;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  /// Proporción (0–1) de mañanas en las que te volviste a dormir después de
+  /// apagar la alarma, sobre las noches con despertar registrado.
+  double? get backToSleepRate {
+    final recent = _lastN(14);
+    if (recent.isEmpty) return null;
+    return recent.where((n) => n.wentBackToSleep).length / recent.length;
+  }
+
+  /// Minutos de más en la cama por recaída, de media (solo las noches en las
+  /// que hubo recaída).
+  double? get avgBackToSleepMinutes {
+    final values = _lastN(14)
+        .map((n) => n.backToSleepMinutes)
+        .whereType<int>()
+        .toList();
     if (values.isEmpty) return null;
     return values.reduce((a, b) => a + b) / values.length;
   }

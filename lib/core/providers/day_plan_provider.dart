@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/day_plan_model.dart';
 import '../services/cache_service.dart';
+import '../services/outbox_service.dart';
+import '../services/synced_write.dart';
 import 'settings_provider.dart';
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -84,9 +86,13 @@ class DayPlansNotifier extends Notifier<List<DayPlan>> {
           .gte('plan_date', _fmtDate(since))
           .order('plan_date', ascending: false);
 
-      final fresh = (response as List)
-          .map((json) => DayPlan.fromJson(json as Map<String, dynamic>))
-          .toList();
+      final rows = OutboxService.reconcileRows(
+        [for (final row in response as List) Map<String, dynamic>.from(row as Map)],
+        await OutboxService.pendingFor('day_plans'),
+      );
+
+      final fresh = rows.map(DayPlan.fromJson).toList()
+        ..sort((a, b) => b.planDate.compareTo(a.planDate));
 
       state = fresh;
       _lastSyncedAt = DateTime.now();
@@ -139,7 +145,9 @@ class DayPlansNotifier extends Notifier<List<DayPlan>> {
     final existing = planFor(dayOnly);
     final merged = (existing ??
             DayPlan(
-              id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+              // Id definitivo desde el cliente: un plan escrito sin conexión ya
+              // es una fila válida y no hay que reemplazarlo al sincronizar.
+              id: newRowId(),
               planDate: dayOnly,
               plannedAt: DateTime.now(),
             ))
@@ -157,31 +165,31 @@ class DayPlansNotifier extends Notifier<List<DayPlan>> {
     ];
     _scheduleCacheSave();
 
-    try {
-      final settings = ref.read(settingsProvider);
-      if (!settings.isSupabaseConfigured) return merged;
+    final settings = ref.read(settingsProvider);
+    if (!settings.isSupabaseConfigured || !canWriteToSupabase) return merged;
 
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      if (user == null) return merged;
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser!;
+    final payload = {'id': merged.id, ...merged.toUpsertJson(user.id)};
 
-      final response = await client
-          .from('day_plans')
-          .upsert(merged.toUpsertJson(user.id), onConflict: 'user_id,plan_date')
-          .select()
-          .single();
+    final confirmed = await syncedWrite(
+      write: () =>
+          client.from('day_plans').upsert(payload, onConflict: 'user_id,plan_date'),
+      fallback: () => OutboxOp.create(
+        table: 'day_plans',
+        kind: OutboxOpKind.upsert,
+        payload: payload,
+        // La identidad de un plan es el día, no su id: reabrir el ritual la
+        // misma noche debe fundirse con lo ya encolado, no crear otra fila.
+        match: {'user_id': user.id, 'plan_date': _fmtDate(dayOnly)},
+        onConflict: 'user_id,plan_date',
+      ),
+    );
 
-      final saved = DayPlan.fromJson(response);
-      state = [
-        saved,
-        ...state.where((p) => p.planDate != dayOnly),
-      ];
-      _scheduleCacheSave();
-      return saved;
-    } catch (e) {
-      lastSyncError = 'No se pudo guardar el plan en el servidor. Quedó en este dispositivo.';
-      return merged;
+    if (!confirmed) {
+      lastSyncError = 'Sin conexión: el plan se guardó y se sincronizará solo.';
     }
+    return merged;
   }
 }
 

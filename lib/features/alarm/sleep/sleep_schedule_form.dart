@@ -25,6 +25,9 @@ class _SleepScheduleFormState extends ConsumerState<SleepScheduleForm> {
   late int _windDown;
   late bool _nag;
   late bool _enabled;
+  late bool _wakeCheck;
+  late int _wakeCheckInterval;
+  late int _wakeCheckWindow;
   bool _saving = false;
 
   static const _dayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -36,6 +39,8 @@ class _SleepScheduleFormState extends ConsumerState<SleepScheduleForm> {
   /// los extremos que la gente usa de verdad.
   static const _goalOptions = [360, 390, 420, 450, 480, 510, 540];
   static const _windDownOptions = [0, 15, 30, 45, 60];
+  static const _wakeCheckIntervalOptions = [5, 10, 15, 20];
+  static const _wakeCheckWindowOptions = [20, 40, 60, 90];
 
   @override
   void initState() {
@@ -46,6 +51,9 @@ class _SleepScheduleFormState extends ConsumerState<SleepScheduleForm> {
     _goalMinutes = s.goalMinutes;
     _windDown = s.windDownMinutes;
     _nag = s.nagEnabled;
+    _wakeCheck = s.wakeCheckEnabled;
+    _wakeCheckInterval = s.wakeCheckIntervalMinutes;
+    _wakeCheckWindow = s.wakeCheckWindowMinutes;
     _enabled = true; // entrar aquí a guardar implica querer activarlo
   }
 
@@ -74,6 +82,9 @@ class _SleepScheduleFormState extends ConsumerState<SleepScheduleForm> {
               goalMinutes: _goalMinutes,
               daysOfWeek: days,
               nagEnabled: _nag,
+              wakeCheckEnabled: _wakeCheck,
+              wakeCheckIntervalMinutes: _wakeCheckInterval,
+              wakeCheckWindowMinutes: _wakeCheckWindow,
             ),
           );
       if (mounted) Navigator.pop(context);
@@ -330,6 +341,56 @@ class _SleepScheduleFormState extends ConsumerState<SleepScheduleForm> {
                     fontSize: 12, color: BentoTheme.creamAlpha(0.55)),
               ),
             ),
+
+            _divider(),
+
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _wakeCheck,
+              activeThumbColor: BentoTheme.accentAlarm,
+              onChanged: (v) => setState(() => _wakeCheck = v),
+              title: Text('Comprobar que sigo despierto',
+                  style: GoogleFonts.montserrat(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: BentoTheme.cream)),
+              subtitle: Text(
+                'Un rato después de apagar la alarma vuelve a sonar hasta que '
+                'confirmes de un toque. Es lo que impide volver a la cama.',
+                style: GoogleFonts.montserrat(
+                    fontSize: 12, color: BentoTheme.creamAlpha(0.55)),
+              ),
+            ),
+            if (_wakeCheck) ...[
+              const SizedBox(height: 16),
+              _sectionTitle('Cada cuánto comprueba'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _wakeCheckIntervalOptions
+                    .map((m) => _chip('$m min',
+                        active: _wakeCheckInterval == m,
+                        onTap: () => setState(() => _wakeCheckInterval = m)))
+                    .toList(),
+              ),
+              const SizedBox(height: 20),
+              _sectionTitle(
+                'Durante cuánto rato',
+                subtitle: 'Pasado este tiempo desde que apagas la alarma, '
+                    'deja de vigilar.',
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _wakeCheckWindowOptions
+                    .map((m) => _chip('$m min',
+                        active: _wakeCheckWindow == m,
+                        onTap: () => setState(() => _wakeCheckWindow = m)))
+                    .toList(),
+              ),
+            ],
           ],
         ),
       ),

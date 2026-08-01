@@ -16,6 +16,8 @@ class CacheService {
     'notes',
     'alarms',
     'tasks',
+    'accounts',
+    'transactions',
     'day_plans',
     'semantic_edges',
     'books',
@@ -25,6 +27,7 @@ class CacheService {
     'focus_stats',
     'pomodoro_prefs',
     'news_digest',
+    'weekly_reviews',
   ];
 
   static Future<SharedPreferences> _instance() async {

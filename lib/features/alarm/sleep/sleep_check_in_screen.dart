@@ -30,6 +30,11 @@ class _SleepCheckInScreenState extends ConsumerState<SleepCheckInScreen> {
   int? _latency;
   bool _saving = false;
 
+  /// `null` = sin responder, `false` = me levanté de una, `true` = volví a
+  /// dormirme (y entonces hace falta la hora real).
+  bool? _backToSleep;
+  TimeOfDay? _finalWake;
+
   static const _qualityFaces = [
     (1, '😵', 'Fatal'),
     (2, '😪', 'Mal'),
@@ -55,18 +60,34 @@ class _SleepCheckInScreenState extends ConsumerState<SleepCheckInScreen> {
   ];
 
   bool get _complete =>
-      _quality != null && _awakenings != null && _latency != null;
+      _quality != null &&
+      _awakenings != null &&
+      _latency != null &&
+      // Decir que te volviste a dormir sin la hora dejaría la noche peor que
+      // no responder: sabríamos que el dato está mal pero no cuál es el bueno.
+      (_backToSleep != true || _finalWake != null);
 
   Future<void> _submit() async {
     if (!_complete || _saving) return;
     setState(() => _saving = true);
 
-    final result = await ref.read(sleepProvider.notifier).submitCheckIn(
-          quality: _quality!,
-          awakenings: _awakenings!,
-          latencyMinutes: _latency!,
-          nightKey: widget.nightKey,
-        );
+    final notifier = ref.read(sleepProvider.notifier);
+
+    // El "me volví a dormir" va antes del check-in: cambia la duración de la
+    // noche, y el premio se calcula con ella.
+    if (_backToSleep == true && _finalWake != null) {
+      await notifier.registerBackToSleep(
+        finalWakeAt: _resolveFinalWake(_finalWake!),
+        nightKey: widget.nightKey,
+      );
+    }
+
+    final result = await notifier.submitCheckIn(
+      quality: _quality!,
+      awakenings: _awakenings!,
+      latencyMinutes: _latency!,
+      nightKey: widget.nightKey,
+    );
 
     if (!mounted) return;
     if (result != null) {
@@ -81,6 +102,29 @@ class _SleepCheckInScreenState extends ConsumerState<SleepCheckInScreen> {
       await Future.delayed(const Duration(milliseconds: 900));
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  /// Convierte la hora elegida en un instante del día del despertar.
+  DateTime _resolveFinalWake(TimeOfDay time) {
+    final key = widget.nightKey ?? nightKeyFor(DateTime.now());
+    final date = ref.read(sleepProvider).sessions[key]?.date ?? DateTime.now();
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  Future<void> _pickFinalWake() async {
+    final session =
+        ref.read(sleepProvider).sessions[widget.nightKey ?? nightKeyFor(DateTime.now())];
+    final picked = await showTimePicker(
+      context: context,
+      // Arranca en la hora en que apagaste la alarma: lo que se pide es cuánto
+      // más tarde te levantaste, no una hora en abstracto.
+      initialTime: _finalWake ??
+          (session?.wokeAt != null
+              ? TimeOfDay.fromDateTime(session!.wokeAt!)
+              : TimeOfDay.now()),
+      helpText: '¿A qué hora te levantaste de verdad?',
+    );
+    if (picked != null && mounted) setState(() => _finalWake = picked);
   }
 
   Future<void> _skip() async {
@@ -227,6 +271,73 @@ class _SleepCheckInScreenState extends ConsumerState<SleepCheckInScreen> {
                           ),
                       ],
                     ),
+                    const SizedBox(height: 32),
+
+                    // Sin esta pregunta el registro diría que te levantaste a
+                    // la hora de la alarma aunque siguieras dos horas en cama.
+                    _question('Tras apagar la alarma, ¿te volviste a dormir?'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _option(
+                          label: 'Me levanté de una',
+                          active: _backToSleep == false,
+                          onTap: () => setState(() {
+                            _backToSleep = false;
+                            _finalWake = null;
+                          }),
+                        ),
+                        _option(
+                          label: 'Sí, volví a la cama',
+                          active: _backToSleep == true,
+                          onTap: () {
+                            setState(() => _backToSleep = true);
+                            _pickFinalWake();
+                          },
+                        ),
+                      ],
+                    ),
+                    if (_backToSleep == true) ...[
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: _pickFinalWake,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            color: BentoTheme.darkCardAlt,
+                            border: Border.all(
+                              color: _finalWake == null
+                                  ? BentoTheme.accentOrange
+                                  : BentoTheme.creamAlpha(0.14),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.schedule,
+                                  size: 16, color: BentoTheme.creamAlpha(0.55)),
+                              const SizedBox(width: 10),
+                              Text(
+                                _finalWake == null
+                                    ? 'Elige a qué hora te levantaste'
+                                    : 'Te levantaste a las '
+                                        '${_finalWake!.hour.toString().padLeft(2, '0')}:'
+                                        '${_finalWake!.minute.toString().padLeft(2, '0')}',
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: _finalWake == null
+                                      ? BentoTheme.accentOrange
+                                      : BentoTheme.cream,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
