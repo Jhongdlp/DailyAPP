@@ -9,6 +9,8 @@ import '../../core/models/habit_model.dart';
 import '../../core/providers/habits_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/rpg_provider.dart';
+import '../../core/providers/exercise_habit_link_provider.dart';
+import '../exercise/exercise_capture_flow.dart';
 import '../../core/models/achievement_catalog.dart';
 import '../../core/widgets/rpg_celebration.dart';
 import '../../core/network/local_ai_client.dart';
@@ -130,6 +132,43 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           newLevel: result['newLevel'] as int?,
         );
         AchievementToast.show(context, result['unlocked']);
+      }
+
+      // Solo para el hábito vinculado a Ejercicio, y solo al completar (no al
+      // desmarcar): ofrece guardar fotos + datos de la sesión de hoy sin que
+      // el usuario tenga que ir a buscar la pestaña Ejercicio por su cuenta.
+      final linkedExerciseHabitId = ref.read(exerciseHabitLinkProvider);
+      if (linkedExerciseHabitId == habit.id && mounted) {
+        final wantsToLog = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: BentoTheme.darkCard,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              '¿Quieres guardar tu progreso de hoy?',
+              style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w700),
+            ),
+            content: Text(
+              'Toma hasta 5 fotos y registra los datos de tu ejercicio.',
+              style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text('No', style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontWeight: FontWeight.w700)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: BentoTheme.accentOrange, foregroundColor: const Color(0xFF0C0C0D)),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Sí'),
+              ),
+            ],
+          ),
+        );
+        if (wantsToLog == true && mounted) {
+          await runExerciseCaptureFlow(context, ref, forDate: day, habitId: habit.id);
+        }
       }
     } else {
       ref.read(rpgProvider.notifier).revertReward(

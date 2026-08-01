@@ -13,6 +13,7 @@ import '../reading/shared_books_handler.dart';
 import '../agenda/agenda_tab.dart';
 import '../news/news_tab.dart';
 import '../analytics/analytics_tab.dart';
+import '../exercise/exercise_tab.dart';
 import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../settings/personalize_screen.dart';
@@ -23,6 +24,7 @@ import '../../core/providers/habits_provider.dart';
 import '../../core/providers/tasks_provider.dart';
 import '../../core/providers/books_provider.dart';
 import '../../core/providers/book_bookmarks_provider.dart';
+import '../../core/providers/exercise_provider.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/widgets/lazy_indexed_stack.dart';
 import '../../core/widgets/sync_indicator.dart';
@@ -50,6 +52,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     const ReadingTab(),
     const NewsTab(),
     const AnalyticsTab(),
+    const ExerciseTab(),
   ];
 
   SharedBooksHandler? _sharedBooks;
@@ -275,6 +278,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   await CacheService.delete('tasks');
                   await CacheService.delete('books');
                   await CacheService.delete('book_bookmarks');
+                  await CacheService.delete('exercise');
 
                   await Supabase.instance.client.auth.signOut();
 
@@ -285,6 +289,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ref.invalidate(tasksProvider);
                   ref.invalidate(booksProvider);
                   ref.invalidate(bookBookmarksProvider);
+                  ref.invalidate(exerciseProvider);
                   
                   if (context.mounted) {
                     Navigator.of(context).pushReplacement(

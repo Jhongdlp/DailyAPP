@@ -28,6 +28,7 @@ class CacheService {
     'pomodoro_prefs',
     'news_digest',
     'weekly_reviews',
+    'exercise',
   ];
 
   static Future<SharedPreferences> _instance() async {

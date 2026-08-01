@@ -1,27 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/news_model.dart';
 import '../services/cache_service.dart';
-
-/// Base cruda del repo donde la routine publica los digests. Es contenido
-/// público y de solo lectura, así que va sin credenciales.
-const _newsBaseUrl =
-    'https://raw.githubusercontent.com/Jhongdlp/DailyAPP/main/news';
-
-/// Días hacia atrás que se prueban cuando el digest de hoy todavía no existe.
-/// La routine corre a las 6am; abrir la app antes de esa hora, o después de un
-/// día en que falló, debe mostrar el último digest disponible en vez de vacío.
-const _maxLookbackDays = 7;
-
-String _fileNameFor(DateTime day) {
-  final y = day.year.toString().padLeft(4, '0');
-  final m = day.month.toString().padLeft(2, '0');
-  final d = day.day.toString().padLeft(2, '0');
-  return '$y-$m-$d.json';
-}
+import 'settings_provider.dart';
 
 class NewsState {
   final NewsDigest? digest;
@@ -44,6 +26,11 @@ class NewsState {
   }
 }
 
+/// Lee el digest más reciente de `news_digests`.
+///
+/// La tabla la escribe una routine (agente programado en la nube) vía la
+/// función `publish_news_digest`; la app solo lee. Por eso aquí no hay ninguna
+/// ruta de escritura ni cola offline: no hay nada que sincronizar de vuelta.
 class NewsNotifier extends Notifier<NewsState> {
   @override
   NewsState build() {
@@ -51,15 +38,19 @@ class NewsNotifier extends Notifier<NewsState> {
     return const NewsState(isLoading: true);
   }
 
+  bool get _hasSupabase {
+    final settings = ref.read(settingsProvider);
+    return settings.isSupabaseConfigured &&
+        Supabase.instance.client.auth.currentUser != null;
+  }
+
   Future<void> _load() async {
-    // El digest cacheado se pinta primero para que el apartado abra al
-    // instante y siga sirviendo sin conexión; la red solo lo reemplaza si
-    // trae algo más nuevo.
+    // El digest cacheado se pinta primero para que la sección abra al
+    // instante y siga sirviendo sin conexión.
     final cached = await _readCache();
     if (cached != null) {
       state = state.copyWith(digest: cached, isLoading: false, clearError: true);
     }
-
     await refresh(silent: cached != null);
   }
 
@@ -71,69 +62,58 @@ class NewsNotifier extends Notifier<NewsState> {
     return null;
   }
 
-  /// Descarga el digest más reciente disponible.
-  ///
-  /// [silent] evita el spinner cuando ya hay un digest cacheado en pantalla:
-  /// un refresco de fondo no debería vaciar la vista.
+  /// [silent] evita el spinner cuando ya hay un digest en pantalla: un
+  /// refresco de fondo no debería vaciar la vista.
   Future<void> refresh({bool silent = false}) async {
-    if (!silent) state = state.copyWith(isLoading: true, clearError: true);
-
-    final client = http.Client();
-    try {
-      final today = DateTime.now();
-      for (var back = 0; back < _maxLookbackDays; back++) {
-        final day = today.subtract(Duration(days: back));
-        final digest = await _fetchDay(client, day);
-        if (digest == null) continue;
-
-        // Un digest más viejo que el cacheado no lo reemplaza: pasa cuando la
-        // routine aún no publicó hoy y el lookback encuentra el de ayer, que
-        // ya teníamos.
-        final current = state.digest;
-        if (current != null && digest.date.isBefore(current.date)) {
-          state = state.copyWith(isLoading: false, clearError: true);
-          return;
-        }
-
-        await CacheService.save('news_digest', digest.toJson());
-        state = NewsState(digest: digest, isLoading: false);
-        return;
-      }
-
+    if (!_hasSupabase) {
       state = state.copyWith(
         isLoading: false,
         error: state.digest == null
-            ? 'Todavía no hay ningún digest publicado.'
-            : 'No se encontró un digest más reciente.',
+            ? 'Inicia sesión para ver el digest de noticias.'
+            : null,
       );
+      return;
+    }
+
+    if (!silent) state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final rows = await Supabase.instance.client
+          .from('news_digests')
+          .select('digest_date, editorial, items')
+          .order('digest_date', ascending: false)
+          .limit(1);
+
+      if (rows.isEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          error: state.digest == null
+              ? 'Todavía no hay ningún digest publicado.'
+              : null,
+        );
+        return;
+      }
+
+      final row = rows.first;
+      // `digest_date` es la columna real; el modelo habla de `date`, que es
+      // también la clave que usa el payload de la routine.
+      final digest = NewsDigest.fromJson({
+        'date': row['digest_date'],
+        'editorial': row['editorial'],
+        'items': row['items'],
+      });
+
+      await CacheService.save('news_digest', digest.toJson());
+      state = NewsState(digest: digest, isLoading: false);
     } catch (e) {
+      // Nunca se traga el error: si no hay nada cacheado el usuario debe ver
+      // qué falló, y si lo hay debe saber que está viendo algo viejo.
       state = state.copyWith(
         isLoading: false,
         error: state.digest == null
             ? 'No se pudo cargar el digest: $e'
             : 'Sin conexión — mostrando el último digest guardado.',
       );
-    } finally {
-      client.close();
-    }
-  }
-
-  Future<NewsDigest?> _fetchDay(http.Client client, DateTime day) async {
-    try {
-      final response = await client
-          .get(Uri.parse('$_newsBaseUrl/${_fileNameFor(day)}'))
-          .timeout(const Duration(seconds: 12));
-      if (response.statusCode != 200) return null;
-
-      // `bodyBytes` + utf8 explícito: raw.githubusercontent no manda charset y
-      // `response.body` asumiría latin-1, rompiendo las tildes de los resúmenes.
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      if (decoded is! Map<String, dynamic>) return null;
-
-      final digest = NewsDigest.fromJson(decoded);
-      return digest.isEmpty ? null : digest;
-    } catch (_) {
-      return null;
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/metric_model.dart';
 import '../models/transaction_model.dart';
 import '../services/metrics_service.dart';
+import 'exercise_provider.dart';
 import 'finance_provider.dart';
 import 'focus_stats_provider.dart';
 import 'habits_provider.dart';
@@ -144,6 +145,22 @@ final metricsSnapshotProvider = Provider<MetricsSnapshot>((ref) {
     expense[day] = (expense[day] ?? 0) + tx.amount;
   }
   if (expense.isNotEmpty) series[DailyMetric.expense] = expense;
+
+  // --- Ejercicio -----------------------------------------------------------
+  final exerciseLogs = ref.watch(exerciseProvider).logs;
+  final exerciseKm = <DateTime, double>{};
+  final exerciseMinutes = <DateTime, double>{};
+  for (final log in exerciseLogs) {
+    final day = _day(log.loggedDate);
+    if (log.distanceKm != null) {
+      exerciseKm[day] = (exerciseKm[day] ?? 0) + log.distanceKm!;
+    }
+    if (log.durationMinutes != null) {
+      exerciseMinutes[day] = (exerciseMinutes[day] ?? 0) + log.durationMinutes!;
+    }
+  }
+  if (exerciseKm.isNotEmpty) series[DailyMetric.exerciseKm] = exerciseKm;
+  if (exerciseMinutes.isNotEmpty) series[DailyMetric.exerciseMinutes] = exerciseMinutes;
 
   return MetricsSnapshot(series);
 });

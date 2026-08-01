@@ -133,6 +133,97 @@ class LocalAIClient {
     }
   }
 
+  /// Clasifica una foto de progreso físico como "cara" o "cuerpo" con Qwen-VL.
+  /// Se usa en background tras subir la foto: nunca bloquea el flujo de
+  /// captura, así que un resultado 'unknown' (respuesta ambigua) es preferible
+  /// a lanzar y dejar la foto sin clasificar para siempre.
+  Future<String> classifyExercisePhoto(String base64Image) async {
+    const prompt = 'Analiza esta imagen de una persona haciendo seguimiento de su progreso físico. '
+        'Responde únicamente con una palabra: "CARA" si la imagen es principalmente un retrato/selfie de rostro, '
+        '"CUERPO" si es una foto de cuerpo completo o torso para ver progreso físico, '
+        'u "OTRO" si no aplica ninguna de las dos. No añadas explicaciones ni más texto.';
+
+    try {
+      final url = Uri.parse('$baseUrl/api/chat');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'model': visionModelName,
+          'messages': [
+            {
+              'role': 'user',
+              'content': prompt,
+              'images': [base64Image]
+            }
+          ],
+          'stream': false,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final result = data['message']['content'].toString();
+        return _extractClassificationLabel(result);
+      } else {
+        return _classifyExercisePhotoOpenAI(base64Image);
+      }
+    } catch (e) {
+      try {
+        return await _classifyExercisePhotoOpenAI(base64Image);
+      } catch (err) {
+        throw Exception('Error al clasificar imagen con Qwen-VL local: $err');
+      }
+    }
+  }
+
+  /// Método auxiliar de clasificación para servidores tipo OpenAI
+  Future<String> _classifyExercisePhotoOpenAI(String base64Image) async {
+    const prompt = 'Analiza esta imagen de una persona haciendo seguimiento de su progreso físico. '
+        'Responde únicamente con una palabra: "CARA" si la imagen es principalmente un retrato/selfie de rostro, '
+        '"CUERPO" si es una foto de cuerpo completo o torso para ver progreso físico, '
+        'u "OTRO" si no aplica ninguna de las dos. No añadas explicaciones ni más texto.';
+    final url = Uri.parse('$baseUrl/v1/chat/completions');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'model': visionModelName,
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {'type': 'text', 'text': prompt},
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+              }
+            ]
+          }
+        ],
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final result = data['choices'][0]['message']['content'].toString();
+      return _extractClassificationLabel(result);
+    } else {
+      throw Exception('Servidor local OpenAI vision retornó código de error: ${response.statusCode}');
+    }
+  }
+
+  /// Extrae 'cara'/'cuerpo'/'unknown' de la respuesta cruda del modelo, con el
+  /// mismo strip de <think> y tokenización usados en [_isPositiveResponse].
+  String _extractClassificationLabel(String rawContent) {
+    final clean = rawContent.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').trim().toUpperCase();
+    final tokens = clean.split(RegExp('[\\s,.\\-!?;():"\'«»]+'));
+
+    if (clean == 'CARA' || tokens.contains('CARA')) return 'cara';
+    if (clean == 'CUERPO' || tokens.contains('CUERPO')) return 'cuerpo';
+    return 'unknown';
+  }
+
   /// Envía una consulta de texto y retorna la respuesta como stream de tokens
   /// (API de Ollama con stream:true, formato NDJSON — una línea JSON por chunk).
   /// Si el streaming falla antes de emitir algo, cae al modo no-streaming

@@ -63,6 +63,18 @@ enum DailyMetric {
     unit: 'min',
     aggregation: MetricAggregation.sum,
     higherIsBetter: true,
+  ),
+  exerciseKm(
+    label: 'Distancia',
+    unit: 'km',
+    aggregation: MetricAggregation.sum,
+    higherIsBetter: true,
+  ),
+  exerciseMinutes(
+    label: 'Ejercicio',
+    unit: 'min',
+    aggregation: MetricAggregation.sum,
+    higherIsBetter: true,
   );
 
   const DailyMetric({
@@ -91,6 +103,8 @@ enum DailyMetric {
         DailyMetric.tasksCompleted => BentoTheme.accentLime,
         DailyMetric.expense => BentoTheme.accentFinance,
         DailyMetric.readingMinutes => BentoTheme.accentPurple,
+        DailyMetric.exerciseKm => BentoTheme.accentOrange,
+        DailyMetric.exerciseMinutes => BentoTheme.accentOrange,
       };
 
   IconData get icon => switch (this) {
@@ -102,6 +116,8 @@ enum DailyMetric {
         DailyMetric.tasksCompleted => Icons.task_alt_outlined,
         DailyMetric.expense => Icons.account_balance_wallet_outlined,
         DailyMetric.readingMinutes => Icons.auto_stories_outlined,
+        DailyMetric.exerciseKm => Icons.directions_run,
+        DailyMetric.exerciseMinutes => Icons.timer_outlined,
       };
 
   /// Texto corto para una tarjeta. Los minutos de sueño se muestran en horas
@@ -112,9 +128,11 @@ enum DailyMetric {
         DailyMetric.habitRate => '${(value * 100).round()}%',
         DailyMetric.expense => '\$${value.toStringAsFixed(0)}',
         DailyMetric.focusMinutes ||
-        DailyMetric.readingMinutes =>
+        DailyMetric.readingMinutes ||
+        DailyMetric.exerciseMinutes =>
           '${value.round()} min',
         DailyMetric.pomodoros || DailyMetric.tasksCompleted => '${value.round()}',
+        DailyMetric.exerciseKm => '${value.toStringAsFixed(1)} km',
       };
 
   /// Cómo se nombra la métrica dentro de una frase ("los días de **más foco**").
@@ -127,6 +145,8 @@ enum DailyMetric {
         DailyMetric.tasksCompleted => 'tareas completadas',
         DailyMetric.expense => 'gasto',
         DailyMetric.readingMinutes => 'lectura',
+        DailyMetric.exerciseKm => 'distancia recorrida',
+        DailyMetric.exerciseMinutes => 'ejercicio',
       };
 }
 
