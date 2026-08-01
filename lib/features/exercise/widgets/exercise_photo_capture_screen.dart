@@ -76,6 +76,13 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
     _controller = controller;
     try {
       await controller.initialize();
+      // La cámara frontal no tiene flash físico: CameraX (Android) simula uno
+      // encendiendo la pantalla en blanco si el modo queda en auto/always
+      // (el valor por defecto al inicializar). Sin esto, cambiar a selfie
+      // deja la pantalla completamente blanca.
+      try {
+        await controller.setFlashMode(FlashMode.off);
+      } catch (_) {}
       await previous?.dispose();
       if (mounted) setState(() => _initializing = false);
     } catch (e) {
