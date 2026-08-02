@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 
 import '../../../core/models/sleep_model.dart';
 import '../../../core/providers/sleep_provider.dart';
@@ -170,7 +171,7 @@ class _SleepCheckInScreenState extends ConsumerState<SleepCheckInScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (emoji != null) ...[
-              Text(emoji, style: const TextStyle(fontSize: 26)),
+              Twemoji(emoji: emoji, height: 26, width: 26),
               const SizedBox(height: 2),
             ],
             Text(

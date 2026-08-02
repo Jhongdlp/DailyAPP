@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import '../../../../core/providers/tasks_provider.dart';
 import '../../../../core/theme/bento_theme.dart';
 import '../night_planning_screen.dart';
@@ -154,7 +155,7 @@ class _StepReviewTodayState extends ConsumerState<StepReviewToday> {
                           ),
                           child: Column(
                             children: [
-                              Text(mood.emoji, style: const TextStyle(fontSize: 22)),
+                              Twemoji(emoji: mood.emoji, height: 22, width: 22),
                               const SizedBox(height: 3),
                               Text(
                                 mood.label,

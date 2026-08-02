@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 
 import '../../core/theme/bento_theme.dart';
 import 'pomodoro_palette.dart';
@@ -135,7 +136,7 @@ class _PomodoroSetupSheetState extends ConsumerState<PomodoroSetupSheet> {
                 children: [
                   Row(
                     children: [
-                      const Text('🍅', style: TextStyle(fontSize: 24)),
+                      const Twemoji(emoji: '🍅', height: 24, width: 24),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/habit_model.dart';
 import '../../core/models/habit_template.dart';
@@ -7,7 +8,7 @@ import '../../core/providers/habits_provider.dart';
 import '../../core/theme/bento_theme.dart';
 
 const List<String> _kEmojiChoices = [
-  '✅', '💧', '🧘', '📚', '🏃', '🍎', '😴', '💪', '✍️', '🎯', '🧠', '🚭', '🎨', '🙏', '💰', '🌱',
+  '✅', '💧', '🧘', '📚', '🏃', '🍎', '😴', '💪', '✍️', '🎯', '🧠', '🚭', '🎨', '🙏', '💰', '🌱', '👟', '🤸',
 ];
 
 const List<String> _kColorChoices = [
@@ -338,7 +339,7 @@ class _HabitFormSheetState extends ConsumerState<_HabitFormSheet> {
                                   color: selected ? BentoTheme.accentHabits.withValues(alpha: 0.16) : BentoTheme.creamAlpha(0.06),
                                   border: Border.all(color: selected ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.14), width: selected ? 2 : 1.5),
                                 ),
-                                child: Text(e, style: const TextStyle(fontSize: 17)),
+                                child: Twemoji(emoji: e, height: 20, width: 20),
                               ),
                             );
                           }).toList(),

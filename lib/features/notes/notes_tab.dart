@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/models/note_model.dart';
 import '../../core/models/note_vault_model.dart';
@@ -1309,7 +1310,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
       ),
       child: iconData != null
           ? Icon(iconData, size: size * 0.5, color: badgeColor)
-          : Text(vault?.icon ?? '📁', style: TextStyle(fontSize: size * 0.46)),
+          : Twemoji(emoji: vault?.icon ?? '📁', height: size * 0.46, width: size * 0.46),
     );
   }
 
@@ -1320,7 +1321,7 @@ class _NotesTabState extends ConsumerState<NotesTab>
     final iconData = vault?.iconData ?? (vault == null ? Icons.description_outlined : null);
     return iconData != null
         ? Icon(iconData, size: size, color: glyphColor)
-        : Text(vault?.icon ?? '📁', style: TextStyle(fontSize: size));
+        : Twemoji(emoji: vault?.icon ?? '📁', height: size, width: size);
   }
 
   Widget _buildVaultsHeader() {

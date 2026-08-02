@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 
 import '../../../core/models/task_model.dart';
 import '../../../core/providers/focus_stats_provider.dart';
@@ -129,8 +130,8 @@ class FocusTaskCard extends ConsumerWidget {
                 ),
                 if (pomodoros > 0) ...[
                   const SizedBox(height: 5),
-                  Text(
-                    '🍅 $pomodoros ${pomodoros == 1 ? "bloque" : "bloques"} en esta tarea',
+                  TwemojiText(
+                    text: '🍅 $pomodoros ${pomodoros == 1 ? "bloque" : "bloques"} en esta tarea',
                     style: GoogleFonts.montserrat(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w600,
@@ -323,8 +324,8 @@ class _FocusTaskPickerSheet extends ConsumerWidget {
                             ),
                             if (count > 0) ...[
                               const SizedBox(width: 8),
-                              Text(
-                                '🍅$count',
+                              TwemojiText(
+                                text: '🍅$count',
                                 style: GoogleFonts.montserrat(
                                   fontSize: 11,
                                   color: BentoTheme.creamAlpha(0.45),

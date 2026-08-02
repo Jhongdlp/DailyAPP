@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/bento_theme.dart';
@@ -830,7 +831,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       child: SizedBox(
         width: size,
         height: size,
-        child: Center(child: Text(emoji, style: TextStyle(fontSize: iconSize))),
+        child: Center(child: Twemoji(emoji: emoji, height: iconSize, width: iconSize)),
       ),
     );
   }

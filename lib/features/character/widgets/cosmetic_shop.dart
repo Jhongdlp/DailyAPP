@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import '../../../core/theme/bento_theme.dart';
 import '../../../core/providers/rpg_provider.dart';
 import '../../../core/models/cosmetic_catalog.dart';
@@ -150,8 +151,8 @@ class CosmeticShop extends ConsumerWidget {
                           : BentoTheme.creamAlpha(0.08),
                       borderRadius: BorderRadius.circular(100),
                     ),
-                    child: Text(
-                      owned
+                    child: TwemojiText(
+                      text: owned
                           ? (equipped ? 'Equipado ✓' : 'Equipar')
                           : '💰 ${item.price}',
                       style: GoogleFonts.montserrat(

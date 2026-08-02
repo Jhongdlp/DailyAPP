@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/bento_theme.dart';
 import '../../core/providers/rpg_provider.dart';
@@ -86,7 +87,7 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                               width: 1.5,
                             ),
                           ),
-                          child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                          child: Twemoji(emoji: emoji, height: 24, width: 24),
                         ),
                       );
                     }).toList(),
@@ -230,7 +231,7 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                 ),
                 child: Row(
                   children: [
-                    const Text('💰', style: TextStyle(fontSize: 14)),
+                    const Twemoji(emoji: '💰', height: 14, width: 14),
                     const SizedBox(width: 4),
                     Text(
                       '${rpgStats.gold}',
@@ -497,8 +498,8 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Costo: ${reward.cost} 💰',
+                          TwemojiText(
+                            text: 'Costo: ${reward.cost} 💰',
                             style: GoogleFonts.montserrat(
                               fontSize: 10,
                               fontWeight: FontWeight.w900,

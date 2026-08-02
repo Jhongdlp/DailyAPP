@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import '../../../core/theme/bento_theme.dart';
 import '../../../core/providers/rpg_provider.dart';
 import '../../../core/models/achievement_catalog.dart';
@@ -54,9 +55,10 @@ class PixelBadge extends StatelessWidget {
             padding: EdgeInsets.only(bottom: size * 0.12),
             child: Opacity(
               opacity: locked ? 0.35 : 1.0,
-              child: Text(
-                locked ? '🔒' : def.emoji,
-                style: TextStyle(fontSize: size * 0.34),
+              child: Twemoji(
+                emoji: locked ? '🔒' : def.emoji,
+                height: size * 0.34,
+                width: size * 0.34,
               ),
             ),
           ),

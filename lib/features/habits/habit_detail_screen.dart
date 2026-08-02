@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/habit_model.dart';
 import '../../core/network/local_ai_client.dart';
@@ -286,10 +287,18 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     _buildBackButton(),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        '${habit.icon}  ${habit.name}',
-                        style: GoogleFonts.montserrat(fontSize: 19, fontWeight: FontWeight.w800, color: BentoTheme.cream),
-                        overflow: TextOverflow.ellipsis,
+                      child: Row(
+                        children: [
+                          Twemoji(emoji: habit.icon, height: 20, width: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              habit.name,
+                              style: GoogleFonts.montserrat(fontSize: 19, fontWeight: FontWeight.w800, color: BentoTheme.cream),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -321,7 +330,22 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         ],
                       ),
                     ),
-                    _StatCard(label: 'Mejor racha', value: '${habit.bestStreak()} 🏆', color: BentoTheme.accentPurple),
+                    _StatCard(
+                      label: 'Mejor racha',
+                      value: '',
+                      color: BentoTheme.accentPurple,
+                      valueWidget: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${habit.bestStreak()}',
+                            style: GoogleFonts.montserrat(fontSize: 17, fontWeight: FontWeight.w800, color: BentoTheme.accentPurple),
+                          ),
+                          const SizedBox(width: 5),
+                          const Twemoji(emoji: '🏆', height: 16, width: 16),
+                        ],
+                      ),
+                    ),
                     _StatCard(label: 'Cumplimiento 30d', value: '${(habit.completionRate(days: 30) * 100).round()}%', color: BentoTheme.successGreen),
                     _StatCard(label: 'Total completados', value: '${habit.completedDates.length}', color: color),
                   ],

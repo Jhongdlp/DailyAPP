@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_twemoji/flutter_twemoji.dart';
 
 import '../../../core/providers/reading_stats_provider.dart';
 import '../../../core/theme/bento_theme.dart';
@@ -79,7 +80,7 @@ class ReadingStatsStrip extends ConsumerWidget {
     return Expanded(
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 15)),
+          Twemoji(emoji: emoji, height: 15, width: 15),
           const SizedBox(width: 7),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
