@@ -9,8 +9,11 @@ import '../../../core/providers/exercise_provider.dart';
 import '../../../core/theme/bento_theme.dart';
 
 /// Grid de fotos de progreso agrupadas por fecha, más recientes primero.
+/// Usado por la Galería (no por la pestaña principal, que ya no muestra
+/// fotos de entrada).
 class ExercisePhotoGrid extends ConsumerWidget {
-  const ExercisePhotoGrid({super.key});
+  final void Function(ExercisePhoto photo)? onTapPhoto;
+  const ExercisePhotoGrid({super.key, this.onTapPhoto});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,7 +45,10 @@ class ExercisePhotoGrid extends ConsumerWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [for (final photo in byDate[day]!) _PhotoThumb(photo: photo)],
+            children: [
+              for (final photo in byDate[day]!)
+                _PhotoThumb(photo: photo, onTap: onTapPhoto == null ? null : () => onTapPhoto!(photo)),
+            ],
           ),
         ],
       ],
@@ -52,7 +58,8 @@ class ExercisePhotoGrid extends ConsumerWidget {
 
 class _PhotoThumb extends StatelessWidget {
   final ExercisePhoto photo;
-  const _PhotoThumb({required this.photo});
+  final VoidCallback? onTap;
+  const _PhotoThumb({required this.photo, this.onTap});
 
   Future<String> _signedUrl() async {
     final res = await Supabase.instance.client.storage
@@ -63,47 +70,50 @@ class _PhotoThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          SizedBox(
-            width: 92,
-            height: 92,
-            child: photo.localFile != null
-                ? Image.file(photo.localFile!, fit: BoxFit.cover)
-                : FutureBuilder<String>(
-                    future: _signedUrl(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return Container(
-                          color: BentoTheme.creamAlpha(0.06),
-                          child: Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.creamAlpha(0.4)),
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            SizedBox(
+              width: 104,
+              height: 104,
+              child: photo.localFile != null
+                  ? Image.file(photo.localFile!, fit: BoxFit.cover)
+                  : FutureBuilder<String>(
+                      future: _signedUrl(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return Container(
+                            color: BentoTheme.creamAlpha(0.06),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.creamAlpha(0.4)),
+                              ),
                             ),
+                          );
+                        }
+                        return Image.network(
+                          snapshot.data!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: BentoTheme.creamAlpha(0.06),
+                            child: Icon(Icons.broken_image_outlined, color: BentoTheme.creamAlpha(0.4)),
                           ),
                         );
-                      }
-                      return Image.network(
-                        snapshot.data!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          color: BentoTheme.creamAlpha(0.06),
-                          child: Icon(Icons.broken_image_outlined, color: BentoTheme.creamAlpha(0.4)),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          Positioned(
-            left: 4,
-            bottom: 4,
-            child: _ClassificationBadge(classification: photo.classification),
-          ),
-        ],
+                      },
+                    ),
+            ),
+            Positioned(
+              left: 4,
+              bottom: 4,
+              child: _ClassificationBadge(classification: photo.classification),
+            ),
+          ],
+        ),
       ),
     );
   }

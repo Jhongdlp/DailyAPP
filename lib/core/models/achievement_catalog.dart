@@ -50,9 +50,52 @@ class RpgCounters {
   static const sleepNights = 'sleep_nights';
   static const sleepGoalNights = 'sleep_goal_nights';
   static const focusMinutes = 'focus_minutes';
+  static const exerciseSessions = 'exercise_sessions';
+  static const exerciseKm = 'exercise_km';
+  static const progressPhotos = 'progress_photos';
   // derivados (no viven en counters):
   static const level = 'level';
   static const cosmetics = 'cosmetics';
+}
+
+/// Categorías usadas para agrupar el panel de logros en la UI. El orden de
+/// este enum define el orden en que se muestran las secciones.
+enum AchievementCategory {
+  habitos,
+  alarma,
+  suenio,
+  finanzas,
+  notas,
+  lectura,
+  enfoque,
+  ejercicio,
+  economia,
+  nivel,
+}
+
+String achievementCategoryLabel(AchievementCategory c) {
+  switch (c) {
+    case AchievementCategory.habitos:
+      return 'Hábitos';
+    case AchievementCategory.alarma:
+      return 'Alarma';
+    case AchievementCategory.suenio:
+      return 'Sueño';
+    case AchievementCategory.finanzas:
+      return 'Finanzas';
+    case AchievementCategory.notas:
+      return 'Notas';
+    case AchievementCategory.lectura:
+      return 'Lectura';
+    case AchievementCategory.enfoque:
+      return 'Enfoque';
+    case AchievementCategory.ejercicio:
+      return 'Ejercicio';
+    case AchievementCategory.economia:
+      return 'Economía y colección';
+    case AchievementCategory.nivel:
+      return 'Nivel';
+  }
 }
 
 class AchievementDef {
@@ -65,6 +108,7 @@ class AchievementDef {
   final int target;
   final int xpReward;
   final int goldReward;
+  final AchievementCategory category;
 
   const AchievementDef({
     required this.id,
@@ -76,6 +120,7 @@ class AchievementDef {
     required this.target,
     required this.xpReward,
     required this.goldReward,
+    required this.category,
   });
 }
 
@@ -91,6 +136,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 1,
     xpReward: 20,
     goldReward: 10,
+    category: AchievementCategory.habitos,
   ),
   AchievementDef(
     id: 'en-racha',
@@ -102,6 +148,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 25,
     xpReward: 50,
     goldReward: 25,
+    category: AchievementCategory.habitos,
   ),
   AchievementDef(
     id: 'imparable',
@@ -113,6 +160,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 100,
     xpReward: 120,
     goldReward: 80,
+    category: AchievementCategory.habitos,
   ),
   AchievementDef(
     id: 'leyenda-viva',
@@ -124,6 +172,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 365,
     xpReward: 300,
     goldReward: 200,
+    category: AchievementCategory.habitos,
   ),
   // ── Alarma / despertar ──
   AchievementDef(
@@ -136,6 +185,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 5,
     xpReward: 30,
     goldReward: 15,
+    category: AchievementCategory.alarma,
   ),
   AchievementDef(
     id: 'madrugador',
@@ -147,6 +197,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 20,
     xpReward: 60,
     goldReward: 40,
+    category: AchievementCategory.alarma,
   ),
   AchievementDef(
     id: 'alondra',
@@ -158,6 +209,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 15,
     xpReward: 120,
     goldReward: 80,
+    category: AchievementCategory.alarma,
   ),
   // ── Sueño ──
   AchievementDef(
@@ -170,6 +222,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 7,
     xpReward: 40,
     goldReward: 20,
+    category: AchievementCategory.suenio,
   ),
   AchievementDef(
     id: 'descanso-real',
@@ -181,6 +234,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 14,
     xpReward: 90,
     goldReward: 50,
+    category: AchievementCategory.suenio,
   ),
   AchievementDef(
     id: 'reloj-suizo',
@@ -192,6 +246,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 60,
     xpReward: 200,
     goldReward: 130,
+    category: AchievementCategory.suenio,
   ),
   // ── Finanzas ──
   AchievementDef(
@@ -204,6 +259,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 10,
     xpReward: 30,
     goldReward: 15,
+    category: AchievementCategory.finanzas,
   ),
   AchievementDef(
     id: 'financiero',
@@ -215,6 +271,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 50,
     xpReward: 80,
     goldReward: 50,
+    category: AchievementCategory.finanzas,
   ),
   // ── Notas ──
   AchievementDef(
@@ -227,6 +284,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 10,
     xpReward: 30,
     goldReward: 15,
+    category: AchievementCategory.notas,
   ),
   AchievementDef(
     id: 'cronista',
@@ -238,6 +296,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 50,
     xpReward: 80,
     goldReward: 50,
+    category: AchievementCategory.notas,
   ),
   // ── Lectura ──
   AchievementDef(
@@ -250,6 +309,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 60,
     xpReward: 30,
     goldReward: 15,
+    category: AchievementCategory.lectura,
   ),
   AchievementDef(
     id: 'raton-de-biblioteca',
@@ -261,6 +321,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 600,
     xpReward: 90,
     goldReward: 60,
+    category: AchievementCategory.lectura,
   ),
   AchievementDef(
     id: 'devorador-de-libros',
@@ -272,6 +333,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 3000,
     xpReward: 300,
     goldReward: 200,
+    category: AchievementCategory.lectura,
   ),
   AchievementDef(
     id: 'subrayador',
@@ -283,6 +345,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 25,
     xpReward: 60,
     goldReward: 40,
+    category: AchievementCategory.lectura,
   ),
   AchievementDef(
     id: 'punto-final',
@@ -294,6 +357,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 3,
     xpReward: 150,
     goldReward: 100,
+    category: AchievementCategory.lectura,
   ),
   // ── Enfoque ──
   AchievementDef(
@@ -306,6 +370,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 25,
     xpReward: 30,
     goldReward: 15,
+    category: AchievementCategory.enfoque,
   ),
   AchievementDef(
     id: 'estado-de-flujo',
@@ -317,6 +382,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 600,
     xpReward: 90,
     goldReward: 60,
+    category: AchievementCategory.enfoque,
   ),
   AchievementDef(
     id: 'mente-de-acero',
@@ -328,6 +394,104 @@ const List<AchievementDef> achievementCatalog = [
     target: 3000,
     xpReward: 250,
     goldReward: 180,
+    category: AchievementCategory.enfoque,
+  ),
+  // ── Ejercicio ──
+  AchievementDef(
+    id: 'primeros-pasos',
+    title: 'Primeros Pasos',
+    description: 'Registra tu primera sesión de ejercicio',
+    emoji: '🏃',
+    tier: BadgeTier.bronce,
+    counterKey: RpgCounters.exerciseSessions,
+    target: 1,
+    xpReward: 20,
+    goldReward: 10,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: 'ritmo-constante',
+    title: 'Ritmo Constante',
+    description: 'Registra 20 sesiones de ejercicio',
+    emoji: '👟',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.exerciseSessions,
+    target: 20,
+    xpReward: 60,
+    goldReward: 40,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: 'maquina-de-correr',
+    title: 'Máquina de Correr',
+    description: 'Registra 100 sesiones de ejercicio',
+    emoji: '🏅',
+    tier: BadgeTier.oro,
+    counterKey: RpgCounters.exerciseSessions,
+    target: 100,
+    xpReward: 150,
+    goldReward: 100,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: '10k-recorridos',
+    title: '10K Recorridos',
+    description: 'Acumula 10 km recorridos',
+    emoji: '🗺️',
+    tier: BadgeTier.bronce,
+    counterKey: RpgCounters.exerciseKm,
+    target: 10,
+    xpReward: 30,
+    goldReward: 15,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: 'medio-centenar',
+    title: 'Medio Centenar',
+    description: 'Acumula 50 km recorridos',
+    emoji: '🛣️',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.exerciseKm,
+    target: 50,
+    xpReward: 80,
+    goldReward: 50,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: 'ultra-distancia',
+    title: 'Ultra Distancia',
+    description: 'Acumula 200 km recorridos',
+    emoji: '🏔️',
+    tier: BadgeTier.oro,
+    counterKey: RpgCounters.exerciseKm,
+    target: 200,
+    xpReward: 180,
+    goldReward: 120,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: 'diario-visual',
+    title: 'Diario Visual',
+    description: 'Guarda 10 fotos de progreso',
+    emoji: '📸',
+    tier: BadgeTier.bronce,
+    counterKey: RpgCounters.progressPhotos,
+    target: 10,
+    xpReward: 30,
+    goldReward: 15,
+    category: AchievementCategory.ejercicio,
+  ),
+  AchievementDef(
+    id: 'archivo-de-progreso',
+    title: 'Archivo de Progreso',
+    description: 'Guarda 50 fotos de progreso',
+    emoji: '🎞️',
+    tier: BadgeTier.plata,
+    counterKey: RpgCounters.progressPhotos,
+    target: 50,
+    xpReward: 80,
+    goldReward: 50,
+    category: AchievementCategory.ejercicio,
   ),
   // ── Economía y colección ──
   AchievementDef(
@@ -340,6 +504,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 1000,
     xpReward: 100,
     goldReward: 50,
+    category: AchievementCategory.economia,
   ),
   AchievementDef(
     id: 'fashionista',
@@ -351,6 +516,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 3,
     xpReward: 60,
     goldReward: 40,
+    category: AchievementCategory.economia,
   ),
   // ── Nivel ──
   AchievementDef(
@@ -363,6 +529,7 @@ const List<AchievementDef> achievementCatalog = [
     target: 10,
     xpReward: 150,
     goldReward: 100,
+    category: AchievementCategory.nivel,
   ),
 ];
 

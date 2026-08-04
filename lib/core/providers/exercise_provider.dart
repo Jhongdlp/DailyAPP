@@ -238,6 +238,24 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
     return photo;
   }
 
+  /// Sube la captura de ruta (p. ej. pantallazo de Strava) y la liga al log
+  /// [logId]. Cada llamada usa un nombre nuevo en vez de sobrescribir: el
+  /// bucket no tiene policy de UPDATE en storage.objects, así que un
+  /// upsert fallaría por RLS. El archivo viejo (si había) se borra best-effort.
+  Future<String> uploadRoutePhoto({required String logId, required File file, String? previousPath}) async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) throw Exception('Se requiere conexión para adjuntar la ruta.');
+
+    final path = '${user.id}/routes/$logId-${DateTime.now().millisecondsSinceEpoch}.jpg';
+    await client.storage.from('exercise-photos').upload(path, file);
+
+    if (previousPath != null && previousPath.isNotEmpty) {
+      unawaited(client.storage.from('exercise-photos').remove([previousPath]).catchError((_) => <FileObject>[]));
+    }
+    return path;
+  }
+
   void setPhotoClassificationLocal(String photoId, PhotoClassification classification) {
     final index = state.photos.indexWhere((p) => p.id == photoId);
     if (index == -1) return;

@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -43,6 +44,17 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:14b")
 PUBLISH_TOKEN = os.environ.get("NEWS_PUBLISH_TOKEN", "")
 DRY_RUN = os.environ.get("NEWS_DRY_RUN") == "1"
+
+# Redacción primaria: Claude Code CLI, autenticado con la sesión/plan del
+# usuario (no una API key) — así no se paga token a token. Si el binario no
+# está, la sesión no está logueada, o falla por cualquier razón, se cae a
+# Ollama/qwen sin abortar el digest del día. CLAUDE_BIN suele ser una ruta
+# completa: el binario vive dentro de la extensión de VS Code, no en el PATH.
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "sonnet")
+CLAUDE_DISALLOWED_TOOLS = (
+    "Bash Edit Write Read Glob Grep WebSearch WebFetch Task NotebookEdit"
+)
 
 # Ventana de recogida. Son 30h y no 24 a propósito: el cron corre a hora fija y
 # una noticia publicada justo antes del corte de ayer se perdería para siempre.
@@ -282,6 +294,65 @@ def ask_ollama(candidates: list[dict]) -> dict:
     return json.loads(content)
 
 
+def extract_json_object(text: str) -> dict:
+    """Aísla el primer objeto JSON de un texto que puede traer prosa o
+    fences de markdown alrededor (Claude, a diferencia de Ollama con
+    `format: json`, no garantiza que la salida sea JSON puro)."""
+    text = text.strip()
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("no se encontró un objeto JSON en la respuesta")
+    return json.loads(text[start : end + 1])
+
+
+def ask_claude(candidates: list[dict]) -> dict:
+    """Redacta con Claude Code CLI usando la sesión/plan ya logueado del
+    usuario en esta máquina — no consume una API key ni factura por token.
+
+    Sin acceso a herramientas: es una tarea de redacción pura sobre la lista
+    de candidatos ya recogida, no necesita bash ni leer archivos.
+    """
+    prompt = PROMPT + build_candidate_list(candidates)
+    cmd = [
+        CLAUDE_BIN,
+        "-p",
+        prompt,
+        "--model",
+        CLAUDE_MODEL,
+        "--output-format",
+        "json",
+        "--disallowedTools",
+        CLAUDE_DISALLOWED_TOOLS,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=300, check=False
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"claude CLI no encontrado ({CLAUDE_BIN}): {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("claude CLI no respondió en 300s") from exc
+
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"claude CLI salió con código {proc.returncode}: {proc.stderr[:500]}"
+        )
+
+    try:
+        outer = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"claude CLI no devolvió JSON válido: {exc}") from exc
+
+    if outer.get("is_error"):
+        raise RuntimeError(f"claude CLI reportó error: {outer.get('result')!r}")
+
+    return extract_json_object(str(outer.get("result", "")))
+
+
 def validate(digest: dict, candidates: list[dict], today: str) -> dict:
     """Normaliza y filtra la salida del modelo.
 
@@ -385,12 +456,18 @@ def main() -> int:
         log("FALLO: muy pocos candidatos, no se publica nada")
         return 1
 
-    log(f"Redactando con {OLLAMA_MODEL}…")
+    raw_digest = None
+    log(f"Redactando con Claude ({CLAUDE_MODEL}, plan del usuario)…")
     try:
-        raw_digest = ask_ollama(candidates)
-    except (urllib.error.URLError, json.JSONDecodeError, RuntimeError, TimeoutError) as exc:
-        log(f"FALLO en Ollama: {exc}")
-        return 1
+        raw_digest = ask_claude(candidates)
+    except Exception as exc:  # cualquier fallo de Claude cae a Ollama, no aborta
+        log(f"  ! Claude Code falló: {exc}")
+        log(f"Redactando con Ollama ({OLLAMA_MODEL}) como respaldo…")
+        try:
+            raw_digest = ask_ollama(candidates)
+        except (urllib.error.URLError, json.JSONDecodeError, RuntimeError, TimeoutError) as exc2:
+            log(f"FALLO en Ollama: {exc2}")
+            return 1
 
     digest = validate(raw_digest, candidates, today)
     log(f"{len(digest['items'])} noticias tras validar")

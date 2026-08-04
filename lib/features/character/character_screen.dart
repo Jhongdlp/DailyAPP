@@ -392,10 +392,12 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Toca un logro desbloqueado para lucirlo en tu carta (máx. 3)',
+                    'Toca un logro para ver su progreso y lucirlo en tu carta (máx. 3)',
                     style: TextStyle(fontSize: 10, color: BentoTheme.creamTertiary),
                   ),
                   const SizedBox(height: 10),
+                  const AchievementsSummary(),
+                  const SizedBox(height: 16),
                   const AchievementsPanel(),
                   const SizedBox(height: 28),
 

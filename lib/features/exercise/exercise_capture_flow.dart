@@ -5,9 +5,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/achievement_catalog.dart';
 import '../../core/models/exercise_model.dart';
 import '../../core/network/local_ai_client.dart';
 import '../../core/providers/exercise_provider.dart';
+import '../../core/providers/rpg_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/lock_task_service.dart';
 import '../../core/services/synced_write.dart';
@@ -57,6 +59,13 @@ Future<void> _uploadAndClassify(WidgetRef ref, File file, DateTime forDate) asyn
   ExercisePhoto photo;
   try {
     photo = await notifier.addPhoto(id: newRowId(), file: file, loggedDate: forDate);
+    // Recompensa silenciosa: esta subida corre desatada en segundo plano y
+    // puede completarse sin que quede una pantalla montada para celebrar.
+    ref.read(rpgProvider.notifier).gainXpAndGold(
+          3,
+          1,
+          counterKeys: const [RpgCounters.progressPhotos],
+        );
   } catch (_) {
     // Sin conexión no hay dónde subir la foto: se pierde el intento de esta
     // toma. Limitación documentada de v1 (requiere conexión para progreso).

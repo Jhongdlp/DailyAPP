@@ -7,9 +7,13 @@ import '../../core/providers/exercise_habit_link_provider.dart';
 import '../../core/providers/exercise_provider.dart';
 import '../../core/providers/habits_provider.dart';
 import '../../core/theme/bento_theme.dart';
+import '../../core/widgets/streak_flame.dart';
 import 'exercise_capture_flow.dart';
+import 'exercise_gallery_screen.dart';
+import 'exercise_stats.dart';
+import 'exercise_stats_screen.dart';
 import 'widgets/exercise_log_form.dart';
-import 'widgets/exercise_photo_grid.dart';
+import 'widgets/exercise_weekly_chart.dart';
 import 'widgets/link_habit_sheet.dart';
 
 class ExerciseTab extends ConsumerWidget {
@@ -124,11 +128,8 @@ class _ExerciseContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final exerciseState = ref.watch(exerciseProvider);
     final now = DateTime.now();
-
-    final last30 = exerciseState.logs.where((l) => now.difference(l.loggedDate).inDays <= 30);
-    final totalKm = last30.fold<double>(0, (sum, l) => sum + (l.distanceKm ?? 0));
-    final paceValues = last30.map((l) => l.computedPace).whereType<double>().toList();
-    final avgPace = paceValues.isEmpty ? null : paceValues.reduce((a, b) => a + b) / paceValues.length;
+    final stats = computeExerciseStats(exerciseState.logs);
+    final photoCount = exerciseState.photos.length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
@@ -143,20 +144,59 @@ class _ExerciseContent extends ConsumerWidget {
             'Vinculado a "${habit.name}"',
             style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontSize: 12, fontWeight: FontWeight.w600),
           ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.directions_run,
+                  accent: BentoTheme.accentOrange,
+                  value: stats.totalKm30.toStringAsFixed(1),
+                  unit: 'km',
+                  label: 'Últimos 30 días',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.event_available,
+                  accent: BentoTheme.accentBlue,
+                  value: '${stats.sessions30}',
+                  unit: stats.sessions30 == 1 ? 'sesión' : 'sesiones',
+                  label: 'Últimos 30 días',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _StreakCard(streak: stats.streakDays),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.speed,
+                  accent: BentoTheme.accentPurple,
+                  value: stats.avgPace30 == null ? '—' : stats.avgPace30!.toStringAsFixed(2),
+                  unit: stats.avgPace30 == null ? '' : 'min/km',
+                  label: 'Ritmo promedio',
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           NeuCard(
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _StatBlock(label: 'Últimos 30 días', value: '${totalKm.toStringAsFixed(1)} km'),
+                Text(
+                  'Kilómetros por semana',
+                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 14, fontWeight: FontWeight.w800),
                 ),
-                Container(width: 1, height: 40, color: BentoTheme.creamAlpha(0.1)),
-                Expanded(
-                  child: _StatBlock(
-                    label: 'Ritmo promedio',
-                    value: avgPace == null ? '—' : '${avgPace.toStringAsFixed(2)} min/km',
-                  ),
-                ),
+                const SizedBox(height: 12),
+                ExerciseWeeklyChart(weeks: stats.weeks, color: BentoTheme.accentOrange),
               ],
             ),
           ),
@@ -180,31 +220,135 @@ class _ExerciseContent extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Progreso',
-            style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 16, fontWeight: FontWeight.w800),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _NavCard(
+                  icon: Icons.bar_chart_rounded,
+                  accent: BentoTheme.accentBlue,
+                  title: 'Detalles',
+                  subtitle: 'Historial y progreso',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => ExerciseStatsScreen(habitId: habit.id)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _NavCard(
+                  icon: Icons.photo_library_outlined,
+                  accent: BentoTheme.accentPurple,
+                  title: 'Galería',
+                  subtitle: photoCount == 0 ? 'Sin fotos aún' : '$photoCount ${photoCount == 1 ? 'foto' : 'fotos'}',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ExerciseGalleryScreen()),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const ExercisePhotoGrid(),
         ],
       ),
     );
   }
 }
 
-class _StatBlock extends StatelessWidget {
-  final String label;
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
   final String value;
-  const _StatBlock({required this.label, required this.value});
+  final String unit;
+  final String label;
+  const _StatCard({required this.icon, required this.accent, required this.value, required this.unit, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value, style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 18, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 2),
-        Text(label, style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontSize: 11, fontWeight: FontWeight.w600)),
-      ],
+    return NeuCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accent, size: 20),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(value, style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 20, fontWeight: FontWeight.w800)),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Text(unit, style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontSize: 12, fontWeight: FontWeight.w700)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.45), fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreakCard extends StatelessWidget {
+  final int streak;
+  const _StreakCard({required this.streak});
+
+  @override
+  Widget build(BuildContext context) {
+    return NeuCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Row(
+        children: [
+          StreakFlame(streak: streak, size: 26),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$streak ${streak == 1 ? 'día' : 'días'}',
+                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                Text('Racha actual', style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.45), fontSize: 11, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavCard extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _NavCard({required this.icon, required this.accent, required this.title, required this.subtitle, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return NeuCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: accent, size: 22),
+              Icon(Icons.chevron_right, color: BentoTheme.creamAlpha(0.3), size: 18),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(title, style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 14, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.45), fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }

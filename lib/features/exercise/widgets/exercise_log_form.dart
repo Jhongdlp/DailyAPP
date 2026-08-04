@@ -1,12 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/models/achievement_catalog.dart';
 import '../../../core/models/exercise_model.dart';
 import '../../../core/providers/exercise_provider.dart';
+import '../../../core/providers/rpg_provider.dart';
 import '../../../core/services/synced_write.dart';
 import '../../../core/theme/bento_theme.dart';
+import '../../../core/widgets/rpg_celebration.dart';
 
 /// Abre el formulario de registro de una sesión (km/duración/notas) para
 /// [forDate], opcionalmente ligada a [habitId]. Si ya existe una sesión ese
@@ -42,15 +48,63 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
   late final TextEditingController _distanceController;
   late final TextEditingController _durationController;
   late final TextEditingController _notesController;
+  late final String _logId;
   bool _saving = false;
+
+  String? _routePhotoPath;
+  File? _routePhotoPreview;
+  bool _uploadingRoutePhoto = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
+    _logId = e?.id ?? newRowId();
     _distanceController = TextEditingController(text: _formatNum(e?.distanceKm));
     _durationController = TextEditingController(text: _formatNum(e?.durationMinutes));
     _notesController = TextEditingController(text: e?.notes ?? '');
+    _routePhotoPath = e?.routePhotoPath;
+  }
+
+  Future<void> _pickRoutePhoto() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null || !mounted) return;
+
+    final file = File(picked.path);
+    setState(() {
+      _routePhotoPreview = file;
+      _uploadingRoutePhoto = true;
+    });
+
+    try {
+      final path = await ref.read(exerciseProvider.notifier).uploadRoutePhoto(
+            logId: _logId,
+            file: file,
+            previousPath: _routePhotoPath,
+          );
+      if (!mounted) return;
+      setState(() {
+        _routePhotoPath = path;
+        _uploadingRoutePhoto = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploadingRoutePhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo subir la captura: $e')),
+      );
+    }
+  }
+
+  void _removeRoutePhoto() {
+    final path = _routePhotoPath;
+    if (path != null) {
+      Supabase.instance.client.storage.from('exercise-photos').remove([path]).catchError((_) => <FileObject>[]);
+    }
+    setState(() {
+      _routePhotoPath = null;
+      _routePhotoPreview = null;
+    });
   }
 
   String _formatNum(double? v) {
@@ -85,7 +139,7 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
     final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
     final existing = widget.existing;
     final log = ExerciseLog(
-      id: existing?.id ?? newRowId(),
+      id: _logId,
       userId: userId,
       habitId: widget.habitId ?? existing?.habitId,
       loggedDate: widget.forDate,
@@ -94,10 +148,32 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       createdAt: existing?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
+      routePhotoPath: _routePhotoPath,
     );
 
     await ref.read(exerciseProvider.notifier).upsertLog(log);
     await ref.read(exerciseProvider.notifier).linkPhotosToLog(widget.forDate, log.id);
+
+    // Solo se premia la primera vez que se registra la sesión del día, para
+    // que editar (p. ej. corregir el km) no farme XP infinito.
+    if (existing == null) {
+      final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+            10,
+            5,
+            counterKeys: const [RpgCounters.exerciseSessions],
+            counterAmounts: km != null ? {RpgCounters.exerciseKm: km.round()} : const {},
+          );
+      if (mounted) {
+        RpgCelebration.show(
+          context,
+          xp: result['xpGained'] as int,
+          gold: result['goldGained'] as int,
+          levelUp: result['levelUp'] as bool,
+          newLevel: result['newLevel'] as int?,
+        );
+        AchievementToast.show(context, result['unlocked']);
+      }
+    }
 
     if (mounted) Navigator.of(context).pop();
   }
@@ -177,11 +253,19 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
                   style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w500),
                   decoration: _decoration('Notas (opcional)'),
                 ),
+                const SizedBox(height: 16),
+                _RoutePhotoField(
+                  path: _routePhotoPath,
+                  preview: _routePhotoPreview,
+                  uploading: _uploadingRoutePhoto,
+                  onPick: _pickRoutePhoto,
+                  onRemove: _removeRoutePhoto,
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _saving ? null : _submit,
+                    onPressed: _saving || _uploadingRoutePhoto ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: BentoTheme.accentOrange,
                       foregroundColor: const Color(0xFF0C0C0D),
@@ -199,6 +283,116 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Adjuntar/reemplazar/quitar la captura de la ruta (p. ej. de Strava).
+/// Sin clasificación IA ni subida en segundo plano: se sube al elegirla y
+/// el botón "Guardar" ya espera con la ruta resuelta.
+class _RoutePhotoField extends StatelessWidget {
+  final String? path;
+  final File? preview;
+  final bool uploading;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  const _RoutePhotoField({
+    required this.path,
+    required this.preview,
+    required this.uploading,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  Future<String> _signedUrl(String storagePath) {
+    return Supabase.instance.client.storage.from('exercise-photos').createSignedUrl(storagePath, 3600);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = preview != null || path != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Ruta (captura de Strava)',
+          style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        if (hasPhoto)
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (preview != null)
+                        Image.file(preview!, fit: BoxFit.cover)
+                      else if (path != null)
+                        FutureBuilder<String>(
+                          future: _signedUrl(path!),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return Container(color: BentoTheme.creamAlpha(0.06));
+                            }
+                            return Image.network(snapshot.data!, fit: BoxFit.cover);
+                          },
+                        ),
+                      if (uploading)
+                        Container(
+                          color: Colors.black45,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: uploading ? null : onPick,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+                      child: Text('Reemplazar', style: GoogleFonts.montserrat(color: BentoTheme.accentOrange, fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                    TextButton(
+                      onPressed: uploading ? null : onRemove,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+                      child: Text('Quitar', style: GoogleFonts.montserrat(color: BentoTheme.errorRed, fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: onPick,
+            icon: Icon(Icons.map_outlined, size: 18, color: BentoTheme.creamAlpha(0.8)),
+            label: Text('Adjuntar captura de Strava', style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w700, fontSize: 13)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BentoTheme.cream,
+              side: BorderSide(color: BentoTheme.creamAlpha(0.2)),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+      ],
     );
   }
 }

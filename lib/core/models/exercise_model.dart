@@ -76,6 +76,11 @@ class ExerciseLog {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// Ruta en el bucket 'exercise-photos' de una captura de la ruta (p. ej.
+  /// pantallazo de Strava), adjunta a la sesión. Sin clasificación IA: es
+  /// solo evidencia visual del recorrido, no una foto de progreso físico.
+  final String? routePhotoPath;
+
   const ExerciseLog({
     required this.id,
     required this.userId,
@@ -89,6 +94,7 @@ class ExerciseLog {
     this.extra = const {},
     this.createdAt,
     this.updatedAt,
+    this.routePhotoPath,
   });
 
   /// Ritmo en minutos por kilómetro, calculado en vivo si no viene guardado.
@@ -112,6 +118,8 @@ class ExerciseLog {
     Map<String, dynamic>? extra,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? routePhotoPath,
+    bool clearRoutePhoto = false,
   }) {
     return ExerciseLog(
       id: id ?? this.id,
@@ -126,6 +134,7 @@ class ExerciseLog {
       extra: extra ?? this.extra,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      routePhotoPath: clearRoutePhoto ? null : (routePhotoPath ?? this.routePhotoPath),
     );
   }
 
@@ -142,6 +151,7 @@ class ExerciseLog {
         extra: Map<String, dynamic>.from(json['extra'] as Map? ?? {}),
         createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String).toLocal() : null,
         updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String).toLocal() : null,
+        routePhotoPath: json['route_photo_path'] as String?,
       );
 
   Map<String, dynamic> toInsertJson(String userId) => {
@@ -155,6 +165,7 @@ class ExerciseLog {
         'pace_min_per_km': computedPace,
         'notes': notes,
         'extra': extra,
+        'route_photo_path': routePhotoPath,
       };
 
   Map<String, dynamic> toCacheJson() => {
@@ -170,6 +181,7 @@ class ExerciseLog {
         'extra': extra,
         'created_at': createdAt?.toIso8601String(),
         'updated_at': updatedAt?.toIso8601String(),
+        'route_photo_path': routePhotoPath,
       };
 
   factory ExerciseLog.fromCacheJson(Map<String, dynamic> json) => ExerciseLog.fromJson(json);
