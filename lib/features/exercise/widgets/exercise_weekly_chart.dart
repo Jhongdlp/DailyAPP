@@ -12,7 +12,12 @@ class ExerciseWeeklyChart extends StatelessWidget {
   final Color color;
   final double height;
 
-  const ExerciseWeeklyChart({super.key, required this.weeks, required this.color, this.height = 130});
+  const ExerciseWeeklyChart({
+    super.key,
+    required this.weeks,
+    required this.color,
+    this.height = 130,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +28,11 @@ class ExerciseWeeklyChart extends StatelessWidget {
         child: Center(
           child: Text(
             'Aún no hay carreras registradas.',
-            style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.4), fontSize: 12, fontWeight: FontWeight.w600),
+            style: GoogleFonts.montserrat(
+              color: BentoTheme.creamAlpha(0.4),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       );
@@ -38,7 +47,10 @@ class ExerciseWeeklyChart extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('${axisMax.toStringAsFixed(axisMax < 10 ? 1 : 0)} km', style: _axisStyle),
+            Text(
+              '${axisMax.toStringAsFixed(axisMax < 10 ? 1 : 0)} km',
+              style: _axisStyle,
+            ),
             Text('esta semana', style: _axisStyle),
           ],
         ),
@@ -46,7 +58,12 @@ class ExerciseWeeklyChart extends StatelessWidget {
         SizedBox(
           height: height,
           child: CustomPaint(
-            painter: _WeeklyBarPainter(weeks: weeks, max: axisMax, color: color, gridColor: BentoTheme.creamAlpha(0.10)),
+            painter: _WeeklyBarPainter(
+              weeks: weeks,
+              max: axisMax,
+              color: color,
+              gridColor: BentoTheme.creamAlpha(0.10),
+            ),
           ),
         ),
         const SizedBox(height: 6),
@@ -61,8 +78,11 @@ class ExerciseWeeklyChart extends StatelessWidget {
     );
   }
 
-  static TextStyle get _axisStyle =>
-      GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w500, color: BentoTheme.creamAlpha(0.45));
+  static TextStyle get _axisStyle => GoogleFonts.montserrat(
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    color: BentoTheme.creamAlpha(0.45),
+  );
 
   static String _weekLabel(DateTime d) => '${d.day}/${d.month}';
 }
@@ -73,7 +93,12 @@ class _WeeklyBarPainter extends CustomPainter {
   final Color color;
   final Color gridColor;
 
-  _WeeklyBarPainter({required this.weeks, required this.max, required this.color, required this.gridColor});
+  _WeeklyBarPainter({
+    required this.weeks,
+    required this.max,
+    required this.color,
+    required this.gridColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -96,7 +121,8 @@ class _WeeklyBarPainter extends CustomPainter {
       final left = i * (barWidth + gap);
       final top = size.height - h;
       final isCurrent = i == n - 1;
-      final paint = Paint()..color = isCurrent ? color : color.withValues(alpha: 0.32);
+      final paint = Paint()
+        ..color = isCurrent ? color : color.withValues(alpha: 0.32);
       final rect = RRect.fromRectAndCorners(
         Rect.fromLTWH(left, top, barWidth, h),
         topLeft: const Radius.circular(4),
@@ -108,5 +134,8 @@ class _WeeklyBarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WeeklyBarPainter old) =>
-      old.max != max || old.color != color || old.weeks.length != weeks.length || old.weeks.last.km != weeks.last.km;
+      old.max != max ||
+      old.color != color ||
+      old.weeks.length != weeks.length ||
+      old.weeks.last.km != weeks.last.km;
 }

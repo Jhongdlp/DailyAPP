@@ -37,7 +37,9 @@ class _LinkHabitSheet extends ConsumerWidget {
       }
     }
     if (created != null) {
-      await ref.read(exerciseHabitLinkProvider.notifier).setLinkedHabit(created.id);
+      await ref
+          .read(exerciseHabitLinkProvider.notifier)
+          .setLinkedHabit(created.id);
       if (context.mounted) Navigator.of(context).pop();
     }
   }
@@ -52,12 +54,17 @@ class _LinkHabitSheet extends ConsumerWidget {
     final habits = ref.watch(habitsProvider).where((h) => !h.archived).toList();
 
     return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
       child: NeuCard(
         radius: const BorderRadius.vertical(top: Radius.circular(28)),
         elevation: 22,
         convex: false,
-        padding: EdgeInsets.only(top: 10, bottom: 10 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.only(
+          top: 10,
+          bottom: 10 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -72,7 +79,11 @@ class _LinkHabitSheet extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Text(
                 'Vincula tu hábito de ejercicio',
-                style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 17, fontWeight: FontWeight.w800),
+                style: GoogleFonts.montserrat(
+                  color: BentoTheme.cream,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             const SizedBox(height: 4),
@@ -80,7 +91,10 @@ class _LinkHabitSheet extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Text(
                 'Marcarlo como hecho en Hábitos te ofrecerá guardar tu progreso aquí.',
-                style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontSize: 13),
+                style: GoogleFonts.montserrat(
+                  color: BentoTheme.creamAlpha(0.6),
+                  fontSize: 13,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -91,18 +105,30 @@ class _LinkHabitSheet extends ConsumerWidget {
                   children: [
                     for (final habit in habits)
                       ListTile(
-                        leading: Text(habit.icon, style: const TextStyle(fontSize: 22)),
+                        leading: Text(
+                          habit.icon,
+                          style: const TextStyle(fontSize: 22),
+                        ),
                         title: Text(
                           habit.name,
-                          style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.montserrat(
+                            color: BentoTheme.cream,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         onTap: () => _link(context, ref, habit),
                       ),
                     ListTile(
-                      leading: Icon(Icons.add_circle_outline, color: BentoTheme.accentOrange),
+                      leading: Icon(
+                        Icons.add_circle_outline,
+                        color: BentoTheme.accentOrange,
+                      ),
                       title: Text(
                         'Crear hábito nuevo',
-                        style: GoogleFonts.montserrat(color: BentoTheme.accentOrange, fontWeight: FontWeight.w700),
+                        style: GoogleFonts.montserrat(
+                          color: BentoTheme.accentOrange,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       onTap: () => _createAndLink(context, ref),
                     ),

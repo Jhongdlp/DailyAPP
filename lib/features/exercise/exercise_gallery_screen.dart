@@ -39,13 +39,21 @@ class ExerciseGalleryScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(11),
                         border: Border.all(color: BentoTheme.creamAlpha(0.14)),
                       ),
-                      child: Icon(Icons.arrow_back, size: 18, color: BentoTheme.cream),
+                      child: Icon(
+                        Icons.arrow_back,
+                        size: 18,
+                        color: BentoTheme.cream,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'Galería',
-                    style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 20, fontWeight: FontWeight.w900),
+                    style: GoogleFonts.montserrat(
+                      color: BentoTheme.cream,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -64,13 +72,21 @@ class ExerciseGalleryScreen extends ConsumerWidget {
     );
   }
 
-  void _openViewer(BuildContext context, List<ExercisePhoto> allPhotos, ExercisePhoto tapped) {
-    final ordered = [...allPhotos]..sort((a, b) => b.loggedDate.compareTo(a.loggedDate));
+  void _openViewer(
+    BuildContext context,
+    List<ExercisePhoto> allPhotos,
+    ExercisePhoto tapped,
+  ) {
+    final ordered = [...allPhotos]
+      ..sort((a, b) => b.loggedDate.compareTo(a.loggedDate));
     final index = ordered.indexWhere((p) => p.id == tapped.id);
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => ExercisePhotoViewerScreen(photos: ordered, initialIndex: index < 0 ? 0 : index),
+        builder: (_) => ExercisePhotoViewerScreen(
+          photos: ordered,
+          initialIndex: index < 0 ? 0 : index,
+        ),
       ),
     );
   }

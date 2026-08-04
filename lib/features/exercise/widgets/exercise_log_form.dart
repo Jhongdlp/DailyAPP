@@ -10,9 +10,13 @@ import '../../../core/models/achievement_catalog.dart';
 import '../../../core/models/exercise_model.dart';
 import '../../../core/providers/exercise_provider.dart';
 import '../../../core/providers/rpg_provider.dart';
+import '../../../core/services/signed_url_cache.dart';
 import '../../../core/services/synced_write.dart';
 import '../../../core/theme/bento_theme.dart';
 import '../../../core/widgets/rpg_celebration.dart';
+import '../exercise_photo_viewer_screen.dart';
+
+const _routePhotosBucket = 'exercise-photos';
 
 /// Abre el formulario de registro de una sesión (km/duración/notas) para
 /// [forDate], opcionalmente ligada a [habitId]. Si ya existe una sesión ese
@@ -29,7 +33,11 @@ Future<void> showExerciseLogForm(
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => _ExerciseLogFormSheet(forDate: forDate, habitId: habitId, existing: existing),
+    builder: (context) => _ExerciseLogFormSheet(
+      forDate: forDate,
+      habitId: habitId,
+      existing: existing,
+    ),
   );
 }
 
@@ -38,10 +46,15 @@ class _ExerciseLogFormSheet extends ConsumerStatefulWidget {
   final String? habitId;
   final ExerciseLog? existing;
 
-  const _ExerciseLogFormSheet({required this.forDate, this.habitId, this.existing});
+  const _ExerciseLogFormSheet({
+    required this.forDate,
+    this.habitId,
+    this.existing,
+  });
 
   @override
-  ConsumerState<_ExerciseLogFormSheet> createState() => _ExerciseLogFormSheetState();
+  ConsumerState<_ExerciseLogFormSheet> createState() =>
+      _ExerciseLogFormSheetState();
 }
 
 class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
@@ -60,14 +73,21 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
     super.initState();
     final e = widget.existing;
     _logId = e?.id ?? newRowId();
-    _distanceController = TextEditingController(text: _formatNum(e?.distanceKm));
-    _durationController = TextEditingController(text: _formatNum(e?.durationMinutes));
+    _distanceController = TextEditingController(
+      text: _formatNum(e?.distanceKm),
+    );
+    _durationController = TextEditingController(
+      text: _formatNum(e?.durationMinutes),
+    );
     _notesController = TextEditingController(text: e?.notes ?? '');
     _routePhotoPath = e?.routePhotoPath;
   }
 
   Future<void> _pickRoutePhoto() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
     if (picked == null || !mounted) return;
 
     final file = File(picked.path);
@@ -77,7 +97,9 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
     });
 
     try {
-      final path = await ref.read(exerciseProvider.notifier).uploadRoutePhoto(
+      final path = await ref
+          .read(exerciseProvider.notifier)
+          .uploadRoutePhoto(
             logId: _logId,
             file: file,
             previousPath: _routePhotoPath,
@@ -99,12 +121,27 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
   void _removeRoutePhoto() {
     final path = _routePhotoPath;
     if (path != null) {
-      Supabase.instance.client.storage.from('exercise-photos').remove([path]).catchError((_) => <FileObject>[]);
+      Supabase.instance.client.storage
+          .from('exercise-photos')
+          .remove([path])
+          .catchError((_) => <FileObject>[]);
+      SignedUrlCache.invalidate(_routePhotosBucket, path);
     }
     setState(() {
       _routePhotoPath = null;
       _routePhotoPreview = null;
     });
+  }
+
+  void _openRoutePhoto() {
+    final path = _routePhotoPath;
+    if (path == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => RoutePhotoViewerScreen(storagePath: path),
+      ),
+    );
   }
 
   String _formatNum(double? v) {
@@ -113,8 +150,12 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
   }
 
   double? get _pace {
-    final km = double.tryParse(_distanceController.text.trim().replaceAll(',', '.'));
-    final min = double.tryParse(_durationController.text.trim().replaceAll(',', '.'));
+    final km = double.tryParse(
+      _distanceController.text.trim().replaceAll(',', '.'),
+    );
+    final min = double.tryParse(
+      _durationController.text.trim().replaceAll(',', '.'),
+    );
     if (km == null || km <= 0 || min == null) return null;
     return min / km;
   }
@@ -128,8 +169,12 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
   }
 
   Future<void> _submit() async {
-    final km = double.tryParse(_distanceController.text.trim().replaceAll(',', '.'));
-    final duration = double.tryParse(_durationController.text.trim().replaceAll(',', '.'));
+    final km = double.tryParse(
+      _distanceController.text.trim().replaceAll(',', '.'),
+    );
+    final duration = double.tryParse(
+      _durationController.text.trim().replaceAll(',', '.'),
+    );
     if (km == null && duration == null) {
       Navigator.of(context).pop();
       return;
@@ -145,23 +190,31 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
       loggedDate: widget.forDate,
       distanceKm: km,
       durationMinutes: duration,
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
       createdAt: existing?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       routePhotoPath: _routePhotoPath,
     );
 
     await ref.read(exerciseProvider.notifier).upsertLog(log);
-    await ref.read(exerciseProvider.notifier).linkPhotosToLog(widget.forDate, log.id);
+    await ref
+        .read(exerciseProvider.notifier)
+        .linkPhotosToLog(widget.forDate, log.id);
 
     // Solo se premia la primera vez que se registra la sesión del día, para
     // que editar (p. ej. corregir el km) no farme XP infinito.
     if (existing == null) {
-      final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+      final result = ref
+          .read(rpgProvider.notifier)
+          .gainXpAndGold(
             10,
             5,
             counterKeys: const [RpgCounters.exerciseSessions],
-            counterAmounts: km != null ? {RpgCounters.exerciseKm: km.round()} : const {},
+            counterAmounts: km != null
+                ? {RpgCounters.exerciseKm: km.round()}
+                : const {},
           );
       if (mounted) {
         RpgCelebration.show(
@@ -182,29 +235,56 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
     return InputDecoration(
       hintText: hint,
       suffixText: suffix,
-      hintStyle: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.35), fontWeight: FontWeight.w500),
-      suffixStyle: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontWeight: FontWeight.w600),
+      hintStyle: GoogleFonts.montserrat(
+        color: BentoTheme.creamAlpha(0.35),
+        fontWeight: FontWeight.w500,
+      ),
+      suffixStyle: GoogleFonts.montserrat(
+        color: BentoTheme.creamAlpha(0.5),
+        fontWeight: FontWeight.w600,
+      ),
       filled: true,
       fillColor: BentoTheme.creamAlpha(0.06),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: BentoTheme.creamAlpha(0.12))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: BentoTheme.creamAlpha(0.12))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: BentoTheme.accentOrange, width: 1.5)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.12)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: BentoTheme.creamAlpha(0.12)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: BentoTheme.accentOrange, width: 1.5),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final pace = _pace;
+    final dayPhotos = ref
+        .watch(exerciseProvider)
+        .photos
+        .where((p) => dateOnly(p.loggedDate) == dateOnly(widget.forDate))
+        .toList();
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        ),
         child: NeuCard(
           radius: const BorderRadius.vertical(top: Radius.circular(28)),
           elevation: 22,
           convex: false,
-          padding: EdgeInsets.fromLTRB(20, 10, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            10,
+            20,
+            20 + MediaQuery.viewPaddingOf(context).bottom,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -221,21 +301,35 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
                 const SizedBox(height: 16),
                 Text(
                   'Registrar carrera',
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 17, fontWeight: FontWeight.w800),
+                  style: GoogleFonts.montserrat(
+                    color: BentoTheme.cream,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _distanceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: GoogleFonts.montserrat(
+                    color: BentoTheme.cream,
+                    fontWeight: FontWeight.w600,
+                  ),
                   decoration: _decoration('Distancia', suffix: 'km'),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _durationController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: GoogleFonts.montserrat(
+                    color: BentoTheme.cream,
+                    fontWeight: FontWeight.w600,
+                  ),
                   decoration: _decoration('Duración', suffix: 'min'),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -243,14 +337,21 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
                   const SizedBox(height: 10),
                   Text(
                     'Ritmo: ${pace.toStringAsFixed(2)} min/km',
-                    style: GoogleFonts.montserrat(color: BentoTheme.accentOrange, fontWeight: FontWeight.w700, fontSize: 13),
+                    style: GoogleFonts.montserrat(
+                      color: BentoTheme.accentOrange,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _notesController,
                   maxLines: 2,
-                  style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.montserrat(
+                    color: BentoTheme.cream,
+                    fontWeight: FontWeight.w500,
+                  ),
                   decoration: _decoration('Notas (opcional)'),
                 ),
                 const SizedBox(height: 16),
@@ -260,7 +361,42 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
                   uploading: _uploadingRoutePhoto,
                   onPick: _pickRoutePhoto,
                   onRemove: _removeRoutePhoto,
+                  onTapPreview: _routePhotoPath == null
+                      ? null
+                      : _openRoutePhoto,
                 ),
+                if (dayPhotos.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Fotos de este día',
+                    style: GoogleFonts.montserrat(
+                      color: BentoTheme.creamAlpha(0.6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 72,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: dayPhotos.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (context, i) => _DayPhotoThumb(
+                        photo: dayPhotos[i],
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            fullscreenDialog: true,
+                            builder: (_) => ExercisePhotoViewerScreen(
+                              photos: dayPhotos,
+                              initialIndex: i,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
@@ -271,11 +407,26 @@ class _ExerciseLogFormSheetState extends ConsumerState<_ExerciseLogFormSheet> {
                       foregroundColor: const Color(0xFF0C0C0D),
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                     child: _saving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0C0C0D)))
-                        : Text('Guardar', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 15)),
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF0C0C0D),
+                            ),
+                          )
+                        : Text(
+                            'Guardar',
+                            style: GoogleFonts.montserrat(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -296,6 +447,7 @@ class _RoutePhotoField extends StatelessWidget {
   final bool uploading;
   final VoidCallback onPick;
   final VoidCallback onRemove;
+  final VoidCallback? onTapPreview;
 
   const _RoutePhotoField({
     required this.path,
@@ -303,11 +455,11 @@ class _RoutePhotoField extends StatelessWidget {
     required this.uploading,
     required this.onPick,
     required this.onRemove,
+    this.onTapPreview,
   });
 
-  Future<String> _signedUrl(String storagePath) {
-    return Supabase.instance.client.storage.from('exercise-photos').createSignedUrl(storagePath, 3600);
-  }
+  Future<String> _signedUrl(String storagePath) =>
+      SignedUrlCache.get(_routePhotosBucket, storagePath);
 
   @override
   Widget build(BuildContext context) {
@@ -318,44 +470,77 @@ class _RoutePhotoField extends StatelessWidget {
       children: [
         Text(
           'Ruta (captura de Strava)',
-          style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontSize: 12, fontWeight: FontWeight.w700),
+          style: GoogleFonts.montserrat(
+            color: BentoTheme.creamAlpha(0.6),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 8),
         if (hasPhoto)
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (preview != null)
-                        Image.file(preview!, fit: BoxFit.cover)
-                      else if (path != null)
-                        FutureBuilder<String>(
-                          future: _signedUrl(path!),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return Container(color: BentoTheme.creamAlpha(0.06));
-                            }
-                            return Image.network(snapshot.data!, fit: BoxFit.cover);
-                          },
-                        ),
-                      if (uploading)
-                        Container(
-                          color: Colors.black45,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              GestureDetector(
+                onTap: uploading ? null : onTapPreview,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (preview != null)
+                          Image.file(preview!, fit: BoxFit.cover)
+                        else if (path != null)
+                          FutureBuilder<String>(
+                            future: _signedUrl(path!),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData) {
+                                return Container(
+                                  color: BentoTheme.creamAlpha(0.06),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: BentoTheme.creamAlpha(0.4),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return Image.network(
+                                snapshot.data!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  color: BentoTheme.creamAlpha(0.06),
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    color: BentoTheme.creamAlpha(0.4),
+                                    size: 18,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        if (uploading)
+                          Container(
+                            color: Colors.black45,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -367,13 +552,33 @@ class _RoutePhotoField extends StatelessWidget {
                   children: [
                     TextButton(
                       onPressed: uploading ? null : onPick,
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
-                      child: Text('Reemplazar', style: GoogleFonts.montserrat(color: BentoTheme.accentOrange, fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        alignment: Alignment.centerLeft,
+                      ),
+                      child: Text(
+                        'Reemplazar',
+                        style: GoogleFonts.montserrat(
+                          color: BentoTheme.accentOrange,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                     TextButton(
                       onPressed: uploading ? null : onRemove,
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
-                      child: Text('Quitar', style: GoogleFonts.montserrat(color: BentoTheme.errorRed, fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        alignment: Alignment.centerLeft,
+                      ),
+                      child: Text(
+                        'Quitar',
+                        style: GoogleFonts.montserrat(
+                          color: BentoTheme.errorRed,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -383,16 +588,88 @@ class _RoutePhotoField extends StatelessWidget {
         else
           OutlinedButton.icon(
             onPressed: onPick,
-            icon: Icon(Icons.map_outlined, size: 18, color: BentoTheme.creamAlpha(0.8)),
-            label: Text('Adjuntar captura de Strava', style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w700, fontSize: 13)),
+            icon: Icon(
+              Icons.map_outlined,
+              size: 18,
+              color: BentoTheme.creamAlpha(0.8),
+            ),
+            label: Text(
+              'Adjuntar captura de Strava',
+              style: GoogleFonts.montserrat(
+                color: BentoTheme.cream,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: BentoTheme.cream,
               side: BorderSide(color: BentoTheme.creamAlpha(0.2)),
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Miniatura de una foto de progreso ya tomada ese día, dentro del propio
+/// formulario de la sesión: abre el visor con borrado al tocarla.
+class _DayPhotoThumb extends StatelessWidget {
+  final ExercisePhoto photo;
+  final VoidCallback onTap;
+  const _DayPhotoThumb({required this.photo, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 72,
+          height: 72,
+          child: photo.localFile != null
+              ? Image.file(photo.localFile!, fit: BoxFit.cover)
+              : FutureBuilder<String>(
+                  future: SignedUrlCache.get(
+                    _routePhotosBucket,
+                    photo.storagePath,
+                  ),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return Container(
+                        color: BentoTheme.creamAlpha(0.06),
+                        child: Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: BentoTheme.creamAlpha(0.4),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return Image.network(
+                      snapshot.data!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: BentoTheme.creamAlpha(0.06),
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: BentoTheme.creamAlpha(0.4),
+                          size: 18,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ),
     );
   }
 }

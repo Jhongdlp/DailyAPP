@@ -31,7 +31,10 @@ Future<void> runExerciseCaptureFlow(
   final granted = await LockTaskService.requestCameraPermission();
   if (!context.mounted) return;
   if (!granted) {
-    showErrorSnackBar(context, message: 'Se necesita permiso de cámara para tomar fotos de progreso.');
+    showErrorSnackBar(
+      context,
+      message: 'Se necesita permiso de cámara para tomar fotos de progreso.',
+    );
     return;
   }
 
@@ -54,18 +57,24 @@ Future<void> runExerciseCaptureFlow(
   await showExerciseLogForm(context, ref, forDate: forDate, habitId: habitId);
 }
 
-Future<void> _uploadAndClassify(WidgetRef ref, File file, DateTime forDate) async {
+Future<void> _uploadAndClassify(
+  WidgetRef ref,
+  File file,
+  DateTime forDate,
+) async {
   final notifier = ref.read(exerciseProvider.notifier);
   ExercisePhoto photo;
   try {
-    photo = await notifier.addPhoto(id: newRowId(), file: file, loggedDate: forDate);
+    photo = await notifier.addPhoto(
+      id: newRowId(),
+      file: file,
+      loggedDate: forDate,
+    );
     // Recompensa silenciosa: esta subida corre desatada en segundo plano y
     // puede completarse sin que quede una pantalla montada para celebrar.
-    ref.read(rpgProvider.notifier).gainXpAndGold(
-          3,
-          1,
-          counterKeys: const [RpgCounters.progressPhotos],
-        );
+    ref
+        .read(rpgProvider.notifier)
+        .gainXpAndGold(3, 1, counterKeys: const [RpgCounters.progressPhotos]);
   } catch (_) {
     // Sin conexión no hay dónde subir la foto: se pierde el intento de esta
     // toma. Limitación documentada de v1 (requiere conexión para progreso).
@@ -73,9 +82,15 @@ Future<void> _uploadAndClassify(WidgetRef ref, File file, DateTime forDate) asyn
   }
 
   try {
-    notifier.setPhotoClassificationLocal(photo.id, PhotoClassification.classifying);
+    notifier.setPhotoClassificationLocal(
+      photo.id,
+      PhotoClassification.classifying,
+    );
     final settings = ref.read(settingsProvider);
-    final aiClient = LocalAIClient(baseUrl: settings.localAiUrl, visionModelName: settings.visionModel);
+    final aiClient = LocalAIClient(
+      baseUrl: settings.localAiUrl,
+      visionModelName: settings.visionModel,
+    );
     final bytes = await file.readAsBytes();
     final label = await aiClient.classifyExercisePhoto(base64Encode(bytes));
     final classification = switch (label) {
@@ -85,6 +100,9 @@ Future<void> _uploadAndClassify(WidgetRef ref, File file, DateTime forDate) asyn
     };
     await notifier.updatePhotoClassification(photo.id, classification);
   } catch (_) {
-    await notifier.updatePhotoClassification(photo.id, PhotoClassification.failed);
+    await notifier.updatePhotoClassification(
+      photo.id,
+      PhotoClassification.failed,
+    );
   }
 }

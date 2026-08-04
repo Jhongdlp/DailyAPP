@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/exercise_model.dart';
 import '../../../core/providers/exercise_provider.dart';
+import '../../../core/services/signed_url_cache.dart';
 import '../../../core/theme/bento_theme.dart';
+
+const exercisePhotosBucket = 'exercise-photos';
 
 /// Grid de fotos de progreso agrupadas por fecha, más recientes primero.
 /// Usado por la Galería (no por la pestaña principal, que ya no muestra
@@ -24,7 +26,10 @@ class ExercisePhotoGrid extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Text(
           'Todavía no hay fotos de progreso.',
-          style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontSize: 13),
+          style: GoogleFonts.montserrat(
+            color: BentoTheme.creamAlpha(0.5),
+            fontSize: 13,
+          ),
         ),
       );
     }
@@ -39,7 +44,11 @@ class ExercisePhotoGrid extends ConsumerWidget {
             padding: const EdgeInsets.only(top: 12, bottom: 8),
             child: Text(
               DateFormat('EEEE d MMM', 'es').format(day),
-              style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontSize: 12, fontWeight: FontWeight.w700),
+              style: GoogleFonts.montserrat(
+                color: BentoTheme.creamAlpha(0.6),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           Wrap(
@@ -47,7 +56,10 @@ class ExercisePhotoGrid extends ConsumerWidget {
             runSpacing: 8,
             children: [
               for (final photo in byDate[day]!)
-                _PhotoThumb(photo: photo, onTap: onTapPhoto == null ? null : () => onTapPhoto!(photo)),
+                _PhotoThumb(
+                  photo: photo,
+                  onTap: onTapPhoto == null ? null : () => onTapPhoto!(photo),
+                ),
             ],
           ),
         ],
@@ -61,12 +73,8 @@ class _PhotoThumb extends StatelessWidget {
   final VoidCallback? onTap;
   const _PhotoThumb({required this.photo, this.onTap});
 
-  Future<String> _signedUrl() async {
-    final res = await Supabase.instance.client.storage
-        .from('exercise-photos')
-        .createSignedUrl(photo.storagePath, 3600);
-    return res;
-  }
+  Future<String> _signedUrl() =>
+      SignedUrlCache.get(exercisePhotosBucket, photo.storagePath);
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +99,10 @@ class _PhotoThumb extends StatelessWidget {
                               child: SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.creamAlpha(0.4)),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: BentoTheme.creamAlpha(0.4),
+                                ),
                               ),
                             ),
                           );
@@ -101,7 +112,10 @@ class _PhotoThumb extends StatelessWidget {
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Container(
                             color: BentoTheme.creamAlpha(0.06),
-                            child: Icon(Icons.broken_image_outlined, color: BentoTheme.creamAlpha(0.4)),
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: BentoTheme.creamAlpha(0.4),
+                            ),
                           ),
                         );
                       },
@@ -125,30 +139,47 @@ class _ClassificationBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (classification == PhotoClassification.pending || classification == PhotoClassification.classifying) {
+    if (classification == PhotoClassification.pending ||
+        classification == PhotoClassification.classifying) {
       return Container(
         padding: const EdgeInsets.all(4),
-        decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+        decoration: const BoxDecoration(
+          color: Colors.black54,
+          shape: BoxShape.circle,
+        ),
         child: const SizedBox(
           width: 10,
           height: 10,
-          child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Colors.white,
+          ),
         ),
       );
     }
     if (classification == PhotoClassification.failed) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(color: BentoTheme.errorRed.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(
+          color: BentoTheme.errorRed.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: const Icon(Icons.refresh, color: Colors.white, size: 12),
       );
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Text(
         classification.label,
-        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

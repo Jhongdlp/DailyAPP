@@ -2,23 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/exercise_model.dart';
 import '../../core/providers/exercise_provider.dart';
+import '../../core/services/signed_url_cache.dart';
 import '../../core/theme/bento_theme.dart';
+
+const _routePhotosBucket = 'exercise-photos';
 
 /// Visor a pantalla completa, deslizable entre fotos, con zoom y borrado.
 class ExercisePhotoViewerScreen extends ConsumerStatefulWidget {
   final List<ExercisePhoto> photos;
   final int initialIndex;
-  const ExercisePhotoViewerScreen({super.key, required this.photos, required this.initialIndex});
+  const ExercisePhotoViewerScreen({
+    super.key,
+    required this.photos,
+    required this.initialIndex,
+  });
 
   @override
-  ConsumerState<ExercisePhotoViewerScreen> createState() => _ExercisePhotoViewerScreenState();
+  ConsumerState<ExercisePhotoViewerScreen> createState() =>
+      _ExercisePhotoViewerScreenState();
 }
 
-class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerScreen> {
+class _ExercisePhotoViewerScreenState
+    extends ConsumerState<ExercisePhotoViewerScreen> {
   late final PageController _controller;
   late List<ExercisePhoto> _photos;
   late int _index;
@@ -46,9 +54,18 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: BentoTheme.errorRed.withValues(alpha: 0.6), width: 1.5),
+          side: BorderSide(
+            color: BentoTheme.errorRed.withValues(alpha: 0.6),
+            width: 1.5,
+          ),
         ),
-        title: Text('¿Eliminar foto?', style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w700)),
+        title: Text(
+          '¿Eliminar foto?',
+          style: GoogleFonts.montserrat(
+            color: BentoTheme.cream,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Text(
           'Esta foto de progreso se eliminará permanentemente.',
           style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6)),
@@ -56,10 +73,19 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancelar', style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontWeight: FontWeight.w700)),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.montserrat(
+                color: BentoTheme.creamAlpha(0.6),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: BentoTheme.errorRed, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: BentoTheme.errorRed,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Eliminar'),
           ),
@@ -69,6 +95,7 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
     if (confirmed != true || !mounted) return;
 
     await ref.read(exerciseProvider.notifier).deletePhoto(photo);
+    SignedUrlCache.invalidate(_routePhotosBucket, photo.storagePath);
     if (!mounted) return;
 
     final remaining = [..._photos]..removeAt(_index);
@@ -84,7 +111,7 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
   }
 
   Future<String> _signedUrl(ExercisePhoto photo) {
-    return Supabase.instance.client.storage.from('exercise-photos').createSignedUrl(photo.storagePath, 3600);
+    return SignedUrlCache.get(_routePhotosBucket, photo.storagePath);
   }
 
   @override
@@ -111,12 +138,18 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
                             future: _signedUrl(p),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData) {
-                                return const CircularProgressIndicator(color: Colors.white54);
+                                return const CircularProgressIndicator(
+                                  color: Colors.white54,
+                                );
                               }
                               return Image.network(
                                 snapshot.data!,
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: Colors.white54,
+                                  size: 48,
+                                ),
                               );
                             },
                           ),
@@ -131,8 +164,15 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _RoundIconButton(icon: Icons.close, onTap: () => Navigator.pop(context)),
-                  _RoundIconButton(icon: Icons.delete_outline, onTap: _confirmDelete, color: BentoTheme.errorRed),
+                  _RoundIconButton(
+                    icon: Icons.close,
+                    onTap: () => Navigator.pop(context),
+                  ),
+                  _RoundIconButton(
+                    icon: Icons.delete_outline,
+                    onTap: _confirmDelete,
+                    color: BentoTheme.errorRed,
+                  ),
                 ],
               ),
             ),
@@ -143,15 +183,80 @@ class _ExercisePhotoViewerScreenState extends ConsumerState<ExercisePhotoViewerS
               child: Column(
                 children: [
                   Text(
-                    DateFormat('EEEE d MMM yyyy', 'es').format(photo.loggedDate),
-                    style: GoogleFonts.montserrat(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                    DateFormat(
+                      'EEEE d MMM yyyy',
+                      'es',
+                    ).format(photo.loggedDate),
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${photo.classification.label} · ${_index + 1}/${_photos.length}',
-                    style: GoogleFonts.montserrat(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Visor a pantalla completa para una sola imagen (la captura de ruta de
+/// Strava adjunta a una sesión): sin swipe entre fotos ni borrado, solo
+/// zoom y cerrar.
+class RoutePhotoViewerScreen extends StatelessWidget {
+  final String storagePath;
+  const RoutePhotoViewerScreen({super.key, required this.storagePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: FutureBuilder<String>(
+                  future: SignedUrlCache.get(_routePhotosBucket, storagePath),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const CircularProgressIndicator(
+                        color: Colors.white54,
+                      );
+                    }
+                    return Image.network(
+                      snapshot.data!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: _RoundIconButton(
+                icon: Icons.close,
+                onTap: () => Navigator.pop(context),
               ),
             ),
           ],
@@ -175,7 +280,10 @@ class _RoundIconButton extends StatelessWidget {
         width: 40,
         height: 40,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          shape: BoxShape.circle,
+        ),
         child: Icon(icon, color: color ?? Colors.white, size: 20),
       ),
     );

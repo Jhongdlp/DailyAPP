@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/models/exercise_model.dart';
 import '../../core/providers/exercise_provider.dart';
+import '../../core/services/signed_url_cache.dart';
 import '../../core/theme/bento_theme.dart';
+import 'exercise_photo_viewer_screen.dart';
 import 'exercise_stats.dart';
 import 'widgets/exercise_log_form.dart';
 import 'widgets/exercise_weekly_chart.dart';
+
+const _exercisePhotosBucket = 'exercise-photos';
 
 /// Pantalla de detalle: todo el avance por kilómetros, días y tiempo, sin
 /// fotos de por medio. `habitId` solo se usa para precargar el hábito al
@@ -22,8 +25,11 @@ class ExerciseStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final exerciseState = ref.watch(exerciseProvider);
     final stats = computeExerciseStats(exerciseState.logs);
-    final logs = exerciseState.logs.where((l) => l.distanceKm != null || l.durationMinutes != null).toList()
-      ..sort((a, b) => b.loggedDate.compareTo(a.loggedDate));
+    final logs =
+        exerciseState.logs
+            .where((l) => l.distanceKm != null || l.durationMinutes != null)
+            .toList()
+          ..sort((a, b) => b.loggedDate.compareTo(a.loggedDate));
 
     return Scaffold(
       backgroundColor: BentoTheme.darkBg,
@@ -39,7 +45,11 @@ class ExerciseStatsScreen extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Text(
                     'Detalles',
-                    style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 20, fontWeight: FontWeight.w900),
+                    style: GoogleFonts.montserrat(
+                      color: BentoTheme.cream,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -73,7 +83,9 @@ class ExerciseStatsScreen extends ConsumerWidget {
                   _MetricTile(
                     icon: Icons.emoji_events_outlined,
                     accent: BentoTheme.accentPurple,
-                    value: stats.bestDistance == null ? '—' : '${stats.bestDistance!.toStringAsFixed(1)} km',
+                    value: stats.bestDistance == null
+                        ? '—'
+                        : '${stats.bestDistance!.toStringAsFixed(1)} km',
                     label: 'Mejor carrera',
                   ),
                 ],
@@ -85,17 +97,29 @@ class ExerciseStatsScreen extends ConsumerWidget {
                   children: [
                     Text(
                       'Últimas 8 semanas',
-                      style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 14, fontWeight: FontWeight.w800),
+                      style: GoogleFonts.montserrat(
+                        color: BentoTheme.cream,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    ExerciseWeeklyChart(weeks: stats.weeks, color: BentoTheme.accentOrange, height: 150),
+                    ExerciseWeeklyChart(
+                      weeks: stats.weeks,
+                      color: BentoTheme.accentOrange,
+                      height: 150,
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
               Text(
                 'Historial',
-                style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 16, fontWeight: FontWeight.w800),
+                style: GoogleFonts.montserrat(
+                  color: BentoTheme.cream,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 10),
               if (logs.isEmpty)
@@ -103,7 +127,10 @@ class ExerciseStatsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Text(
                     'Todavía no hay carreras registradas.',
-                    style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.45), fontSize: 13),
+                    style: GoogleFonts.montserrat(
+                      color: BentoTheme.creamAlpha(0.45),
+                      fontSize: 13,
+                    ),
                   ),
                 )
               else
@@ -112,7 +139,12 @@ class ExerciseStatsScreen extends ConsumerWidget {
                     for (final log in logs) ...[
                       _LogRow(
                         log: log,
-                        onViewDetail: () => showExerciseLogForm(context, ref, forDate: log.loggedDate, habitId: habitId),
+                        onViewDetail: () => showExerciseLogForm(
+                          context,
+                          ref,
+                          forDate: log.loggedDate,
+                          habitId: habitId,
+                        ),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -162,7 +194,12 @@ class _MetricTile extends StatelessWidget {
   final Color accent;
   final String value;
   final String label;
-  const _MetricTile({required this.icon, required this.accent, required this.value, required this.label});
+  const _MetricTile({
+    required this.icon,
+    required this.accent,
+    required this.value,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -174,9 +211,23 @@ class _MetricTile extends StatelessWidget {
         children: [
           Icon(icon, color: accent, size: 18),
           const SizedBox(height: 8),
-          Text(value, style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 17, fontWeight: FontWeight.w800)),
+          Text(
+            value,
+            style: GoogleFonts.montserrat(
+              color: BentoTheme.cream,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.45), fontSize: 11, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: GoogleFonts.montserrat(
+              color: BentoTheme.creamAlpha(0.45),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -200,7 +251,16 @@ class _LogRowState extends State<_LogRow> {
   bool _expanded = false;
 
   Future<String> _signedUrl(String path) {
-    return Supabase.instance.client.storage.from('exercise-photos').createSignedUrl(path, 3600);
+    return SignedUrlCache.get(_exercisePhotosBucket, path);
+  }
+
+  void _openRoutePhoto(String path) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => RoutePhotoViewerScreen(storagePath: path),
+      ),
+    );
   }
 
   @override
@@ -221,8 +281,15 @@ class _LogRowState extends State<_LogRow> {
                 width: 42,
                 height: 42,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: BentoTheme.accentOrange.withValues(alpha: 0.14), shape: BoxShape.circle),
-                child: Icon(Icons.directions_run, color: BentoTheme.accentOrange, size: 20),
+                decoration: BoxDecoration(
+                  color: BentoTheme.accentOrange.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.directions_run,
+                  color: BentoTheme.accentOrange,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -231,34 +298,54 @@ class _LogRowState extends State<_LogRow> {
                   children: [
                     Text(
                       DateFormat('EEEE d MMM', 'es').format(log.loggedDate),
-                      style: GoogleFonts.montserrat(color: BentoTheme.cream, fontSize: 13, fontWeight: FontWeight.w700),
+                      style: GoogleFonts.montserrat(
+                        color: BentoTheme.cream,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       [
-                        if (log.distanceKm != null) '${log.distanceKm!.toStringAsFixed(1)} km',
-                        if (log.durationMinutes != null) '${log.durationMinutes!.toStringAsFixed(0)} min',
+                        if (log.distanceKm != null)
+                          '${log.distanceKm!.toStringAsFixed(1)} km',
+                        if (log.durationMinutes != null)
+                          '${log.durationMinutes!.toStringAsFixed(0)} min',
                         if (pace != null) '${pace.toStringAsFixed(2)} min/km',
                       ].join(' · '),
-                      style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontSize: 11, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.montserrat(
+                        color: BentoTheme.creamAlpha(0.5),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
               if (routePhoto != null) ...[
-                Icon(Icons.map_outlined, color: BentoTheme.creamAlpha(0.35), size: 16),
+                Icon(
+                  Icons.map_outlined,
+                  color: BentoTheme.creamAlpha(0.35),
+                  size: 16,
+                ),
                 const SizedBox(width: 6),
               ],
               AnimatedRotation(
                 turns: _expanded ? 0.25 : 0,
                 duration: const Duration(milliseconds: 180),
-                child: Icon(Icons.chevron_right, color: BentoTheme.creamAlpha(0.3), size: 18),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: BentoTheme.creamAlpha(0.3),
+                  size: 18,
+                ),
               ),
             ],
           ),
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 180),
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             firstChild: const SizedBox(width: double.infinity, height: 0),
             secondChild: Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -266,30 +353,60 @@ class _LogRowState extends State<_LogRow> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (routePhoto != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 10,
-                        child: FutureBuilder<String>(
-                          future: _signedUrl(routePhoto),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return Container(
-                                color: BentoTheme.creamAlpha(0.06),
-                                child: Center(
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: BentoTheme.creamAlpha(0.4)),
-                                ),
-                              );
-                            }
-                            return Image.network(
-                              snapshot.data!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Container(
-                                color: BentoTheme.creamAlpha(0.06),
-                                child: Icon(Icons.broken_image_outlined, color: BentoTheme.creamAlpha(0.4)),
+                    GestureDetector(
+                      onTap: () => _openRoutePhoto(routePhoto),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 10,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              FutureBuilder<String>(
+                                future: _signedUrl(routePhoto),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return Container(
+                                      color: BentoTheme.creamAlpha(0.06),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: BentoTheme.creamAlpha(0.4),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return Image.network(
+                                    snapshot.data!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: BentoTheme.creamAlpha(0.06),
+                                      child: Icon(
+                                        Icons.broken_image_outlined,
+                                        color: BentoTheme.creamAlpha(0.4),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
+                              Positioned(
+                                right: 8,
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black45,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.zoom_in,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     )
@@ -298,7 +415,11 @@ class _LogRowState extends State<_LogRow> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Text(
                         'Sin ruta adjunta.',
-                        style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.4), fontSize: 12, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.montserrat(
+                          color: BentoTheme.creamAlpha(0.4),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -306,10 +427,16 @@ class _LogRowState extends State<_LogRow> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: widget.onViewDetail,
-                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
                       child: Text(
                         'Ver detalle',
-                        style: GoogleFonts.montserrat(color: BentoTheme.accentOrange, fontWeight: FontWeight.w700, fontSize: 13),
+                        style: GoogleFonts.montserrat(
+                          color: BentoTheme.accentOrange,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),

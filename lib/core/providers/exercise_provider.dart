@@ -7,8 +7,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exercise_model.dart';
 import '../services/cache_service.dart';
 import '../services/outbox_service.dart';
+import '../services/signed_url_cache.dart';
 import '../services/synced_write.dart';
 import 'settings_provider.dart';
+
+const _exercisePhotosBucket = 'exercise-photos';
 
 /// Cuántos días de historial se traen al cargar: suficiente para comparar
 /// progreso "en unos meses" (running + fotos) sin arrastrar toda la vida de
@@ -61,18 +64,34 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
       final cached = await CacheService.read('exercise');
       if (cached is Map) {
         final syncedAtStr = cached['syncedAt'] as String?;
-        _lastSyncedAt = syncedAtStr != null ? DateTime.tryParse(syncedAtStr) : null;
+        _lastSyncedAt = syncedAtStr != null
+            ? DateTime.tryParse(syncedAtStr)
+            : null;
         final logsJson = cached['logs'] as List? ?? const [];
         final photosJson = cached['photos'] as List? ?? const [];
         state = state.copyWith(
-          logs: logsJson.map((e) => ExerciseLog.fromCacheJson(Map<String, dynamic>.from(e as Map))).toList(),
-          photos: photosJson.map((e) => ExercisePhoto.fromCacheJson(Map<String, dynamic>.from(e as Map))).toList(),
+          logs: logsJson
+              .map(
+                (e) => ExerciseLog.fromCacheJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+          photos: photosJson
+              .map(
+                (e) => ExercisePhoto.fromCacheJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
         );
       }
     } catch (_) {}
 
     try {
-      if (!force && _lastSyncedAt != null && DateTime.now().difference(_lastSyncedAt!) < _cacheTtl) {
+      if (!force &&
+          _lastSyncedAt != null &&
+          DateTime.now().difference(_lastSyncedAt!) < _cacheTtl) {
         state = state.copyWith(loading: false);
         return;
       }
@@ -90,7 +109,9 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
         return;
       }
 
-      final cutoff = DateTime.now().subtract(const Duration(days: _historyDays));
+      final cutoff = DateTime.now().subtract(
+        const Duration(days: _historyDays),
+      );
       final cutoffStr = _fmtDate(cutoff);
 
       final logsResponse = await client
@@ -107,19 +128,27 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
           .gte('logged_date', cutoffStr)
           .order('logged_date', ascending: false);
 
-      final logRows = OutboxService.reconcileRows(
-        [for (final row in logsResponse as List) Map<String, dynamic>.from(row as Map)],
-        await OutboxService.pendingFor('exercise_logs'),
-      );
-      final photoRows = OutboxService.reconcileRows(
-        [for (final row in photosResponse as List) Map<String, dynamic>.from(row as Map)],
-        await OutboxService.pendingFor('exercise_photos'),
-      );
+      final logRows = OutboxService.reconcileRows([
+        for (final row in logsResponse as List)
+          Map<String, dynamic>.from(row as Map),
+      ], await OutboxService.pendingFor('exercise_logs'));
+      final photoRows = OutboxService.reconcileRows([
+        for (final row in photosResponse as List)
+          Map<String, dynamic>.from(row as Map),
+      ], await OutboxService.pendingFor('exercise_photos'));
 
-      final freshLogs = logRows.map((json) => ExerciseLog.fromJson(json)).toList();
-      final freshPhotos = photoRows.map((json) => ExercisePhoto.fromJson(json)).toList();
+      final freshLogs = logRows
+          .map((json) => ExerciseLog.fromJson(json))
+          .toList();
+      final freshPhotos = photoRows
+          .map((json) => ExercisePhoto.fromJson(json))
+          .toList();
 
-      state = ExerciseState(logs: freshLogs, photos: freshPhotos, loading: false);
+      state = ExerciseState(
+        logs: freshLogs,
+        photos: freshPhotos,
+        loading: false,
+      );
       _lastSyncedAt = DateTime.now();
       unawaited(_persistCache());
     } catch (_) {
@@ -128,10 +157,10 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
   }
 
   Future<void> _persistCache() => CacheService.save('exercise', {
-        'syncedAt': _lastSyncedAt?.toIso8601String(),
-        'logs': state.logs.map((l) => l.toCacheJson()).toList(),
-        'photos': state.photos.map((p) => p.toCacheJson()).toList(),
-      });
+    'syncedAt': _lastSyncedAt?.toIso8601String(),
+    'logs': state.logs.map((l) => l.toCacheJson()).toList(),
+    'photos': state.photos.map((p) => p.toCacheJson()).toList(),
+  });
 
   ExerciseLog? logForDate(DateTime day) {
     final target = dateOnly(day);
@@ -160,9 +189,11 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
     await _ensureLoaded();
     final index = state.logs.indexWhere((l) => l.id == log.id);
     final newLogs = [
-      if (index == -1) ...state.logs else ...[
+      if (index == -1)
+        ...state.logs
+      else ...[
         for (int i = 0; i < state.logs.length; i++)
-          if (i != index) state.logs[i]
+          if (i != index) state.logs[i],
       ],
       log,
     ];
@@ -175,7 +206,8 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
       final user = client.auth.currentUser!;
       final payload = log.toInsertJson(user.id);
       await syncedWrite(
-        write: () => client.from('exercise_logs').upsert(payload, onConflict: 'id'),
+        write: () =>
+            client.from('exercise_logs').upsert(payload, onConflict: 'id'),
         fallback: () => OutboxOp.create(
           table: 'exercise_logs',
           kind: OutboxOpKind.upsert,
@@ -242,31 +274,53 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
   /// [logId]. Cada llamada usa un nombre nuevo en vez de sobrescribir: el
   /// bucket no tiene policy de UPDATE en storage.objects, así que un
   /// upsert fallaría por RLS. El archivo viejo (si había) se borra best-effort.
-  Future<String> uploadRoutePhoto({required String logId, required File file, String? previousPath}) async {
+  Future<String> uploadRoutePhoto({
+    required String logId,
+    required File file,
+    String? previousPath,
+  }) async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
-    if (user == null) throw Exception('Se requiere conexión para adjuntar la ruta.');
+    if (user == null)
+      throw Exception('Se requiere conexión para adjuntar la ruta.');
 
-    final path = '${user.id}/routes/$logId-${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path =
+        '${user.id}/routes/$logId-${DateTime.now().millisecondsSinceEpoch}.jpg';
     await client.storage.from('exercise-photos').upload(path, file);
 
     if (previousPath != null && previousPath.isNotEmpty) {
-      unawaited(client.storage.from('exercise-photos').remove([previousPath]).catchError((_) => <FileObject>[]));
+      unawaited(
+        client.storage
+            .from('exercise-photos')
+            .remove([previousPath])
+            .catchError((_) => <FileObject>[]),
+      );
+      SignedUrlCache.invalidate(_exercisePhotosBucket, previousPath);
     }
     return path;
   }
 
-  void setPhotoClassificationLocal(String photoId, PhotoClassification classification) {
+  void setPhotoClassificationLocal(
+    String photoId,
+    PhotoClassification classification,
+  ) {
     final index = state.photos.indexWhere((p) => p.id == photoId);
     if (index == -1) return;
-    final updated = state.photos[index].copyWith(classification: classification);
-    state = state.copyWith(photos: [
-      for (int i = 0; i < state.photos.length; i++)
-        if (i == index) updated else state.photos[i]
-    ]);
+    final updated = state.photos[index].copyWith(
+      classification: classification,
+    );
+    state = state.copyWith(
+      photos: [
+        for (int i = 0; i < state.photos.length; i++)
+          if (i == index) updated else state.photos[i],
+      ],
+    );
   }
 
-  Future<void> updatePhotoClassification(String photoId, PhotoClassification classification) async {
+  Future<void> updatePhotoClassification(
+    String photoId,
+    PhotoClassification classification,
+  ) async {
     setPhotoClassificationLocal(photoId, classification);
     unawaited(_persistCache());
 
@@ -278,7 +332,8 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
       'classification': classification.dbClassification,
     };
     await syncedWrite(
-      write: () => client.from('exercise_photos').update(payload).eq('id', photoId),
+      write: () =>
+          client.from('exercise_photos').update(payload).eq('id', photoId),
       fallback: () => OutboxOp.create(
         table: 'exercise_photos',
         kind: OutboxOpKind.update,
@@ -290,13 +345,22 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
 
   Future<void> linkPhotosToLog(DateTime day, String exerciseLogId) async {
     final target = dateOnly(day);
-    final toLink = state.photos.where((p) => dateOnly(p.loggedDate) == target && p.exerciseLogId == null).toList();
+    final toLink = state.photos
+        .where(
+          (p) => dateOnly(p.loggedDate) == target && p.exerciseLogId == null,
+        )
+        .toList();
     if (toLink.isEmpty) return;
 
-    state = state.copyWith(photos: [
-      for (final p in state.photos)
-        if (toLink.any((l) => l.id == p.id)) p.copyWith(exerciseLogId: exerciseLogId) else p
-    ]);
+    state = state.copyWith(
+      photos: [
+        for (final p in state.photos)
+          if (toLink.any((l) => l.id == p.id))
+            p.copyWith(exerciseLogId: exerciseLogId)
+          else
+            p,
+      ],
+    );
     unawaited(_persistCache());
 
     final settings = ref.read(settingsProvider);
@@ -305,7 +369,8 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
     for (final photo in toLink) {
       final payload = {'exercise_log_id': exerciseLogId};
       await syncedWrite(
-        write: () => client.from('exercise_photos').update(payload).eq('id', photo.id),
+        write: () =>
+            client.from('exercise_photos').update(payload).eq('id', photo.id),
         fallback: () => OutboxOp.create(
           table: 'exercise_photos',
           kind: OutboxOpKind.update,
@@ -317,15 +382,23 @@ class ExerciseNotifier extends Notifier<ExerciseState> {
   }
 
   Future<void> deletePhoto(ExercisePhoto photo) async {
-    state = state.copyWith(photos: state.photos.where((p) => p.id != photo.id).toList());
+    state = state.copyWith(
+      photos: state.photos.where((p) => p.id != photo.id).toList(),
+    );
     unawaited(_persistCache());
+    SignedUrlCache.invalidate(_exercisePhotosBucket, photo.storagePath);
 
     final settings = ref.read(settingsProvider);
     if (!settings.isSupabaseConfigured || !canWriteToSupabase) return;
     final client = Supabase.instance.client;
 
     // Borrado del objeto en Storage: best-effort, no bloquea ni se reintenta.
-    unawaited(client.storage.from('exercise-photos').remove([photo.storagePath]).catchError((_) => <FileObject>[]));
+    unawaited(
+      client.storage
+          .from('exercise-photos')
+          .remove([photo.storagePath])
+          .catchError((_) => <FileObject>[]),
+    );
 
     await syncedWrite(
       write: () => client.from('exercise_photos').delete().eq('id', photo.id),

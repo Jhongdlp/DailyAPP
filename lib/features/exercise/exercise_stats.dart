@@ -45,16 +45,25 @@ DateTime _mondayOf(DateTime d) {
 
 ExerciseStats computeExerciseStats(List<ExerciseLog> logs) {
   final now = DateTime.now();
-  final logged = logs.where((l) => l.distanceKm != null || l.durationMinutes != null).toList();
+  final logged = logs
+      .where((l) => l.distanceKm != null || l.durationMinutes != null)
+      .toList();
 
-  bool within(ExerciseLog l, int days) => now.difference(l.loggedDate).inDays <= days;
+  bool within(ExerciseLog l, int days) =>
+      now.difference(l.loggedDate).inDays <= days;
   final last30 = logged.where((l) => within(l, 30)).toList();
   final last90 = logged.where((l) => within(l, 90)).toList();
 
-  double sumKm(Iterable<ExerciseLog> xs) => xs.fold<double>(0, (s, l) => s + (l.distanceKm ?? 0));
+  double sumKm(Iterable<ExerciseLog> xs) =>
+      xs.fold<double>(0, (s, l) => s + (l.distanceKm ?? 0));
 
-  final paces30 = last30.map((l) => l.computedPace).whereType<double>().toList();
-  final avgPace30 = paces30.isEmpty ? null : paces30.reduce((a, b) => a + b) / paces30.length;
+  final paces30 = last30
+      .map((l) => l.computedPace)
+      .whereType<double>()
+      .toList();
+  final avgPace30 = paces30.isEmpty
+      ? null
+      : paces30.reduce((a, b) => a + b) / paces30.length;
 
   double? bestDistance;
   for (final l in logged) {
@@ -68,7 +77,8 @@ ExerciseStats computeExerciseStats(List<ExerciseLog> logs) {
   // (o desde ayer si hoy todavía no se registró nada).
   final loggedDays = logged.map((l) => _dateOnly(l.loggedDate)).toSet();
   var cursor = _dateOnly(now);
-  if (!loggedDays.contains(cursor)) cursor = cursor.subtract(const Duration(days: 1));
+  if (!loggedDays.contains(cursor))
+    cursor = cursor.subtract(const Duration(days: 1));
   var streak = 0;
   while (loggedDays.contains(cursor)) {
     streak++;
@@ -80,11 +90,14 @@ ExerciseStats computeExerciseStats(List<ExerciseLog> logs) {
     for (var i = 7; i >= 0; i--)
       WeekBucket(
         weekStart: currentWeekStart.subtract(Duration(days: 7 * i)),
-        km: sumKm(logged.where((l) {
-          final start = currentWeekStart.subtract(Duration(days: 7 * i));
-          final d = _dateOnly(l.loggedDate);
-          return !d.isBefore(start) && d.isBefore(start.add(const Duration(days: 7)));
-        })),
+        km: sumKm(
+          logged.where((l) {
+            final start = currentWeekStart.subtract(Duration(days: 7 * i));
+            final d = _dateOnly(l.loggedDate);
+            return !d.isBefore(start) &&
+                d.isBefore(start.add(const Duration(days: 7)));
+          }),
+        ),
       ),
   ];
 
@@ -94,7 +107,10 @@ ExerciseStats computeExerciseStats(List<ExerciseLog> logs) {
     totalKmAll: sumKm(logged),
     sessions30: last30.length,
     sessionsAll: logged.length,
-    totalMinutes30: last30.fold<double>(0, (s, l) => s + (l.durationMinutes ?? 0)),
+    totalMinutes30: last30.fold<double>(
+      0,
+      (s, l) => s + (l.durationMinutes ?? 0),
+    ),
     avgPace30: avgPace30,
     streakDays: streak,
     bestDistance: bestDistance,

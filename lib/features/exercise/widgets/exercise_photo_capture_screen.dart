@@ -19,7 +19,8 @@ class ExercisePhotoCaptureScreen extends StatefulWidget {
   const ExercisePhotoCaptureScreen({super.key});
 
   @override
-  State<ExercisePhotoCaptureScreen> createState() => _ExercisePhotoCaptureScreenState();
+  State<ExercisePhotoCaptureScreen> createState() =>
+      _ExercisePhotoCaptureScreenState();
 }
 
 class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
@@ -52,7 +53,9 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
         return;
       }
       _cameras = cameras;
-      _cameraIndex = cameras.indexWhere((c) => c.lensDirection == CameraLensDirection.back);
+      _cameraIndex = cameras.indexWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+      );
       if (_cameraIndex < 0) _cameraIndex = 0;
       await _initController(_cameras[_cameraIndex]);
     } catch (e) {
@@ -210,8 +213,12 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
   Widget _buildPreview() {
     if (_error != null) return _buildError();
     final controller = _controller;
-    if (_initializing || controller == null || !controller.value.isInitialized) {
-      return Center(child: CircularProgressIndicator(color: BentoTheme.accentOrange));
+    if (_initializing ||
+        controller == null ||
+        !controller.value.isInitialized) {
+      return Center(
+        child: CircularProgressIndicator(color: BentoTheme.accentOrange),
+      );
     }
     return FittedBox(
       fit: BoxFit.cover,
@@ -229,12 +236,20 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.no_photography_outlined, color: BentoTheme.accentOrange, size: 64),
+          Icon(
+            Icons.no_photography_outlined,
+            color: BentoTheme.accentOrange,
+            size: 64,
+          ),
           const SizedBox(height: 20),
           Text(
             _error ?? 'Error de cámara',
             textAlign: TextAlign.center,
-            style: TextStyle(color: BentoTheme.cream, fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: BentoTheme.cream,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 28),
           ElevatedButton(
@@ -244,9 +259,14 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
               foregroundColor: const Color(0xFF0C0C0D),
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
-            child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+            child: const Text(
+              'Cerrar',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
           ),
         ],
       ),
@@ -278,7 +298,10 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
-          _CircleButton(icon: Icons.close, onTap: () => Navigator.of(context).pop(_shots)),
+          _CircleButton(
+            icon: Icons.close,
+            onTap: () => Navigator.of(context).pop(_shots),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Container(
@@ -291,11 +314,20 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.fitness_center, color: BentoTheme.accentOrange, size: 20),
+                  Icon(
+                    Icons.fitness_center,
+                    color: BentoTheme.accentOrange,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Text(
                     'Foto de progreso ${_shots.length}/$kMaxExercisePhotos',
-                    style: TextStyle(color: BentoTheme.cream, fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'Outfit'),
+                    style: TextStyle(
+                      color: BentoTheme.cream,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Outfit',
+                    ),
                   ),
                 ],
               ),
@@ -320,7 +352,12 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(_shots[index], width: 60, height: 60, fit: BoxFit.cover),
+                child: Image.file(
+                  _shots[index],
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                ),
               ),
               Positioned(
                 top: -6,
@@ -329,8 +366,15 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
                   onTap: () => _removeShot(index),
                   child: Container(
                     padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
-                    child: const Icon(Icons.close, color: Colors.white, size: 14),
+                    decoration: const BoxDecoration(
+                      color: Colors.black87,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                   ),
                 ),
               ),
@@ -342,7 +386,8 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
   }
 
   Widget _buildBottomBar() {
-    final canShoot = _error == null &&
+    final canShoot =
+        _error == null &&
         !_initializing &&
         (_controller?.value.isInitialized ?? false) &&
         _shots.length < kMaxExercisePhotos;
@@ -357,18 +402,29 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
                     onPressed: _finish,
                     child: Text(
                       'Listo',
-                      style: TextStyle(color: BentoTheme.accentOrange, fontWeight: FontWeight.w800, fontSize: 15),
+                      style: TextStyle(
+                        color: BentoTheme.accentOrange,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
                     ),
                   )
                 : null,
           ),
           const Spacer(),
-          _ShutterButton(enabled: canShoot && !_capturing, busy: _capturing, onTap: _capture),
+          _ShutterButton(
+            enabled: canShoot && !_capturing,
+            busy: _capturing,
+            onTap: _capture,
+          ),
           const Spacer(),
           SizedBox(
             width: 72,
             child: _cameras.length > 1
-                ? _CircleButton(icon: Icons.cameraswitch_outlined, onTap: _switchCamera)
+                ? _CircleButton(
+                    icon: Icons.cameraswitch_outlined,
+                    onTap: _switchCamera,
+                  )
                 : null,
           ),
         ],
@@ -391,7 +447,11 @@ class _CircleButton extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: SizedBox(width: 48, height: 48, child: Icon(icon, color: BentoTheme.cream, size: 24)),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(icon, color: BentoTheme.cream, size: 24),
+        ),
       ),
     );
   }
@@ -402,7 +462,11 @@ class _ShutterButton extends StatelessWidget {
   final bool busy;
   final VoidCallback onTap;
 
-  const _ShutterButton({required this.enabled, required this.busy, required this.onTap});
+  const _ShutterButton({
+    required this.enabled,
+    required this.busy,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -421,16 +485,25 @@ class _ShutterButton extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(6),
             child: Container(
-              decoration: BoxDecoration(shape: BoxShape.circle, color: BentoTheme.accentOrange),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: BentoTheme.accentOrange,
+              ),
               child: busy
                   ? const Padding(
                       padding: EdgeInsets.all(18),
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0C0C0D)),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFF0C0C0D),
+                        ),
                       ),
                     )
-                  : const Icon(Icons.camera_alt, color: Color(0xFF0C0C0D), size: 30),
+                  : const Icon(
+                      Icons.camera_alt,
+                      color: Color(0xFF0C0C0D),
+                      size: 30,
+                    ),
             ),
           ),
         ),
