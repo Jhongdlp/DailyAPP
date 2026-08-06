@@ -7,8 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The Flutter SDK is located at `/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/`. Use the full path:
 
 ```bash
-# Run the app
-/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter run
+# Run the app (LOCAL_AI_URL points to the real Ollama server; keep the real
+# value out of source control — export it in your shell profile or pass it
+# inline, never commit it)
+/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter run --dart-define=LOCAL_AI_URL=http://<ollama-host>:11434
 
 # Analyze (lint)
 /home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter analyze
@@ -32,7 +34,7 @@ The Flutter SDK is located at `/home/jhon/Documentos/TerminalAgent/sdk/flutter/b
 | Service | Address | Purpose |
 |---|---|---|
 | Supabase | `https://vhtorhsyqszoaeshlnjs.supabase.co` | Auth, PostgreSQL, Storage |
-| Ollama (AI) | `http://63.141.255.7:11434` | Local AI inference |
+| Ollama (AI) | `<LOCAL_AI_URL>` — injected at build time, see below | Local AI inference |
 
 **Ollama models:**
 - `qwen2.5-coder:14b` — text reasoning, chat copilot, note connections

@@ -3,10 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Backend e IA fijos del proyecto: no son configurables desde la app
 /// (multi-tenant, cada usuario se aísla por RLS con su propia cuenta, no por
 /// servidor; y el servidor de IA es un único servidor propio, no por-usuario).
+///
+/// kLocalAiUrl se inyecta en build time con --dart-define=LOCAL_AI_URL=...
+/// para no dejar la IP real del servidor en el código fuente/APK.
 const String kSupabaseUrl = 'https://vhtorhsyqszoaeshlnjs.supabase.co';
 const String kSupabaseAnonKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodG9yaHN5cXN6b2Flc2hsbmpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MjkwOTYsImV4cCI6MjA5NzMwNTA5Nn0.y1FMqvVlchoFLr06NWvA9sCUZsFsaQ9GPB59BrH8Q9k';
-const String kLocalAiUrl = 'http://63.141.255.7:11434';
+const String kLocalAiUrl = String.fromEnvironment(
+  'LOCAL_AI_URL',
+  defaultValue: 'http://10.0.2.2:11434',
+);
 const String kTextModel = 'qwen2.5-coder:14b';
 const String kVisionModel = 'qwen3-vl:8b';
 const String kEmbeddingModel = 'bge-m3:latest';

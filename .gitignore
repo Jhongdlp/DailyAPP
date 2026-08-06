@@ -49,3 +49,19 @@ android/key.properties
 android/app/upload-keystore.jks
 *.jks
 *.keystore
+
+# Build artifacts outside the root /build (gitignored above)
+android/build/
+android/app/build/
+ios/build/
+macos/build/
+
+# IDE / OS
+.idea/
+*.iml
+test_output.log
+
+# Config local del agente IA (no es código de la app)
+.agents/
+.mcp.json
+skills-lock.json
