@@ -1,109 +1,187 @@
-# 🚀 SistemDaily: El Sistema Inteligente de Vida (Life OS)
+<p align="center">
+  <img src="assets/branding/logo.png" alt="SistemDaily" width="140" />
+</p>
 
-SistemDaily es una aplicación móvil desarrollada en **Flutter** diseñada con una estética de **Minimalist Glassmorphism**. Funciona como un "segundo cerebro" personal y un asistente de vida diario que integra el seguimiento de hábitos, notas interconectadas y alarmas inteligentes.
-
-Todo el procesamiento de Inteligencia Artificial (análisis de texto y validación de imágenes) se ejecuta de forma **privada y local** en tu propio servidor remoto a través de **Ollama**.
+<h1 align="center">SistemDaily</h1>
+<p align="center"><b>Life OS personal</b> — hábitos, notas, finanzas, agenda, ejercicio y más, con IA local y privada.</p>
 
 ---
 
-## 🛠️ Arquitectura del Sistema
+SistemDaily es una app Flutter (Android / iOS / escritorio / web) que funciona como un **segundo cerebro personal**: centraliza hábitos, notas interconectadas, finanzas, agenda, lectura, ejercicio y analíticas en un solo lugar, con un sistema de alarmas anti-procrastinación validadas por visión artificial.
+
+Todo el procesamiento de IA (chat, conexiones entre notas, validación de fotos, embeddings) corre en un **servidor propio con Ollama** — nada de datos personales sale hacia proveedores externos de IA.
+
+---
+
+## 🧩 Funcionalidades
+
+### ✅ Hábitos
+Seguimiento de hábitos con heatmap estilo GitHub, rachas, categorías y plantillas rápidas. Historial persistido en `habit_logs` para ver evolución a largo plazo.
+
+### 🧠 Notas (Segundo Cerebro)
+Editor estilo Notion, grabación de voz, y un **grafo de conocimiento interactivo** que conecta notas semánticamente mediante embeddings (`bge-m3`, pgvector) — sin depender de etiquetas manuales. Incluye recordatorios y notas con autodestrucción.
+
+### ⏰ Alarma anti-procrastinación
+Alarmas reales (múltiples, por días de la semana, con objetos personalizados) que solo se desactivan validando una foto con un **modelo de visión (`qwen3-vl`)** — por ejemplo, fotografiar la cocina hecha o el escritorio ordenado. Incluye diagnóstico de notificaciones, panel de sueño y "wake check" (comprobación de que sigues despierto).
+
+### 💰 Finanzas
+Gestor de dinero en USD con cuentas, transacciones y entrada asistida por IA (describe el gasto en lenguaje natural y la app lo estructura).
+
+### 💬 Copiloto (Chat)
+Chat con memoria persistente, múltiples conversaciones y una persona de experto financiero, con contexto inyectado automáticamente desde hábitos y notas. RAG con streaming sobre el grafo de notas.
+
+### 🗓️ Agenda
+Planeación nocturna con timeline arrastrable, tareas vinculadas a hábitos y un ritual guiado de 5 pasos para cerrar el día y planear el siguiente.
+
+### 📚 Biblioteca
+Lector integrado de EPUB y PDF con texto a voz (TTS), posición de lectura persistida y recepción de libros compartidos desde otras apps.
+
+### 📰 Noticias
+Digest de noticias generado por un cron en el servidor propio + Ollama, entregado como resumen diario.
+
+### 📊 Analíticas
+Métricas derivadas de hábitos, finanzas, sueño y ejercicio sin necesidad de SQL adicional: correlaciones por tercios y revisión semanal.
+
+### 🏃 Ejercicio
+Registro de running (integración con Strava) y fotos de progreso físico validadas/organizadas con IA, con galería, estadísticas y zoom sobre la ruta.
+
+### 🎮 Mi Personaje (RPG)
+Un sistema de gamificación con 5 héroes en pixel art que evolucionan por nivel, bazar de cosméticos y 14 logros con badges y puntos ganados por hábitos, alarma, finanzas y notas.
+
+### 🔒 Bóveda (Vault)
+Almacén cifrado de datos sensibles protegido con biometría/PIN (`local_auth`), cifrado local con `encrypt` y `flutter_secure_storage`.
+
+### ⚡ Captura rápida
+Widget de escritorio / tile de notificaciones para capturar notas y tareas sin abrir la app completa.
+
+### ⏱️ Pomodoro
+Temporizador con "modo monje" (paneles solo visibles durante el descanso, para minimizar distracción) y estadísticas locales.
+
+### 🎨 Personalización
+Tema neumórfico propio (claro/oscuro) con paleta de colores configurable por el usuario.
+
+### 🔄 Auto-actualización
+Comprobación e instalación de nuevas versiones directamente desde releases de GitHub, sin pasar por una tienda de apps.
+
+---
+
+## 🏗️ Arquitectura del Sistema
 
 ```mermaid
 graph TD
-    A[SistemDaily App - Flutter] -->|Autenticación y Datos| B[Supabase]
-    A -->|Procesamiento de Notas, Voz e Imágenes| C[Servidor IA Local - Ollama API]
-    
-    subgraph Supabase Database
-        B --> D[(PostgreSQL)]
-        D --> D1[Tabla de Usuarios / Perfiles]
-        D --> D2[Tabla de Hábitos e Historial]
-        D --> D3[Tabla de Notas con Vectores pgvector]
-        D --> D4[Configuración de Alarmas]
+    A[SistemDaily App - Flutter] -->|Auth, datos, storage| B[Supabase]
+    A -->|Chat, notas, visión, embeddings| C[Servidor IA propio - Ollama API]
+
+    subgraph "Supabase"
+        B --> D[(PostgreSQL + RLS)]
+        D --> D1[Hábitos / habit_logs]
+        D --> D2[Notas + pgvector]
+        D --> D3[Alarmas / Sueño]
+        D --> D4[Finanzas]
+        D --> D5[Agenda / Tareas]
+        D --> D6[Ejercicio / Analíticas]
+        B --> H[(Storage: fotos, adjuntos)]
     end
 
-    subgraph Servidor IA Local (Ollama)
-        C --> E[qwen3-vl:8b - Modelo de Visión para Alarmas]
-        C --> F[qwen2.5-coder:14b - Razonamiento de Notas y Conexiones]
-        C --> G[bge-m3 - Búsqueda Semántica de Notas]
-    end
-
-    subgraph Almacenamiento
-        B --> H[(Supabase Storage)]
-        H -->|Fotos de Alarmas / Adjuntos| D
+    subgraph "Servidor IA (Ollama)"
+        C --> E["qwen3-vl:8b — visión (alarma, fotos de ejercicio)"]
+        C --> F["qwen2.5-coder:14b — chat, conexiones de notas, finanzas"]
+        C --> G["bge-m3 — embeddings / búsqueda semántica"]
     end
 ```
 
 ---
 
-## 🖥️ Configuración del Servidor de IA (Ollama)
+## 🖥️ Servidor de IA (Ollama)
 
-El servidor remoto ha sido diagnosticado y configurado con los siguientes detalles:
+*   **Host**: `63.141.255.7:11434`
+*   **Hardware**: Intel Xeon E5-2697 v3, 125 GiB RAM, NVIDIA Tesla V100 (16 GB VRAM, CUDA 13.0)
+*   **Modelos**:
+    | Modelo | Uso |
+    |---|---|
+    | `qwen2.5-coder:14b` | Chat, razonamiento, conexiones de notas, digest de noticias |
+    | `qwen3-vl:8b` | Validación visual (alarma, fotos de ejercicio) |
+    | `bge-m3:latest` | Embeddings para búsqueda semántica (pgvector) |
 
-*   **Dirección Host**: `63.141.255.7`
-*   **Puerto de Ollama**: `11434` (Escuchando públicamente en `0.0.0.0:11434`)
-*   **Hardware del Servidor**:
-    *   **CPU**: Intel Xeon E5-2697 v3 (x86_64) @ 2.60GHz
-    *   **Memoria RAM**: 125 GiB RAM
-    *   **GPU**: NVIDIA Tesla V100 PCIe (16 GB VRAM) con soporte CUDA 13.0
-*   **Servicio Systemd**:
-    *   Fichero de configuración de overrides: `/etc/systemd/system/ollama.service.d/override.conf` conteniendo `Environment="OLLAMA_HOST=0.0.0.0"`.
-    *   Ruta de almacenamiento de modelos: `/home/ollama-models` (según `models.conf`).
-
-### Modelos de IA Instalados en el Servidor
-1.  **`qwen2.5-coder:14b`** (Texto/Razonamiento): Utilizado como copiloto en el chat interactivo, organizador de tareas y recomendador semántico de conexiones entre notas.
-2.  **`qwen3-vl:8b`** (Visión/Multimodal): Utilizado para la validación visual de la alarma anti-procrastinación.
-3.  **`bge-m3:latest`** (Embeddings): Para la indexación semántica y búsqueda vectorial en el Segundo Cerebro.
+`LocalAIClient` (`lib/core/network/local_ai_client.dart`) habla con `/api/chat` de Ollama y cae automáticamente a un endpoint compatible con OpenAI (`/v1/chat/completions`) si el servidor es LM Studio, vLLM, etc.
 
 ---
 
-## 🎨 Guía de Diseño Visual: Glassmorphism
+## 🎨 Diseño: Bento / Neumorfismo
 
-La interfaz móvil implementa una estética de cristal translúcido (cristal esmerilado):
-*   **Degradados de Fondo**: Un fondo oscuro profundo (`0xFF0F0C20` a `0xFF06040A`) con dos orbes de luz difusos e indirectos (púrpura y azul) generados en base al tamaño de pantalla mediante `BackdropFilter` con difuminados de alta densidad (blur de 100 y 120).
-*   **Tarjetas de Cristal**: Contenedores translúcidos (`GlassContainer`) creados con filtros de desenfoque (`ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0)`) con bordes finos blancos semi-transparentes de 1.2px y opacidades bajas de fondo de entre 5% y 15%.
-*   **Navegación**: Un menú inferior flotante y curvo que cambia dinámicamente de color de selección en base a la pestaña seleccionada (Púrpura, Azul, Cyan, Coral).
+La interfaz usa un sistema neumórfico propio en modo claro y oscuro, sin gradientes:
+
+*   `BentoTheme.primaryDark` (`#27187E`) — color primario / texto
+*   `BentoTheme.bgLight` (`#F7F7FF`) — fondo del scaffold
+*   `BentoCard` / `BentoBackground` — contenedor con borde suave y wrapper con safe area
+*   Acentos por sección: naranja, azul, púrpura, lima, etc.
+*   Fuente: **Outfit** (Google Fonts)
+*   La luz de las sombras neumórficas siempre viene de arriba-izquierda; en listas se usan variantes "lite" (`NeuPressed(lite)`, `neuRaisedLite`) para evitar el coste de renderizar múltiples pasadas de blur offscreen.
 
 ---
 
-## 📁 Estructura del Proyecto Flutter
+## 📁 Estructura del Proyecto
 
 ```text
 lib/
-├── main.dart                       # Inicialización de la app, Providers y redirección dinámica
+├── main.dart                     # Bootstrap, providers globales, deep links y entry point de captura rápida
 ├── core/
-│   ├── theme/
-│   │   └── glass_theme.dart        # Paleta, configuraciones del tema y widgets reutilizables (GlassContainer, DeepBackground)
-│   ├── network/
-│   │   └── local_ai_client.dart    # Cliente HTTP para Ollama con compatibilidad OpenAI (Qwen & Qwen-VL)
-│   └── providers/
-│       └── settings_provider.dart  # Notifier de Riverpod para persistencia de la URL del servidor e IP de Supabase
+│   ├── theme/                    # Paleta Bento/neumórfica, OKLCH
+│   ├── network/                  # Cliente Ollama (local_ai_client.dart)
+│   ├── providers/                # Riverpod: settings, hábitos, alarmas, sueño, agenda, ejercicio...
+│   ├── services/                 # Notificaciones, sincronización offline, alarmas, recordatorios
+│   ├── models/                   # Modelos de datos (AppDestination, alarmas, etc.)
+│   ├── utils/ y widgets/         # Utilidades y widgets compartidos
 └── features/
-    ├── setup/
-    │   └── setup_screen.dart       # Formulario inicial de login y tests de conexión con servidor local de IA
-    ├── dashboard/
-    │   └── dashboard_screen.dart   # Contenedor principal de pestañas con barra flotante Glassmorphic
-    ├── habits/
-    │   └── habits_tab.dart         # Grid de hábitos e integración con Qwen para feedbacks
-    ├── alarm/
-    │   └── alarm_tab.dart          # Configuración de alarma, selección de target y testeo con cámara (Qwen-VL)
-    ├── notes/
-    │   └── notes_tab.dart          # Segundo cerebro: Markdown editor y visualizador de grafo interactivo en 2D (CustomPainter)
-    └── chat/
-        └── chat_tab.dart           # Copiloto conversacional con inyección automática de contexto (hábitos y notas)
+    ├── habits/                   # Hábitos + heatmap
+    ├── notes/                    # Segundo cerebro: editor + grafo de conocimiento
+    ├── alarm/                    # Alarma anti-procrastinación + sueño
+    ├── finance/                  # Gestor de dinero
+    ├── chat/                     # Copiloto conversacional
+    ├── agenda/                   # Planeación nocturna + timeline
+    ├── reading/                  # Lector EPUB / PDF + TTS
+    ├── news/                     # Digest de noticias
+    ├── analytics/                # Métricas y revisión semanal
+    ├── exercise/                 # Running + fotos de progreso
+    ├── character/                # RPG: héroes, cosméticos, logros
+    ├── vault/                    # Bóveda cifrada
+    ├── quick_capture/            # Widget/entry point de captura rápida
+    ├── pomodoro/                 # Temporizador modo monje
+    ├── settings/                 # Personalización de tema
+    ├── update/                   # Auto-actualización
+    ├── auth/                     # Login / sesión
+    └── dashboard/                # Contenedor de pestañas y menú
 ```
+
+Pestañas del dashboard, en orden: **Hábitos · Notas · Alarma · Finanzas · Copiloto · Agenda · Biblioteca · Noticias · Analíticas · Ejercicio** — más accesos a *Mi Personaje*, *Personalizar* y *Buscar actualizaciones* desde el menú lateral.
+
+### Base de datos
+
+Definida en `supabase_schema.sql` (+ migraciones sueltas para agenda, ejercicio y noticias). Todas las tablas usan RLS con políticas por usuario; un trigger crea el `profile` automáticamente al registrarse.
 
 ---
 
-## 🚀 Instrucciones de Ejecución
+## 🚀 Ejecución
 
-1.  Asegúrate de contar con el SDK de Flutter y un emulador de Android/iOS o dispositivo físico conectado.
-2.  Para iniciar la aplicación, ejecuta desde la terminal del proyecto:
-    ```bash
-    /home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter run
-    ```
-3.  Al abrir la app por primera vez, verás la pantalla de configuración. Completa los campos con las siguientes credenciales:
-    *   **Supabase URL** y **Anon Key** de tu proyecto Supabase.
-    *   **URL de API Local**: `http://63.141.255.7:11434`
-    *   **Modelo de Texto (Qwen)**: `qwen2.5-coder:14b`
-    *   **Modelo de Visión (Qwen-VL)**: `qwen3-vl:8b`
-4.  Presiona el botón de **Test de Conexión** (icono de rayo) para validar que la conexión al servidor remoto sea exitosa antes de guardar y acceder al dashboard.
+```bash
+# El SDK de Flutter vive en una ruta fija del proyecto
+/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter pub get
+/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter run
+```
+
+1. Al abrir la app por primera vez verás la pantalla de configuración (`SetupScreen`). Completa:
+   *   **Supabase URL** y **Anon Key** de tu proyecto.
+   *   **URL del servidor de IA**: `http://63.141.255.7:11434`
+   *   **Modelo de texto**: `qwen2.5-coder:14b`
+   *   **Modelo de visión**: `qwen3-vl:8b`
+2. Prueba la conexión con el botón de rayo antes de guardar.
+3. Si ya hay sesión guardada, la app entra directo al `DashboardScreen`.
+
+```bash
+# Analizar (lint)
+/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter analyze
+
+# Tests
+/home/jhon/Documentos/TerminalAgent/sdk/flutter/bin/flutter test
+```
+</content>
