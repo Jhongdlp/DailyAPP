@@ -16,6 +16,7 @@ import 'core/providers/habits_provider.dart';
 import 'core/providers/night_planning_provider.dart';
 import 'core/providers/sleep_provider.dart';
 import 'core/services/alarm_service.dart';
+import 'core/services/camera_service.dart';
 import 'core/services/lock_task_service.dart';
 import 'core/services/note_reminder_service.dart';
 import 'core/services/habit_reminder_service.dart';
@@ -41,6 +42,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es');
+  // Enumerar las cámaras tarda cientos de ms en Android; hacerlo aquí en
+  // segundo plano hace que la pantalla de captura abra sin esa espera.
+  CameraService.prewarm();
 
   runApp(
     const ProviderScope(

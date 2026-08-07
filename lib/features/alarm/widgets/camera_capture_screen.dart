@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import '../../../core/services/camera_service.dart';
 import '../../../core/theme/bento_theme.dart';
+import '../../../core/widgets/camera_cover_preview.dart';
 
 /// Cámara in-app a pantalla completa siguiendo el diseño oscuro Bento.
 ///
@@ -36,6 +38,12 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   bool _capturing = false;
   String? _error;
 
+  /// Marca de la apertura en curso. Cada llamada a [_initController] la
+  /// incrementa, de modo que una inicialización lenta que termina después de
+  /// que el usuario ya haya cambiado de cámara (o cerrado la pantalla) se
+  /// descarta en vez de pisar el controller bueno.
+  int _initToken = 0;
+
   @override
   void initState() {
     super.initState();
@@ -45,7 +53,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
   Future<void> _setup() async {
     try {
-      final cameras = await availableCameras();
+      final cameras = await CameraService.cameras();
       if (cameras.isEmpty) {
         if (mounted) {
           setState(() {
@@ -57,15 +65,12 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       }
       _cameras = cameras;
       // Preferir la cámara trasera.
-      _cameraIndex = cameras.indexWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-      );
-      if (_cameraIndex < 0) _cameraIndex = 0;
+      _cameraIndex = CameraService.backCameraIndex(cameras);
       await _initController(_cameras[_cameraIndex]);
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = _friendlyError(e);
+          _error = CameraService.friendlyError(e);
           _initializing = false;
         });
       }
@@ -73,52 +78,50 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   }
 
   Future<void> _initController(CameraDescription camera) async {
+    final token = ++_initToken;
+    // Soltar el controller anterior ANTES de abrir el nuevo: el hardware solo
+    // admite una sesión a la vez y, si no, `initialize()` se queda esperando
+    // para siempre (preview en blanco al cambiar a la frontal).
     final previous = _controller;
-    final controller = CameraController(
-      camera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-    _controller = controller;
-    try {
-      await controller.initialize();
-      // La cámara frontal no tiene flash físico: CameraX (Android) simula uno
-      // encendiendo la pantalla en blanco si el modo queda en auto/always
-      // (el valor por defecto al inicializar). Sin esto, cambiar a selfie
-      // deja la pantalla completamente blanca.
-      try {
-        await controller.setFlashMode(FlashMode.off);
-      } catch (_) {}
-      await previous?.dispose();
-      if (mounted) setState(() => _initializing = false);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = _friendlyError(e);
-          _initializing = false;
-        });
-      }
+    _controller = null;
+    if (mounted) {
+      setState(() {
+        _initializing = true;
+        _error = null;
+      });
     }
-  }
 
-  String _friendlyError(Object e) {
-    if (e is CameraException) {
-      if (e.code == 'CameraAccessDenied' ||
-          e.code == 'CameraAccessDeniedWithoutPrompt' ||
-          e.code == 'CameraAccessRestricted') {
-        return 'Necesito permiso para usar la cámara. Actívalo en los ajustes del sistema.';
+    try {
+      final controller = await CameraService.open(camera, previous: previous);
+      if (!mounted || token != _initToken) {
+        await CameraService.disposeQuietly(controller);
+        return;
       }
-      return e.description ?? 'No se pudo abrir la cámara.';
+      setState(() {
+        _controller = controller;
+        _initializing = false;
+      });
+    } catch (e) {
+      if (!mounted || token != _initToken) return;
+      setState(() {
+        _error = CameraService.friendlyError(e);
+        _initializing = false;
+      });
     }
-    return 'No se pudo abrir la cámara.';
   }
 
   Future<void> _switchCamera() async {
-    if (_cameras.length < 2 || _capturing) return;
-    setState(() => _initializing = true);
+    if (_cameras.length < 2 || _capturing || _initializing) return;
     _cameraIndex = (_cameraIndex + 1) % _cameras.length;
     await _initController(_cameras[_cameraIndex]);
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _error = null;
+      _initializing = true;
+    });
+    await _setup();
   }
 
   Future<void> _capture() async {
@@ -140,7 +143,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
           SnackBar(
             backgroundColor: BentoTheme.errorRed,
             content: Text(
-              'No se pudo tomar la foto: ${_friendlyError(e)}',
+              'No se pudo tomar la foto: ${CameraService.friendlyError(e)}',
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -156,6 +159,9 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
+        // Invalida cualquier apertura en vuelo: si volvía a mitad de camino, su
+        // controller se descarta en lugar de quedar abierto en segundo plano.
+        _initToken++;
         final controller = _controller;
         if (controller == null) return;
         _controller = null;
@@ -164,10 +170,9 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         // en el siguiente frame (justo lo que pasaba al aparecer el prompt de
         // huella o el diálogo de permisos sobre la pantalla de la alarma).
         if (mounted) setState(() => _initializing = true);
-        controller.dispose();
+        CameraService.disposeQuietly(controller);
       case AppLifecycleState.resumed:
         if (_controller == null && _cameras.isNotEmpty && _error == null) {
-          if (mounted) setState(() => _initializing = true);
           _initController(_cameras[_cameraIndex]);
         }
     }
@@ -176,7 +181,8 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
+    _initToken++;
+    CameraService.disposeQuietly(_controller);
     super.dispose();
   }
 
@@ -215,14 +221,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       );
     }
     // Cubrir toda la pantalla manteniendo el aspecto de la cámara.
-    return FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: controller.value.previewSize?.height ?? 1,
-        height: controller.value.previewSize?.width ?? 1,
-        child: CameraPreview(controller),
-      ),
-    );
+    return CameraCoverPreview(controller: controller);
   }
 
   Widget _buildError() {
@@ -242,7 +241,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
           ),
           const SizedBox(height: 28),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _retry,
             style: ElevatedButton.styleFrom(
               backgroundColor: BentoTheme.accentAlarm,
               foregroundColor: const Color(0xFF0C0C0D),
@@ -251,8 +250,16 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
             ),
-            child: const Text('Cerrar',
+            child: const Text('Reintentar',
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cerrar',
+                style: TextStyle(
+                    color: BentoTheme.creamAlpha(0.7),
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),

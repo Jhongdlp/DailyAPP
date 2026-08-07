@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import '../../../core/services/camera_service.dart';
 import '../../../core/theme/bento_theme.dart';
+import '../../../core/widgets/camera_cover_preview.dart';
 
 const int kMaxExercisePhotos = 5;
 
@@ -33,6 +35,10 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
   String? _error;
   final List<File> _shots = [];
 
+  /// Ver `CameraCaptureScreen._initToken`: descarta aperturas que terminan
+  /// tarde, cuando el usuario ya cambió de cámara o cerró la pantalla.
+  int _initToken = 0;
+
   @override
   void initState() {
     super.initState();
@@ -42,7 +48,7 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
 
   Future<void> _setup() async {
     try {
-      final cameras = await availableCameras();
+      final cameras = await CameraService.cameras();
       if (cameras.isEmpty) {
         if (mounted) {
           setState(() {
@@ -53,15 +59,12 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
         return;
       }
       _cameras = cameras;
-      _cameraIndex = cameras.indexWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-      );
-      if (_cameraIndex < 0) _cameraIndex = 0;
+      _cameraIndex = CameraService.backCameraIndex(cameras);
       await _initController(_cameras[_cameraIndex]);
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = _friendlyError(e);
+          _error = CameraService.friendlyError(e);
           _initializing = false;
         });
       }
@@ -69,52 +72,50 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
   }
 
   Future<void> _initController(CameraDescription camera) async {
+    final token = ++_initToken;
+    // Soltar el controller anterior ANTES de abrir el nuevo: el hardware solo
+    // admite una sesión a la vez y, si no, `initialize()` se queda esperando
+    // para siempre (preview en blanco al cambiar a la frontal).
     final previous = _controller;
-    final controller = CameraController(
-      camera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-    _controller = controller;
-    try {
-      await controller.initialize();
-      // La cámara frontal no tiene flash físico: CameraX (Android) simula uno
-      // encendiendo la pantalla en blanco si el modo queda en auto/always
-      // (el valor por defecto al inicializar). Sin esto, cambiar a selfie
-      // deja la pantalla completamente blanca.
-      try {
-        await controller.setFlashMode(FlashMode.off);
-      } catch (_) {}
-      await previous?.dispose();
-      if (mounted) setState(() => _initializing = false);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = _friendlyError(e);
-          _initializing = false;
-        });
-      }
+    _controller = null;
+    if (mounted) {
+      setState(() {
+        _initializing = true;
+        _error = null;
+      });
     }
-  }
 
-  String _friendlyError(Object e) {
-    if (e is CameraException) {
-      if (e.code == 'CameraAccessDenied' ||
-          e.code == 'CameraAccessDeniedWithoutPrompt' ||
-          e.code == 'CameraAccessRestricted') {
-        return 'Necesito permiso para usar la cámara. Actívalo en los ajustes del sistema.';
+    try {
+      final controller = await CameraService.open(camera, previous: previous);
+      if (!mounted || token != _initToken) {
+        await CameraService.disposeQuietly(controller);
+        return;
       }
-      return e.description ?? 'No se pudo abrir la cámara.';
+      setState(() {
+        _controller = controller;
+        _initializing = false;
+      });
+    } catch (e) {
+      if (!mounted || token != _initToken) return;
+      setState(() {
+        _error = CameraService.friendlyError(e);
+        _initializing = false;
+      });
     }
-    return 'No se pudo abrir la cámara.';
   }
 
   Future<void> _switchCamera() async {
-    if (_cameras.length < 2 || _capturing) return;
-    setState(() => _initializing = true);
+    if (_cameras.length < 2 || _capturing || _initializing) return;
     _cameraIndex = (_cameraIndex + 1) % _cameras.length;
     await _initController(_cameras[_cameraIndex]);
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _error = null;
+      _initializing = true;
+    });
+    await _setup();
   }
 
   Future<void> _capture() async {
@@ -142,7 +143,7 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
           SnackBar(
             backgroundColor: BentoTheme.errorRed,
             content: Text(
-              'No se pudo tomar la foto: ${_friendlyError(e)}',
+              'No se pudo tomar la foto: ${CameraService.friendlyError(e)}',
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -166,14 +167,16 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
+        // Invalida cualquier apertura en vuelo para que no quede una sesión de
+        // cámara abierta en segundo plano.
+        _initToken++;
         final controller = _controller;
         if (controller == null) return;
         _controller = null;
         if (mounted) setState(() => _initializing = true);
-        controller.dispose();
+        CameraService.disposeQuietly(controller);
       case AppLifecycleState.resumed:
         if (_controller == null && _cameras.isNotEmpty && _error == null) {
-          if (mounted) setState(() => _initializing = true);
           _initController(_cameras[_cameraIndex]);
         }
     }
@@ -182,7 +185,8 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
+    _initToken++;
+    CameraService.disposeQuietly(_controller);
     super.dispose();
   }
 
@@ -220,14 +224,7 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
         child: CircularProgressIndicator(color: BentoTheme.accentOrange),
       );
     }
-    return FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: controller.value.previewSize?.height ?? 1,
-        height: controller.value.previewSize?.width ?? 1,
-        child: CameraPreview(controller),
-      ),
-    );
+    return CameraCoverPreview(controller: controller);
   }
 
   Widget _buildError() {
@@ -253,7 +250,7 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
           ),
           const SizedBox(height: 28),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(_shots),
+            onPressed: _retry,
             style: ElevatedButton.styleFrom(
               backgroundColor: BentoTheme.accentOrange,
               foregroundColor: const Color(0xFF0C0C0D),
@@ -264,8 +261,19 @@ class _ExercisePhotoCaptureScreenState extends State<ExercisePhotoCaptureScreen>
               ),
             ),
             child: const Text(
-              'Cerrar',
+              'Reintentar',
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(_shots),
+            child: Text(
+              'Cerrar',
+              style: TextStyle(
+                color: BentoTheme.creamAlpha(0.7),
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
