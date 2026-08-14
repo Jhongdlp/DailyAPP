@@ -254,6 +254,30 @@ class AlarmService {
     }
   }
 
+  static AlarmSettings _settingsFor(AlarmModel alarm, DateTime when) =>
+      AlarmSettings(
+        id: nativeId(alarm.id),
+        dateTime: when,
+        assetAudioPath: null, // usa sonido por defecto del sistema
+        loopAudio: true,
+        vibrate: true,
+        warningNotificationOnKill: true,
+        // El usuario puede intentar apagar la alarma cerrando la app desde
+        // "recientes" mientras suena. Sin esto, el servicio nativo la detiene
+        // en onTaskRemoved (comportamiento por defecto del paquete `alarm`).
+        androidStopAlarmOnTermination: false,
+        volumeSettings: const VolumeSettings.fixed(
+          volume: 1.0,
+          volumeEnforced: true,
+        ),
+        notificationSettings: NotificationSettings(
+          title: '⏰ ${alarm.label}',
+          body: 'Fotografía "${alarm.targetObject}" para desactivar',
+          icon: 'notification_icon',
+        ),
+        androidFullScreenIntent: true,
+      );
+
   static Future<void> scheduleAlarm(AlarmModel alarm, {DateTime? from}) async {
     // Al arrancar por un full-screen intent, el provider de alarmas reprograma
     // todo; sin esta guarda cortaría la alarma que acaba de despertarnos.
@@ -265,30 +289,37 @@ class AlarmService {
     final next = alarm.nextTrigger(from: from);
     if (next == null) return;
 
-    final alarmSettings = AlarmSettings(
-      id: alarm.id.hashCode.abs() % 100000,
-      dateTime: next,
-      assetAudioPath: null, // usa sonido por defecto del sistema
-      loopAudio: true,
-      vibrate: true,
-      warningNotificationOnKill: true,
-      // El usuario puede intentar apagar la alarma cerrando la app desde
-      // "recientes" mientras suena. Sin esto, el servicio nativo la detiene
-      // en onTaskRemoved (comportamiento por defecto del paquete `alarm`).
-      androidStopAlarmOnTermination: false,
-      volumeSettings: const VolumeSettings.fixed(
-        volume: 1.0,
-        volumeEnforced: true,
-      ),
-      notificationSettings: NotificationSettings(
-        title: '⏰ ${alarm.label}',
-        body: 'Fotografía "${alarm.targetObject}" para desactivar',
-        icon: 'notification_icon',
-      ),
-      androidFullScreenIntent: true,
-    );
+    await Alarm.set(alarmSettings: _settingsFor(alarm, next));
+  }
 
-    await Alarm.set(alarmSettings: alarmSettings);
+  /// Calla el timbre SIN dar la alarma por resuelta.
+  ///
+  /// El paquete `alarm` no tiene pausa, así que "pausar" es parar el servicio y
+  /// volver a programarlo con [ringAgain]. Se usa mientras el usuario apunta
+  /// con la cámara: sostener el móvil enfocando un objeto con el timbre a todo
+  /// volumen al lado de la oreja hacía que la foto saliera movida (y la IA
+  /// fallara) por pura prisa.
+  static Future<void> silence(String alarmId) async {
+    try {
+      await Alarm.stop(nativeId(alarmId));
+    } catch (e) {
+      debugPrint('AlarmService: no pude silenciar $alarmId: $e');
+    }
+  }
+
+  /// Vuelve a sonar dentro de [delay]. Contrapartida obligatoria de [silence]:
+  /// sin esto, "pausar" sería un botón de apagado gratis.
+  static Future<void> ringAgain(
+    AlarmModel alarm, {
+    Duration delay = const Duration(seconds: 2),
+  }) async {
+    try {
+      await Alarm.set(
+        alarmSettings: _settingsFor(alarm, DateTime.now().add(delay)),
+      );
+    } catch (e) {
+      debugPrint('AlarmService: no pude reanudar ${alarm.id}: $e');
+    }
   }
 
   static Future<void> cancelAlarm(String alarmId) async {

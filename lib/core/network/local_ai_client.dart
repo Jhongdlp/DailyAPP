@@ -1,5 +1,24 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
+/// Resultado de mirar una foto con el modelo de visión.
+///
+/// Hace falta el tercer estado: si el modelo se corta a media frase, se va por
+/// las ramas o el servidor devuelve basura, tratarlo como un "NO" acusaba al
+/// usuario de no haber fotografiado el objeto cuando el fallo era nuestro.
+enum PhotoVerdict { yes, no, unclear }
+
+/// El servidor de IA no está disponible (caído, fuera de la red, o tardando
+/// más de lo que se puede esperar con una alarma sonando).
+class AiUnavailableException implements Exception {
+  final String message;
+  const AiUnavailableException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 /// Cliente para la integración con el Servidor IA Local que ejecuta modelos Qwen.
 /// Soporta procesamiento de texto y análisis visual con Qwen-VL.
@@ -94,17 +113,73 @@ class LocalAIClient {
     }
   }
 
-  /// Envía una imagen (en Base64) y un prompt al modelo Qwen-VL para verificar la foto de la alarma
-  Future<bool> verifyAlarmPhoto(String base64Image, String targetObject) async {
-    final prompt = 'Analiza esta imagen y responde únicamente "SÍ" si contiene "$targetObject" (o un equivalente directo/sinónimo, tolerando pequeños errores de escritura o variaciones de nombre como "abamanos" por "lavamanos") de forma clara, o "NO" si no lo contiene. No añadas explicaciones ni más texto.';
-    
+  /// Cuánto mantiene Ollama el modelo de visión cargado tras usarlo.
+  ///
+  /// El valor por defecto del servidor son 5 minutos: con una alarma diaria,
+  /// eso garantiza que TODAS las mañanas la primera foto pague la carga entera
+  /// de los 8B de pesos desde disco antes de mirar siquiera la imagen.
+  static const visionKeepAlive = '30m';
+
+  static const _jsonHeaders = {'Content-Type': 'application/json'};
+
+  String _alarmPhotoPrompt(String targetObject) =>
+      'Analiza esta imagen y responde únicamente "SÍ" si contiene "$targetObject" (o un equivalente directo/sinónimo, tolerando pequeños errores de escritura o variaciones de nombre como "abamanos" por "lavamanos") de forma clara, o "NO" si no lo contiene. No añadas explicaciones ni más texto.';
+
+  /// Deja el modelo de visión cargado en memoria del servidor.
+  ///
+  /// Se lanza en cuanto se abre la pantalla de la alarma, para que la carga del
+  /// modelo ocurra mientras el usuario se levanta y camina hasta el objeto en
+  /// lugar de después de disparar la foto. Devuelve `false` si el servidor no
+  /// contesta, que es la señal para ofrecer directamente el reto mental.
+  ///
+  /// Una petición con `messages` vacío es la forma documentada de pedirle a
+  /// Ollama que cargue un modelo sin generar nada.
+  Future<bool> warmUpVision({
+    Duration timeout = const Duration(seconds: 90),
+  }) async {
     try {
-      // Intentar API de Ollama para visión (soporta pasar base64 en el campo 'images')
-      final url = Uri.parse('$baseUrl/api/chat');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/chat'),
+            headers: _jsonHeaders,
+            body: jsonEncode({
+              'model': visionModelName,
+              'messages': const [],
+              'stream': false,
+              'keep_alive': visionKeepAlive,
+            }),
+          )
+          .timeout(timeout);
+      return response.statusCode == 200;
+    } catch (_) {
+      // Puede ser un servidor estilo OpenAI, que no tiene precarga: basta con
+      // saber que está vivo.
+      try {
+        final response = await http
+            .get(Uri.parse('$baseUrl/v1/models'))
+            .timeout(const Duration(seconds: 8));
+        return response.statusCode == 200;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+
+  /// Envía una imagen (en Base64) al modelo de visión y decide si contiene
+  /// [targetObject].
+  ///
+  /// Lanza [AiUnavailableException] si el servidor no responde dentro de
+  /// [timeout]: con una alarma sonando, quedarse esperando indefinidamente (lo
+  /// que hacía la versión anterior, sin ningún tope) es el peor final posible.
+  Future<PhotoVerdict> verifyAlarmPhoto(
+    String base64Image,
+    String targetObject, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final prompt = _alarmPhotoPrompt(targetObject);
+    final url = Uri.parse('$baseUrl/api/chat');
+
+    Map<String, dynamic> payload({required bool withThinkFlag}) => {
           'model': visionModelName,
           'messages': [
             {
@@ -114,23 +189,50 @@ class LocalAIClient {
             }
           ],
           'stream': false,
-        }),
-      );
+          'keep_alive': visionKeepAlive,
+          // qwen3-vl razona por defecto: escupía cientos de tokens de <think>
+          // antes del "SÍ"/"NO" final. Eso, y no el análisis de la imagen, es
+          // lo que hacía eterna la espera.
+          if (withThinkFlag) 'think': false,
+          'options': {
+            'temperature': 0,
+            // Red de seguridad por si el servidor ignora `think`: la respuesta
+            // útil son 1-2 tokens, esto solo acota el peor caso.
+            'num_predict': 200,
+          },
+        };
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final result = data['message']['content'].toString();
-        return _isPositiveResponse(result);
-      } else {
-        return _verifyAlarmPhotoOpenAI(base64Image, targetObject);
+    http.Response response;
+    try {
+      response = await http
+          .post(url,
+              headers: _jsonHeaders,
+              body: jsonEncode(payload(withThinkFlag: true)))
+          .timeout(timeout);
+      // Ollama antiguo (o un modelo sin razonamiento) rechaza el campo `think`.
+      if (response.statusCode == 400) {
+        response = await http
+            .post(url,
+                headers: _jsonHeaders,
+                body: jsonEncode(payload(withThinkFlag: false)))
+            .timeout(timeout);
       }
-    } catch (e) {
-      try {
-        return await _verifyAlarmPhotoOpenAI(base64Image, targetObject);
-      } catch (err) {
-        throw Exception('Error al validar imagen con Qwen-VL local: $err');
-      }
+    } on TimeoutException {
+      // Deliberadamente NO se reintenta con el endpoint OpenAI: sería pagar el
+      // timeout dos veces seguidas con la alarma sonando.
+      throw AiUnavailableException(
+        'El servidor de IA no respondió en ${timeout.inSeconds}s.',
+      );
+    } catch (_) {
+      // Fallo de conexión o estructura: puede que no sea Ollama.
+      return _verifyAlarmPhotoOpenAI(base64Image, targetObject, timeout);
     }
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return readVerdict(data['message']?['content']?.toString() ?? '');
+    }
+    return _verifyAlarmPhotoOpenAI(base64Image, targetObject, timeout);
   }
 
   /// Clasifica una foto de progreso físico como "cara" o "cuerpo" con Qwen-VL.
@@ -145,21 +247,26 @@ class LocalAIClient {
 
     try {
       final url = Uri.parse('$baseUrl/api/chat');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'model': visionModelName,
-          'messages': [
-            {
-              'role': 'user',
-              'content': prompt,
-              'images': [base64Image]
-            }
-          ],
-          'stream': false,
-        }),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: _jsonHeaders,
+            body: jsonEncode({
+              'model': visionModelName,
+              'messages': [
+                {
+                  'role': 'user',
+                  'content': prompt,
+                  'images': [base64Image]
+                }
+              ],
+              'stream': false,
+              'keep_alive': visionKeepAlive,
+              'think': false,
+              'options': {'temperature': 0, 'num_predict': 200},
+            }),
+          )
+          .timeout(const Duration(seconds: 120));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -184,25 +291,28 @@ class LocalAIClient {
         '"CUERPO" si es una foto de cuerpo completo o torso para ver progreso físico, '
         'u "OTRO" si no aplica ninguna de las dos. No añadas explicaciones ni más texto.';
     final url = Uri.parse('$baseUrl/v1/chat/completions');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'model': visionModelName,
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {'type': 'text', 'text': prompt},
+    final response = await http
+        .post(
+          url,
+          headers: _jsonHeaders,
+          body: jsonEncode({
+            'model': visionModelName,
+            'messages': [
               {
-                'type': 'image_url',
-                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+                'role': 'user',
+                'content': [
+                  {'type': 'text', 'text': prompt},
+                  {
+                    'type': 'image_url',
+                    'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+                  }
+                ]
               }
-            ]
-          }
-        ],
-      }),
-    );
+            ],
+            'max_tokens': 200,
+          }),
+        )
+        .timeout(const Duration(seconds: 120));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -214,7 +324,7 @@ class LocalAIClient {
   }
 
   /// Extrae 'cara'/'cuerpo'/'unknown' de la respuesta cruda del modelo, con el
-  /// mismo strip de <think> y tokenización usados en [_isPositiveResponse].
+  /// mismo strip de `<think>` y tokenización usados en [readVerdict].
   String _extractClassificationLabel(String rawContent) {
     final clean = rawContent.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').trim().toUpperCase();
     final tokens = clean.split(RegExp('[\\s,.\\-!?;():"\'«»]+'));
@@ -395,55 +505,80 @@ class LocalAIClient {
   }
 
   /// Método auxiliar de validación de imágenes para servidores tipo OpenAI
-  Future<bool> _verifyAlarmPhotoOpenAI(String base64Image, String targetObject) async {
-    final prompt = 'Analiza esta imagen y responde únicamente "SÍ" si contiene "$targetObject" (o un equivalente directo/sinónimo, tolerando pequeños errores de escritura o variaciones de nombre como "abamanos" por "lavamanos") de forma clara, o "NO" si no lo contiene. No añadas explicaciones ni más texto.';
+  Future<PhotoVerdict> _verifyAlarmPhotoOpenAI(
+    String base64Image,
+    String targetObject,
+    Duration timeout,
+  ) async {
     final url = Uri.parse('$baseUrl/v1/chat/completions');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'model': visionModelName,
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'text',
-                'text': prompt
-              },
-              {
-                'type': 'image_url',
-                'image_url': {
-                  'url': 'data:image/jpeg;base64,$base64Image'
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            url,
+            headers: _jsonHeaders,
+            body: jsonEncode({
+              'model': visionModelName,
+              'messages': [
+                {
+                  'role': 'user',
+                  'content': [
+                    {'type': 'text', 'text': _alarmPhotoPrompt(targetObject)},
+                    {
+                      'type': 'image_url',
+                      'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ],
-      }),
-    );
+              ],
+              'temperature': 0,
+              'max_tokens': 200,
+            }),
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw AiUnavailableException(
+        'El servidor de IA no respondió en ${timeout.inSeconds}s.',
+      );
+    } catch (e) {
+      throw AiUnavailableException('No pude contactar con el servidor de IA.');
+    }
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      final result = data['choices'][0]['message']['content'].toString();
-      return _isPositiveResponse(result);
-    } else {
-      throw Exception('Servidor local OpenAI vision retornó código de error: ${response.statusCode}');
+      return readVerdict(
+        data['choices']?[0]?['message']?['content']?.toString() ?? '',
+      );
     }
+    throw AiUnavailableException(
+      'El servidor de IA respondió con el código ${response.statusCode}.',
+    );
   }
 
-  /// Procesa la respuesta de la IA de forma robusta, eliminando bloques de pensamiento <think>
-  /// y realizando coincidencia exacta de palabras para evitar falsos positivos.
-  bool _isPositiveResponse(String rawContent) {
-    // Eliminar bloque de razonamiento <think>...</think> si existe
-    final clean = rawContent.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').trim().toUpperCase();
-    
-    if (clean == 'SÍ' || clean == 'SI' || clean == 'YES') {
-      return true;
+  /// Traduce la respuesta cruda del modelo a un veredicto, quitando los bloques
+  /// de razonamiento y decidiendo por la PRIMERA palabra reconocible: si el
+  /// modelo se explaya ("NO, no hay ningún lavamanos, sí veo una mesa"), lo que
+  /// vale es su veredicto, no si en algún punto aparece un "sí".
+  @visibleForTesting
+  PhotoVerdict readVerdict(String rawContent) {
+    final clean = rawContent
+        .replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '')
+        // Un <think> sin cerrar significa respuesta cortada por num_predict:
+        // no llegó a haber veredicto.
+        .replaceAll(RegExp(r'<think>[\s\S]*'), '')
+        .trim()
+        .toUpperCase();
+    if (clean.isEmpty) return PhotoVerdict.unclear;
+
+    final tokens = clean
+        .split(RegExp('[\\s,.\\-!?;():"\'«»]+'))
+        .where((t) => t.isNotEmpty);
+    for (final token in tokens) {
+      if (token == 'SÍ' || token == 'SI' || token == 'YES') {
+        return PhotoVerdict.yes;
+      }
+      if (token == 'NO' || token == 'NOT') return PhotoVerdict.no;
     }
-    
-    // Dividir por espacios y signos de puntuación comunes para extraer tokens
-    final tokens = clean.split(RegExp('[\\s,.\\-!?;():"\'«»]+'));
-    return tokens.contains('SÍ') || tokens.contains('SI') || tokens.contains('YES');
+    return PhotoVerdict.unclear;
   }
 }

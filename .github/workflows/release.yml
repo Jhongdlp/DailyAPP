@@ -53,6 +53,19 @@ jobs:
           echo "BUILD_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
+      # Sin esta comprobación el build sale "bien" pero con el valor por defecto
+      # de kLocalAiUrl (10.0.2.2, el alias del emulador): en un móvil real toda
+      # llamada a la IA se queda colgada hasta agotar el timeout. Pasó en
+      # v2.7.2, cuando se sacó la IP del código sin añadir el define aquí.
+      - name: Check AI server secret
+        env:
+          LOCAL_AI_URL: ${{ secrets.LOCAL_AI_URL }}
+        run: |
+          if [ -z "$LOCAL_AI_URL" ]; then
+            echo "::error::Falta el secret LOCAL_AI_URL. Sin él el APK no puede hablar con Ollama."
+            exit 1
+          fi
+
       - name: Build release APK
         env:
           SIGNING_STORE_FILE: upload-keystore.jks
@@ -62,7 +75,8 @@ jobs:
         run: |
           flutter build apk --release \
             --build-name="$BUILD_NAME" \
-            --build-number="$BUILD_NUMBER"
+            --build-number="$BUILD_NUMBER" \
+            --dart-define=LOCAL_AI_URL="${{ secrets.LOCAL_AI_URL }}"
 
       - name: Rename APK with version
         run: |
