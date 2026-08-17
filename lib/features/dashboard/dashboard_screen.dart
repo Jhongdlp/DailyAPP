@@ -4,7 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/bento_theme.dart';
 import '../alarm/alarm_tab.dart';
-import '../habits/habits_tab.dart';
+// Exploración de diseño (rama design/minimal-habits). Para volver al diseño de
+// tarjetas neumórficas: cambiar por '../habits/habits_tab.dart' y
+// `HabitsTabEditorial` por `HabitsTab` en _tabs. Los otros pilotos siguen
+// intactos en la misma carpeta.
+import '../habits/habits_tab_editorial.dart';
 import '../notes/notes_tab.dart';
 import '../chat/chat_tab.dart';
 import '../finance/finance_tab.dart';
@@ -43,7 +47,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   /// En el mismo orden que [AppDestination]: el índice del enum ES el índice
   /// del stack.
   final List<Widget> _tabs = [
-    const HabitsTab(),
+    const HabitsTabEditorial(),
     const NotesTab(),
     const AlarmTab(),
     const FinanceTab(),

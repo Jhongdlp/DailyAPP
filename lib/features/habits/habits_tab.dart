@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_twemoji/flutter_twemoji.dart';
@@ -24,6 +25,36 @@ import 'habit_template_picker.dart';
 import 'widgets/habit_blob_header.dart';
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+// ─── Escala de radios ───
+//
+// Antes convivían 10, 12, 16, 18, 20, 22, 24 y 100 en la misma pantalla, que es
+// lo que hace que un conjunto de tarjetas se lea desordenado aunque cada pieza
+// esté bien. Tres valores y las píldoras; nada más.
+const double _rChip = 12.0;
+const double _rCard = 20.0;
+const double _rFeatured = 28.0;
+
+// ─── Tipografía ───
+//
+// Una sola familia (Outfit, la del tema) y tres pesos. Fuera Montserrat, y
+// fuera el micro-texto en mayúsculas con letterSpacing: ese recurso —
+// 'COMPLETADO' a 7px con tracking— es lo que más fechaba la pantalla, y encima
+// era ilegible. Todo en caja de frase.
+TextStyle _t(
+  double size, {
+  FontWeight weight = FontWeight.w500,
+  Color? color,
+  double? letterSpacing,
+  double? height,
+}) =>
+    GoogleFonts.outfit(
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: height,
+    );
 
 double _incrementFor(String? unit) {
   final unitLower = (unit ?? '').toLowerCase();
@@ -51,26 +82,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     return List.generate(7, (index) => monday.add(Duration(days: index)));
   }
 
-  String _getWeekdayLetter(DateTime day) {
-    switch (day.weekday) {
-      case 1:
-        return 'L';
-      case 2:
-        return 'M';
-      case 3:
-        return 'M';
-      case 4:
-        return 'J';
-      case 5:
-        return 'V';
-      case 6:
-        return 'S';
-      case 7:
-        return 'D';
-      default:
-        return '';
-    }
-  }
+  static const List<String> _weekdayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+  String _getWeekdayLetter(DateTime day) => _weekdayLetters[day.weekday - 1];
 
   Future<void> _analyzeHabitsWithAI(List<Habit> habits) async {
     setState(() {
@@ -105,9 +119,40 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     }
   }
 
+  /// Deshacer para el desmarcado accidental. Antes, tocar un día por error
+  /// obligaba a volver a acertarle al mismo punto de 22px; ahora hay una salida
+  /// explícita.
+  void _showUndoBar(String message, VoidCallback onUndo) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message, style: _t(14, color: BentoTheme.cream)),
+        backgroundColor: BentoTheme.darkCardAlt,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_rChip)),
+        margin: const EdgeInsets.fromLTRB(22, 0, 22, 104),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Deshacer',
+          textColor: BentoTheme.accentHabits,
+          onPressed: onUndo,
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleToggleHabit(Habit habit, DateTime day, [Offset? tapPosition]) async {
     final wasCompleted = habit.isCompletedOn(day);
-    
+
+    // La háptica va ANTES del await: el dedo todavía está en la pantalla y el
+    // acuse tiene que llegar en el mismo gesto, no cuando vuelve la red.
+    if (wasCompleted) {
+      HapticFeedback.selectionClick();
+    } else {
+      HapticFeedback.mediumImpact();
+    }
+
     if (!wasCompleted && mounted) {
       final spawnOffset = tapPosition ?? Offset(
         MediaQuery.of(context).size.width / 2,
@@ -117,79 +162,92 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     }
 
     await ref.read(habitsProvider.notifier).toggleHabit(habit.id, day);
-    
-    if (!wasCompleted) {
-      final result = ref.read(rpgProvider.notifier).gainXpAndGold(
-        15,
-        5,
-        counterKeys: const [RpgCounters.habitsDone],
-      );
-      if (mounted) {
-        RpgCelebration.show(
-          context,
-          xp: result['xpGained'] as int,
-          gold: result['goldGained'] as int,
-          levelUp: result['levelUp'] as bool,
-          newLevel: result['newLevel'] as int?,
-        );
-        AchievementToast.show(context, result['unlocked']);
-      }
 
-      // Solo para el hábito vinculado a Ejercicio, y solo al completar (no al
-      // desmarcar): ofrece guardar fotos + datos de la sesión de hoy sin que
-      // el usuario tenga que ir a buscar la pestaña Ejercicio por su cuenta.
-      final linkedExerciseHabitId = ref.read(exerciseHabitLinkProvider);
-      if (linkedExerciseHabitId == habit.id && mounted) {
-        final wantsToLog = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            backgroundColor: BentoTheme.darkCard,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(
-              '¿Quieres guardar tu progreso de hoy?',
-              style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w700),
-            ),
-            content: Text(
-              'Toma hasta 5 fotos y registra los datos de tu ejercicio.',
-              style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6)),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text('No', style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.6), fontWeight: FontWeight.w700)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: BentoTheme.accentOrange, foregroundColor: const Color(0xFF0C0C0D)),
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Sí'),
-              ),
-            ],
-          ),
-        );
-        if (wantsToLog == true && mounted) {
-          await runExerciseCaptureFlow(context, ref, forDate: day, habitId: habit.id);
-        }
-      }
-    } else {
+    if (wasCompleted) {
       ref.read(rpgProvider.notifier).revertReward(
         15,
         5,
         counterKeys: const [RpgCounters.habitsDone],
       );
+      if (mounted) {
+        _showUndoBar(
+          'Desmarcado "${habit.name}"',
+          () => _handleToggleHabit(habit, day),
+        );
+      }
+      return;
+    }
+
+    final result = ref.read(rpgProvider.notifier).gainXpAndGold(
+      15,
+      5,
+      counterKeys: const [RpgCounters.habitsDone],
+    );
+    if (mounted) {
+      RpgCelebration.show(
+        context,
+        xp: result['xpGained'] as int,
+        gold: result['goldGained'] as int,
+        levelUp: result['levelUp'] as bool,
+        newLevel: result['newLevel'] as int?,
+      );
+      AchievementToast.show(context, result['unlocked']);
+    }
+
+    // Solo para el hábito vinculado a Ejercicio, y solo al completar (no al
+    // desmarcar): ofrece guardar fotos + datos de la sesión de hoy sin que
+    // el usuario tenga que ir a buscar la pestaña Ejercicio por su cuenta.
+    final linkedExerciseHabitId = ref.read(exerciseHabitLinkProvider);
+    if (linkedExerciseHabitId == habit.id && mounted) {
+      final wantsToLog = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: BentoTheme.darkCard,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_rCard)),
+          title: Text(
+            '¿Quieres guardar tu progreso de hoy?',
+            style: _t(19, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -0.3),
+          ),
+          content: Text(
+            'Toma hasta 5 fotos y registra los datos de tu ejercicio.',
+            style: _t(15, color: BentoTheme.creamAlpha(0.6), height: 1.35),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('Ahora no', style: _t(15, weight: FontWeight.w600, color: BentoTheme.creamAlpha(0.6))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: BentoTheme.accentHabits,
+                foregroundColor: const Color(0xFF0C0C0D),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_rChip)),
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text('Guardar', style: _t(15, weight: FontWeight.w600, color: const Color(0xFF0C0C0D))),
+            ),
+          ],
+        ),
+      );
+      if (wantsToLog == true && mounted) {
+        await runExerciseCaptureFlow(context, ref, forDate: day, habitId: habit.id);
+      }
     }
   }
 
   Future<void> _handleUpdateProgress(Habit habit, DateTime day, double increment) async {
     final wasCompleted = habit.isCompletedOn(day);
+    HapticFeedback.selectionClick();
     await ref.read(habitsProvider.notifier).updateHabitProgress(habit.id, day, increment);
-    
+
     final updatedHabits = ref.read(habitsProvider);
     final updatedHabit = updatedHabits.where((h) => h.id == habit.id).firstOrNull;
     if (updatedHabit == null) return;
-    
+
     final isCompletedNow = updatedHabit.isCompletedOn(day);
     if (!wasCompleted && isCompletedNow) {
+      HapticFeedback.mediumImpact();
       final result = ref.read(rpgProvider.notifier).gainXpAndGold(
         15,
         5,
@@ -234,7 +292,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildHeader(context, longestStreak),
-          _buildRpgPanel(context, completedToday, activeToday.length, longestStreak),
+          _buildSummaryCard(context, completedToday, activeToday.length),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.only(top: 4, bottom: 110),
@@ -245,21 +303,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 _buildSectionHeader(context, activeToday.length, habits),
                 if (_aiFeedback != null) _buildAiFeedbackCard(context),
                 if (habits.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-                    child: Text(
-                      'No tienes hábitos creados todavía.',
-                      style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontWeight: FontWeight.w600),
-                    ),
-                  )
+                  _emptyState('Todavía no tienes hábitos', 'Empieza por uno. Se construye de a poco.')
                 else if (activeToday.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-                    child: Text(
-                      'No tienes hábitos activos hoy.',
-                      style: GoogleFonts.montserrat(color: BentoTheme.creamAlpha(0.5), fontWeight: FontWeight.w600),
-                    ),
-                  ),
+                  _emptyState('Hoy no toca ninguno', 'Ninguno de tus hábitos está programado para hoy.'),
                 if (featured != null) _buildFeaturedCard(context, featured, today, days),
                 // Cada fila es un hijo directo del ListView (mismo layout que
                 // la Column anterior): así cada una recibe su propio
@@ -268,12 +314,26 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 for (int i = 0; i < compactHabits.length; i++)
                   Padding(
                     key: ValueKey(compactHabits[i].id),
-                    padding: EdgeInsets.fromLTRB(22, i == 0 ? 12 : 0, 22, 10),
+                    padding: EdgeInsets.fromLTRB(22, i == 0 ? 14 : 0, 22, 12),
                     child: _buildCompactRow(context, compactHabits[i], today, days),
                   ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyState(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 28, 22, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: _t(19, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -0.3)),
+          const SizedBox(height: 6),
+          Text(subtitle, style: _t(15, color: BentoTheme.creamAlpha(0.45), height: 1.35)),
         ],
       ),
     );
@@ -287,15 +347,15 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     return Tooltip(
       message: tooltip,
       child: NeuCard(
-        width: 34,
-        height: 34,
-        borderRadius: 10,
+        width: 38,
+        height: 38,
+        borderRadius: _rChip,
         distance: 3,
         blur: 6,
         padding: EdgeInsets.zero,
         onTap: onPressed,
         child: Center(
-          child: Icon(icon, size: 17, color: onPressed == null ? BentoTheme.creamAlpha(0.3) : BentoTheme.cream),
+          child: Icon(icon, size: 18, color: onPressed == null ? BentoTheme.creamAlpha(0.3) : BentoTheme.cream),
         ),
       ),
     );
@@ -315,52 +375,50 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               children: [
                 Text(
                   'Hábitos',
-                  style: GoogleFonts.montserrat(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 42,
-                    height: 0.92,
-                    letterSpacing: -1.4,
+                  style: _t(
+                    42,
+                    weight: FontWeight.w600,
                     color: BentoTheme.cream,
+                    letterSpacing: -1.2,
+                    height: 0.95,
                   ),
                 ),
-                if (longestStreak >= 0) ...[
+                if (longestStreak > 0)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: GlassCard(
-                      borderRadius: 12,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      borderRadius: _rChip,
+                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           StreakFlame(streak: longestStreak, size: 18),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 7),
                           Text(
                             '$longestStreak',
-                            style: GoogleFonts.montserrat(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 20,
-                              height: 1.0,
-                              letterSpacing: -0.5,
+                            style: _t(
+                              20,
+                              weight: FontWeight.w600,
                               color: BentoTheme.isDark ? BentoTheme.neuText : Colors.black,
+                              letterSpacing: -0.4,
+                              height: 1.0,
                             ),
                           ),
-                          const SizedBox(width: 3),
+                          const SizedBox(width: 4),
                           Text(
-                            'días',
-                            style: GoogleFonts.montserrat(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 10,
+                            longestStreak == 1 ? 'día' : 'días',
+                            style: _t(
+                              13,
                               color: BentoTheme.isDark
-                                  ? BentoTheme.creamAlpha(0.6)
-                                  : Colors.black.withValues(alpha: 0.6),
+                                  ? BentoTheme.creamAlpha(0.55)
+                                  : Colors.black.withValues(alpha: 0.55),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -369,142 +427,112 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     );
   }
 
-  Widget _buildRpgPanel(BuildContext context, int completedToday, int activeCount, int longestStreak) {
+  /// Tarjeta de resumen del día. Reemplaza al panel que metía nivel, XP, HP y
+  /// progreso en 50px de alto, todo al mismo tamaño y sin jerarquía.
+  ///
+  /// Ahora hay UN protagonista —cuántos llevas hoy, a 44px— y el RPG queda de
+  /// acompañante a la derecha. El dato que más miras es el más grande.
+  Widget _buildSummaryCard(BuildContext context, int completedToday, int activeCount) {
     final rpg = ref.watch(rpgProvider);
-    final nextLevelXp = rpg.xpNeeded;
-    final xpRatio = (rpg.xp / nextLevelXp).clamp(0.0, 1.0);
-    final hpRatio = (rpg.hp / 100.0).clamp(0.0, 1.0);
+    final xpRatio = (rpg.xp / rpg.xpNeeded).clamp(0.0, 1.0);
+    final dayRatio = activeCount == 0 ? 0.0 : (completedToday / activeCount).clamp(0.0, 1.0);
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(22, 10, 22, 14),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 10, 22, 14),
       child: GlassCard(
-        borderRadius: 16,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        child: Row(
+        borderRadius: _rCard,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Nivel y XP (Minimalista)
-            Expanded(
-              flex: 5,
-              child: Row(
-                children: [
-                  Icon(Icons.shield_outlined, color: BentoTheme.accentPurple, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'NV. ${rpg.level}',
-                          style: GoogleFonts.montserrat(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11,
-                            color: BentoTheme.cream,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        _customProgressBar(xpRatio, BentoTheme.accentPurple),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            // 2. HP (Consistencia)
-            Expanded(
-              flex: 5,
-              child: Row(
-                children: [
-                  const Icon(Icons.favorite_border, color: Color(0xFFFF4949), size: 15),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'HP ${rpg.hp}',
-                          style: GoogleFonts.montserrat(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11,
-                            color: BentoTheme.cream,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        _customProgressBar(hpRatio, const Color(0xFFFF4949)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Separador vertical
-            Container(width: 1, height: 22, color: BentoTheme.creamAlpha(0.12)),
-            const SizedBox(width: 16),
-            // 3. Progreso Diario (Mejorado)
             Row(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(Icons.check_circle_outline, color: BentoTheme.accentFinance, size: 16),
-                const SizedBox(width: 6),
+                // Protagonista: el conteo del día.
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '$completedToday',
+                            style: _t(
+                              44,
+                              weight: FontWeight.w600,
+                              color: BentoTheme.cream,
+                              letterSpacing: -1.6,
+                              height: 1.0,
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '/ $activeCount',
+                            style: _t(
+                              20,
+                              weight: FontWeight.w500,
+                              color: BentoTheme.creamAlpha(0.35),
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        activeCount == 0 ? 'Sin hábitos hoy' : 'Completados hoy',
+                        style: _t(14, color: BentoTheme.creamAlpha(0.5)),
+                      ),
+                    ],
+                  ),
+                ),
+                // Acompañante: el estado del personaje, en voz baja.
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '$completedToday/$activeCount',
-                      style: GoogleFonts.montserrat(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        color: BentoTheme.cream,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shield_outlined, color: BentoTheme.accentPurple, size: 15),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Nivel ${rpg.level}',
+                          style: _t(15, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -0.2),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'COMPLETADO',
-                      style: GoogleFonts.montserrat(
-                        fontSize: 7,
-                        letterSpacing: 0.4,
-                        fontWeight: FontWeight.bold,
-                        color: BentoTheme.creamAlpha(0.4),
-                      ),
+                    const SizedBox(height: 7),
+                    SizedBox(
+                      width: 96,
+                      child: _neuProgressBar(xpRatio, BentoTheme.accentPurple, height: 7),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.favorite, color: Color(0xFFFF4949), size: 12),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${rpg.hp}',
+                          style: _t(13, weight: FontWeight.w600, color: BentoTheme.creamAlpha(0.7)),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '${rpg.xp}/${rpg.xpNeeded} XP',
+                          style: _t(13, color: BentoTheme.creamAlpha(0.4)),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            _neuProgressBar(dayRatio, BentoTheme.accentHabits, height: 10),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _customProgressBar(double ratio, Color color) {
-    return Container(
-      height: 5,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: BentoTheme.creamAlpha(0.06),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: ratio,
-          child: Container(
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(100),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.35),
-                  blurRadius: 4,
-                  spreadRadius: 0.5,
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -512,7 +540,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
 
   Widget _buildSectionHeader(BuildContext context, int activeCount, List<Habit> habits) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -521,13 +549,13 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                'HOY',
-                style: GoogleFonts.montserrat(fontSize: 12, letterSpacing: 2.4, fontWeight: FontWeight.w600, color: BentoTheme.cream),
+                'Hoy',
+                style: _t(22, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -0.5),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Text(
-                '${activeCount.toString().padLeft(2, '0')} hábitos',
-                style: GoogleFonts.montserrat(fontSize: 11, letterSpacing: 1.1, color: BentoTheme.creamAlpha(0.4)),
+                activeCount == 1 ? '1 hábito' : '$activeCount hábitos',
+                style: _t(15, color: BentoTheme.creamAlpha(0.4)),
               ),
             ],
           ),
@@ -542,9 +570,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               const SizedBox(width: 8),
               _analyzing
                   ? NeuCard(
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
+                      width: 38,
+                      height: 38,
+                      borderRadius: _rChip,
                       distance: 3,
                       blur: 6,
                       padding: EdgeInsets.zero,
@@ -568,15 +596,15 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 distance: 3,
                 blur: 6,
                 color: BentoTheme.accentHabits,
-                padding: const EdgeInsets.fromLTRB(11, 7, 13, 7),
+                padding: const EdgeInsets.fromLTRB(13, 9, 15, 9),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.add, size: 13, color: Color(0xFF0C0C0D)),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.add, size: 16, color: Color(0xFF0C0C0D)),
+                    const SizedBox(width: 5),
                     Text(
                       'Nuevo',
-                      style: GoogleFonts.montserrat(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: const Color(0xFF0C0C0D)),
+                      style: _t(14, weight: FontWeight.w600, color: const Color(0xFF0C0C0D), letterSpacing: -0.1),
                     ),
                   ],
                 ),
@@ -592,8 +620,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
       child: GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 18,
+        padding: const EdgeInsets.all(18),
+        borderRadius: _rCard,
         backgroundColor: BentoTheme.accentHabits.withValues(alpha: 0.07),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,43 +631,45 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 18),
+                    Icon(Icons.psychology, color: BentoTheme.accentHabits, size: 19),
                     const SizedBox(width: 8),
                     Text(
                       'Coach de IA',
-                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: BentoTheme.accentHabits),
+                      style: _t(16, weight: FontWeight.w600, color: BentoTheme.accentHabits, letterSpacing: -0.2),
                     ),
                   ],
                 ),
                 GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _aiFeedback = null;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: BentoTheme.creamAlpha(0.06),
-                      shape: BoxShape.circle,
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _aiFeedback = null),
+                  child: Padding(
+                    // Zona táctil real: el icono es de 16px pero el objetivo
+                    // no puede serlo.
+                    padding: const EdgeInsets.all(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: BentoTheme.creamAlpha(0.06),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.close, color: BentoTheme.creamAlpha(0.6), size: 15),
                     ),
-                    child: Icon(Icons.close, color: BentoTheme.creamAlpha(0.6), size: 14),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             MarkdownBody(
               data: _aiFeedback!,
               shrinkWrap: true,
               styleSheet: MarkdownStyleSheet(
-                p: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontWeight: FontWeight.w500, height: 1.4),
-                strong: TextStyle(fontSize: 13, color: BentoTheme.cream, fontWeight: FontWeight.w900, height: 1.4),
-                em: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), fontStyle: FontStyle.italic, height: 1.4),
-                listBullet: TextStyle(fontSize: 13, color: BentoTheme.creamAlpha(0.85), height: 1.4),
-                h1: TextStyle(fontSize: 16, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
-                h2: TextStyle(fontSize: 15, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
-                h3: TextStyle(fontSize: 14, color: BentoTheme.accentHabits, fontWeight: FontWeight.w900),
+                p: _t(15, color: BentoTheme.creamAlpha(0.85), height: 1.45),
+                strong: _t(15, weight: FontWeight.w600, color: BentoTheme.cream, height: 1.45),
+                em: _t(15, color: BentoTheme.creamAlpha(0.85), height: 1.45).copyWith(fontStyle: FontStyle.italic),
+                listBullet: _t(15, color: BentoTheme.creamAlpha(0.85), height: 1.45),
+                h1: _t(18, weight: FontWeight.w600, color: BentoTheme.accentHabits, letterSpacing: -0.3),
+                h2: _t(17, weight: FontWeight.w600, color: BentoTheme.accentHabits, letterSpacing: -0.3),
+                h3: _t(16, weight: FontWeight.w600, color: BentoTheme.accentHabits, letterSpacing: -0.2),
               ),
             ),
           ],
@@ -661,8 +691,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       padding: const EdgeInsets.symmetric(horizontal: 22),
       child: GlassCard(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id))),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-        borderRadius: 22,
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        borderRadius: _rFeatured,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -671,11 +701,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 padding: const EdgeInsets.only(bottom: 14),
                 child: Row(
                   children: [
-                    Icon(Icons.access_time, size: 12, color: BentoTheme.creamAlpha(0.5)),
-                    const SizedBox(width: 5),
+                    Icon(Icons.access_time, size: 14, color: BentoTheme.creamAlpha(0.45)),
+                    const SizedBox(width: 6),
                     Text(
                       '${habit.reminderHour?.toString().padLeft(2, '0') ?? '--'}:${habit.reminderMinute?.toString().padLeft(2, '0') ?? '--'}',
-                      style: GoogleFonts.montserrat(fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
+                      style: _t(14, color: BentoTheme.creamAlpha(0.45)),
                     ),
                   ],
                 ),
@@ -684,8 +714,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               children: [
                 // El emoji vive en un pocito hundido: identidad del hábito
                 // engastada en el material, no flotando encima.
-                _sunkenIconWell(habit.icon, size: 42, iconSize: 20, borderRadius: 13),
-                const SizedBox(width: 13),
+                _sunkenIconWell(habit.icon, size: 44, iconSize: 21, borderRadius: 14),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Row(
                     children: [
@@ -693,7 +723,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         child: Text(
                           habit.name,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 24, letterSpacing: -0.5, color: BentoTheme.cream),
+                          style: _t(24, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -0.6),
                         ),
                       ),
                       if (habit.currentStreak() > 0) ...[
@@ -702,13 +732,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             StreakFlame(streak: habit.currentStreak(), size: 22, animate: false),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 5),
                             Text(
                               '${habit.currentStreak()}',
-                              style: GoogleFonts.montserrat(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                              style: _t(
+                                17,
+                                weight: FontWeight.w600,
                                 color: StreakFlame.getColorForStreak(habit.currentStreak()),
+                                letterSpacing: -0.3,
                               ),
                             ),
                           ],
@@ -719,7 +750,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -734,12 +765,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                       children: [
                         Text(
                           fmtProgress,
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 34, height: 0.8, letterSpacing: -0.7, color: BentoTheme.cream),
+                          style: _t(40, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -1.4, height: 1.0),
                         ),
                         const SizedBox(width: 6),
                         Text(
                           '/ $fmtGoal $unit',
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 17, color: BentoTheme.creamAlpha(0.4)),
+                          style: _t(18, color: BentoTheme.creamAlpha(0.4), letterSpacing: -0.2),
                         ),
                       ],
                     ),
@@ -762,43 +793,63 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            _neuProgressBar(ratio, BentoTheme.accentHabits),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: days.map((day) {
-                final isToday = day == today;
-                final isCompleted = habit.isCompletedOn(day);
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) => _handleToggleHabit(habit, day, details.globalPosition),
-                  child: Column(
-                    children: [
-                      Text(
-                        _getWeekdayLetter(day),
-                        style: GoogleFonts.montserrat(
-                          fontSize: 10,
-                          letterSpacing: 0.8,
-                          fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
-                          color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.4),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _neuDayDot(
-                        completed: isCompleted,
-                        isToday: isToday,
-                        accent: BentoTheme.accentHabits,
-                        size: 26,
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+            _neuProgressBar(ratio, BentoTheme.accentHabits, height: 10),
+            const SizedBox(height: 10),
+            _buildWeekRow(habit, today, days, accent: BentoTheme.accentHabits, dotSize: 26),
           ],
         ),
       ),
+    );
+  }
+
+  /// Fila de la semana con objetivos táctiles reales.
+  ///
+  /// Los puntos siguen midiendo 22–26px porque visualmente funcionan, pero
+  /// ahora cada uno vive dentro de una celda de 44px de alto que es la que
+  /// recibe el toque. Antes el área tocable era el propio punto, y fallar el
+  /// tiro marcaba el día de al lado.
+  Widget _buildWeekRow(
+    Habit habit,
+    DateTime today,
+    List<DateTime> days, {
+    required Color accent,
+    required double dotSize,
+  }) {
+    return Row(
+      children: days.map((day) {
+        final isToday = day == today;
+        final isCompleted = habit.isCompletedOn(day);
+        return Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) => _handleToggleHabit(habit, day, details.globalPosition),
+            child: SizedBox(
+              height: 48,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _getWeekdayLetter(day),
+                    style: _t(
+                      12,
+                      weight: isToday ? FontWeight.w600 : FontWeight.w400,
+                      color: isToday ? accent : BentoTheme.creamAlpha(0.4),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  _DayDot(
+                    completed: isCompleted,
+                    isToday: isToday,
+                    accent: accent,
+                    size: dotSize,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -807,15 +858,15 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     // es la misma pieza en material neutro. Ambos con física de presión.
     return NeuCard(
       onTap: onTap,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       distance: 3,
       blur: 6,
       padding: EdgeInsets.zero,
       color: filled ? BentoTheme.accentHabits : null,
       child: Center(
-        child: Icon(icon, size: 15, color: filled ? const Color(0xFF0C0C0D) : BentoTheme.cream),
+        child: Icon(icon, size: 17, color: filled ? const Color(0xFF0C0C0D) : BentoTheme.cream),
       ),
     );
   }
@@ -840,87 +891,47 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   /// acento cilíndrico (brillo arriba, sombra abajo). Las sombras interiores
   /// del canal se pintan POR ENCIMA del relleno, así que el líquido se lee
   /// dentro del hueco.
-  Widget _neuProgressBar(double ratio, Color accent) {
+  ///
+  /// Es la ÚNICA barra de progreso de la pantalla. Antes convivía con otra de
+  /// 5px que llevaba un `boxShadow` del mismo color para simular resplandor —
+  /// ese glow es lo que más fechaba el panel de cabecera.
+  Widget _neuProgressBar(double ratio, Color accent, {double height = 10}) {
     return NeuPressed(
       borderRadius: 100,
       distance: 2,
       blur: 4,
       child: SizedBox(
-        height: 10,
+        height: height,
         width: double.infinity,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(100),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: ratio.clamp(0.0, 1.0),
-              heightFactor: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color.lerp(accent, Colors.white, 0.30)!,
-                      accent,
-                      Color.lerp(accent, Colors.black, 0.22)!,
-                    ],
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: ratio.clamp(0.0, 1.0)),
+              duration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) => FractionallySizedBox(
+                widthFactor: value,
+                heightFactor: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(100),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color.lerp(accent, Colors.white, 0.30)!,
+                        accent,
+                        Color.lerp(accent, Colors.black, 0.22)!,
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  /// Toggle de día: vacío = hueco circular en la superficie (con punto de
-  /// acento si es hoy); completado = disco de acento extruido con volumen
-  /// cilíndrico. Estado leído por el tacto: hundido pide acción, extruido
-  /// celebra lo hecho.
-  Widget _neuDayDot({
-    required bool completed,
-    required bool isToday,
-    required Color accent,
-    required double size,
-  }) {
-    if (completed) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(accent, Colors.white, 0.28)!,
-              accent,
-              Color.lerp(accent, Colors.black, 0.18)!,
-            ],
-          ),
-          boxShadow: BentoTheme.neuRaisedLite(distance: 2, blur: 4),
-        ),
-        child: Icon(Icons.check, size: size * 0.54, color: Colors.white),
-      );
-    }
-    return NeuPressed(
-      lite: true,
-      borderRadius: size / 2,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: isToday
-            ? Center(
-                child: Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                ),
-              )
-            : null,
       ),
     );
   }
@@ -935,106 +946,176 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
 
     return GlassCard(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id))),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      borderRadius: 16,
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 12),
+      borderRadius: _rCard,
       child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                _sunkenIconWell(habit.icon, size: 34, iconSize: 15, borderRadius: 10),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              habit.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 16, letterSpacing: -0.2, color: BentoTheme.cream),
-                            ),
-                          ),
-                          if (habit.currentStreak() > 0) ...[
-                            const SizedBox(width: 6),
-                            StreakFlame(streak: habit.currentStreak(), size: 16, animate: false),
-                            const SizedBox(width: 3),
-                            Text(
-                              '${habit.currentStreak()}',
-                              style: GoogleFonts.montserrat(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: StreakFlame.getColorForStreak(habit.currentStreak()),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (metaParts.isNotEmpty) ...[
-                        const SizedBox(height: 5),
-                        Text(
-                          metaParts.join(' · ').toUpperCase(),
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.montserrat(fontSize: 10.5, letterSpacing: 1.1, color: BentoTheme.creamAlpha(0.4)),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) => _handleToggleHabit(habit, today, details.globalPosition),
-                  child: _neuDayDot(
-                    completed: isCompleted,
-                    isToday: true,
-                    accent: habit.colorValue,
-                    size: 26,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: days.map((day) {
-                  final isToday = day == today;
-                  final isCompletedDay = habit.isCompletedOn(day);
-                  final color = habit.colorValue;
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (details) => _handleToggleHabit(habit, day, details.globalPosition),
-                    child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              _sunkenIconWell(habit.icon, size: 38, iconSize: 17, borderRadius: _rChip),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          _getWeekdayLetter(day),
-                          style: GoogleFonts.montserrat(
-                            fontSize: 9,
-                            letterSpacing: 0.8,
-                            fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
-                            color: isToday ? BentoTheme.accentHabits : BentoTheme.creamAlpha(0.4),
+                        Expanded(
+                          child: Text(
+                            habit.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: _t(17, weight: FontWeight.w600, color: BentoTheme.cream, letterSpacing: -0.3),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        _neuDayDot(
-                          completed: isCompletedDay,
-                          isToday: isToday,
-                          accent: color,
-                          size: 22,
-                        ),
+                        if (habit.currentStreak() > 0) ...[
+                          const SizedBox(width: 6),
+                          StreakFlame(streak: habit.currentStreak(), size: 16, animate: false),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${habit.currentStreak()}',
+                            style: _t(
+                              14,
+                              weight: FontWeight.w600,
+                              color: StreakFlame.getColorForStreak(habit.currentStreak()),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                  );
-                }).toList(),
+                    if (metaParts.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        metaParts.join(' · '),
+                        overflow: TextOverflow.ellipsis,
+                        style: _t(13.5, color: BentoTheme.creamAlpha(0.42)),
+                      ),
+                    ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 10),
+              // Objetivo táctil de 48×48 alrededor del punto de hoy.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) => _handleToggleHabit(habit, today, details.globalPosition),
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Center(
+                    child: _DayDot(
+                      completed: isCompleted,
+                      isToday: true,
+                      accent: habit.colorValue,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _buildWeekRow(habit, today, days, accent: habit.colorValue, dotSize: 22),
+        ],
+      ),
+    );
+  }
+}
+
+/// Toggle de día: vacío = hueco circular en la superficie (con punto de acento
+/// si es hoy); completado = disco de acento extruido con volumen cilíndrico.
+/// Estado leído por el tacto: hundido pide acción, extruido celebra lo hecho.
+///
+/// Es un widget con estado propio sólo para poder animar el momento en que se
+/// marca: la pieza sale del hueco con un rebote corto. Un cambio instantáneo
+/// entre dos formas se lee como un parpadeo, no como una acción.
+class _DayDot extends StatefulWidget {
+  const _DayDot({
+    required this.completed,
+    required this.isToday,
+    required this.accent,
+    required this.size,
+  });
+
+  final bool completed;
+  final bool isToday;
+  final Color accent;
+  final double size;
+
+  @override
+  State<_DayDot> createState() => _DayDotState();
+}
+
+class _DayDotState extends State<_DayDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+    value: 1,
+  );
+
+  @override
+  void didUpdateWidget(covariant _DayDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sólo al marcar. Desmarcar es una corrección, no un logro: no merece
+    // rebote.
+    if (widget.completed && !oldWidget.completed) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget dot = widget.completed
+        ? Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.lerp(widget.accent, Colors.white, 0.28)!,
+                  widget.accent,
+                  Color.lerp(widget.accent, Colors.black, 0.18)!,
+                ],
+              ),
+              boxShadow: BentoTheme.neuRaisedLite(distance: 2, blur: 4),
             ),
-          ],
-        ),
-      );
+            child: Icon(Icons.check, size: widget.size * 0.54, color: Colors.white),
+          )
+        : NeuPressed(
+            lite: true,
+            borderRadius: widget.size / 2,
+            child: SizedBox(
+              width: widget.size,
+              height: widget.size,
+              child: widget.isToday
+                  ? Center(
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: widget.accent),
+                      ),
+                    )
+                  : null,
+            ),
+          );
+
+    if (!widget.completed) return dot;
+
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.55, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+      ),
+      child: dot,
+    );
   }
 }

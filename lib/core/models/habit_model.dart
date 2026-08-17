@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import '../theme/bento_theme.dart';
 
 enum HabitCategory {
-  health('health', 'Salud', Icons.favorite_border),
-  mind('mind', 'Mente', Icons.self_improvement),
-  productivity('productivity', 'Productividad', Icons.bolt_outlined),
-  learning('learning', 'Aprendizaje', Icons.school_outlined),
-  social('social', 'Social', Icons.groups_outlined),
-  general('general', 'General', Icons.circle_outlined);
+  health('health', 'Salud', Icons.favorite_border_rounded),
+  mind('mind', 'Mente', Icons.self_improvement_rounded),
+  productivity('productivity', 'Productividad', Icons.bolt_rounded),
+  learning('learning', 'Aprendizaje', Icons.auto_stories_rounded),
+  social('social', 'Social', Icons.diversity_3_rounded),
+  general('general', 'General', Icons.auto_awesome_rounded);
 
   final String value;
   final String label;
