@@ -2,7 +2,11 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../core/services/camera_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/providers/appearance_provider.dart';
 import '../../../core/theme/bento_theme.dart';
+import '../../../core/theme/editorial_theme.dart';
 import '../../../core/widgets/camera_cover_preview.dart';
 
 /// Cámara in-app a pantalla completa siguiendo el diseño oscuro Bento.
@@ -19,17 +23,25 @@ import '../../../core/widgets/camera_cover_preview.dart';
 ///   ),
 /// );
 /// ```
-class CameraCaptureScreen extends StatefulWidget {
+/// La cámara es la pantalla donde menos cambia el lenguaje visual, y hay una
+/// razón: casi todo es vista previa de vídeo, y el cromo que va encima tiene
+/// que leerse sobre CUALQUIER imagen. Eso deja un solo recurso posible —negro
+/// translúcido con tinta clara— en las dos pieles.
+///
+/// Lo único que se bifurca es el acento: en editorial el obturador es papel,
+/// que sobre una escena a oscuras es el punto más brillante de la pantalla y
+/// por tanto lo que la mano encuentra primero.
+class CameraCaptureScreen extends ConsumerStatefulWidget {
   /// Objeto que el usuario debe fotografiar (se muestra como pista arriba).
   final String targetObject;
 
   const CameraCaptureScreen({super.key, required this.targetObject});
 
   @override
-  State<CameraCaptureScreen> createState() => _CameraCaptureScreenState();
+  ConsumerState<CameraCaptureScreen> createState() => _CameraCaptureScreenState();
 }
 
-class _CameraCaptureScreenState extends State<CameraCaptureScreen>
+class _CameraCaptureScreenState extends ConsumerState<CameraCaptureScreen>
     with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription> _cameras = const [];
@@ -286,6 +298,11 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
     );
   }
 
+  /// Color del acento del cromo. Ver la nota de clase.
+  Color get _accent => ref.watch(designLanguageProvider).isEditorial
+      ? EditorialTheme.paper
+      : BentoTheme.accentOrange;
+
   Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -307,8 +324,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.camera_alt,
-                      color: BentoTheme.accentOrange, size: 20),
+                  Icon(Icons.camera_alt, color: _accent, size: 20),
                   const SizedBox(width: 10),
                   Flexible(
                     child: RichText(
@@ -353,6 +369,9 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
           _ShutterButton(
             enabled: canShoot && !_capturing,
             busy: _capturing,
+            fill: ref.watch(designLanguageProvider).isEditorial
+                ? EditorialTheme.paper
+                : BentoTheme.accentAlarm,
             onTap: _capture,
           ),
           const Spacer(),
@@ -400,11 +419,13 @@ class _CircleButton extends StatelessWidget {
 class _ShutterButton extends StatelessWidget {
   final bool enabled;
   final bool busy;
+  final Color fill;
   final VoidCallback onTap;
 
   const _ShutterButton({
     required this.enabled,
     required this.busy,
+    required this.fill,
     required this.onTap,
   });
 
@@ -427,7 +448,7 @@ class _ShutterButton extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: BentoTheme.accentAlarm,
+                color: fill,
               ),
               child: busy
                   ? const Padding(

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sistem_daily/core/providers/appearance_provider.dart';
 import 'package:sistem_daily/core/theme/app_palette.dart';
+import 'package:sistem_daily/core/theme/design_language.dart';
 import 'package:sistem_daily/features/settings/personalize_screen.dart';
 
 /// La pantalla de personalizar no depende de Supabase ni de red, así que sí se
@@ -35,22 +36,38 @@ void main() {
   /// - Lo que cae justo debajo del borde SÍ está construido (entra en el cache
   ///   extent), así que scrollUntilVisible se da por satisfecho sin mover nada
   ///   y el toque caería fuera de pantalla: ahí hace falta ensureVisible.
-  Future<void> tapText(WidgetTester tester, String label) async {
+  Future<Finder> revealText(WidgetTester tester, String label) async {
     final finder = find.text(label);
     if (finder.evaluate().isEmpty) {
       await tester.scrollUntilVisible(finder, 120, scrollable: find.byType(Scrollable).first);
     }
     await tester.ensureVisible(finder);
     await tester.pump();
-    await tester.tap(finder);
+    return finder;
+  }
+
+  Future<void> tapText(WidgetTester tester, String label) async {
+    await tester.tap(await revealText(tester, label));
     await tester.pump();
   }
 
   testWidgets('monta sin errores', (tester) async {
     await pump(tester);
     expect(find.text('Personalizar'), findsOneWidget);
-    expect(find.text('Vívida'), findsOneWidget);
-    expect(find.text('La tuya'), findsOneWidget);
+    // Las secciones de más abajo hay que revelarlas: la ListView es perezosa y
+    // el viewport del test no llega a la paleta.
+    expect(await revealText(tester, 'Vívida'), findsOneWidget);
+    expect(await revealText(tester, 'La tuya'), findsOneWidget);
+  });
+
+  testWidgets('elegir el lenguaje de diseño lo guarda', (tester) async {
+    final container = await pump(tester);
+    expect(container.read(appearanceProvider).design, DesignLanguage.editorial);
+
+    await tapText(tester, DesignLanguage.neu.label);
+
+    expect(container.read(appearanceProvider).design, DesignLanguage.neu);
+    expect(container.read(designLanguageProvider), DesignLanguage.neu);
   });
 
   testWidgets('elegir el modo sistema lo guarda', (tester) async {
@@ -93,6 +110,7 @@ void main() {
     final notifier = container.read(appearanceProvider.notifier);
 
     notifier.setMode(ThemeMode.light);
+    notifier.setDesign(DesignLanguage.neu);
     notifier.setPreset('neon');
     notifier.setMaterial(const MaterialSpec(hue: 30, chroma: 0.03));
     await tester.pump();
@@ -103,11 +121,14 @@ void main() {
     expect(state.palette.presetId, 'vivid');
     expect(state.material, isNull);
     expect(state.mode, ThemeMode.light, reason: 'restablecer colores no es cambiar de modo');
+    expect(state.design, DesignLanguage.neu,
+        reason: 'restablecer colores tampoco es cambiar de lenguaje');
   });
 
   testWidgets('la elección sobrevive a reabrir la app', (tester) async {
     final first = await pump(tester);
     first.read(appearanceProvider.notifier).setPreset('forest');
+    first.read(appearanceProvider.notifier).setDesign(DesignLanguage.neu);
     await tester.pumpAndSettle();
 
     // Un contenedor nuevo = un arranque nuevo leyendo las preferencias.
@@ -117,5 +138,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(second.read(appearanceProvider).palette.presetId, 'forest');
+    expect(second.read(appearanceProvider).design, DesignLanguage.neu);
   });
 }

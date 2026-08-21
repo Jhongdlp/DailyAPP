@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/providers/appearance_provider.dart';
 import '../../../core/theme/bento_theme.dart';
+import '../../../core/theme/editorial_theme.dart';
+import '../../../core/widgets/editorial_kit.dart';
 import 'mental_challenge.dart';
 
 /// Reto mental para apagar la alarma sin foto.
@@ -14,7 +18,7 @@ import 'mental_challenge.dart';
 /// Hay que acertar [requiredCorrect] seguidas: con una sola, un acierto por
 /// azar en una pregunta de opción múltiple sería un botón de apagado. Un fallo
 /// devuelve el contador a cero.
-class ChallengeScreen extends StatefulWidget {
+class ChallengeScreen extends ConsumerStatefulWidget {
   /// Cuántos aciertos seguidos hacen falta.
   final int requiredCorrect;
 
@@ -28,10 +32,10 @@ class ChallengeScreen extends StatefulWidget {
   });
 
   @override
-  State<ChallengeScreen> createState() => _ChallengeScreenState();
+  ConsumerState<ChallengeScreen> createState() => _ChallengeScreenState();
 }
 
-class _ChallengeScreenState extends State<ChallengeScreen> {
+class _ChallengeScreenState extends ConsumerState<ChallengeScreen> {
   late MentalChallenge _challenge = MentalChallenges.next();
   String _typed = '';
   int _solved = 0;
@@ -78,8 +82,16 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
     });
   }
 
+  // Dos pieles en el mismo archivo, por la misma razón que en
+  // `alarm_dismiss_screen.dart`: la lógica de arriba —racha que se reinicia al
+  // fallar, teclado propio porque el del sistema no aparece sobre el bloqueo—
+  // es lo que hace que el reto no sea un botón de apagado, y no puede vivir por
+  // duplicado.
+
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(designLanguageProvider).isEditorial) return _buildEditorial();
+
     final isMath = _challenge.kind == ChallengeKind.math;
 
     return PopScope(
@@ -300,6 +312,256 @@ class _ChallengeScreenState extends State<ChallengeScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ─────────────────────── piel editorial ───────────────────────
+
+  static final Color _edDanger =
+      EditorialTheme.accentAt(const Color(0xFFE5484D), 0.62);
+
+  Widget _buildEditorial() {
+    final isMath = _challenge.kind == ChallengeKind.math;
+
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: EditorialTheme.canvas,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _edHeader(),
+                const SizedBox(height: 18),
+                _edProgress(),
+                const SizedBox(height: 22),
+                Expanded(child: _edQuestion(isMath)),
+                const SizedBox(height: 16),
+                if (isMath) _edKeypad() else _edOptions(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _edHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RETO MENTAL',
+                style: EditorialTheme.caps(
+                  26,
+                  color: EditorialTheme.paper,
+                  letterSpacing: -0.8,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                widget.reason ??
+                    'Acierta ${widget.requiredCorrect} seguidas para apagar la alarma.',
+                style: EditorialTheme.text(13,
+                    color: EditorialTheme.muted, height: 1.35),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        EditorialPressable(
+          onTap: () => Navigator.of(context).pop(false),
+          scale: 0.9,
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Text(
+              'Volver',
+              style: EditorialTheme.text(13,
+                  weight: FontWeight.w600, color: EditorialTheme.muted),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// La racha, como tres barras. Es la única señal de progreso y por eso se
+  /// pinta en papel pleno: en un sistema sin color de estado, "hecho" es
+  /// "blanco" y "pendiente" es "apagado".
+  Widget _edProgress() {
+    return Row(
+      children: [
+        for (var i = 0; i < widget.requiredCorrect; i++) ...[
+          Expanded(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              height: 5,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(3),
+                color: i < _solved
+                    ? EditorialTheme.paper
+                    : EditorialTheme.paperAlpha(0.12),
+              ),
+            ),
+          ),
+          if (i < widget.requiredCorrect - 1) const SizedBox(width: 6),
+        ],
+      ],
+    );
+  }
+
+  /// La pregunta va en papel: es lo que hay que leer, y a estas horas leer
+  /// tinta sobre blanco cuesta bastante menos que al revés.
+  Widget _edQuestion(bool isMath) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(EditorialTheme.radiusPanel),
+        color: EditorialTheme.paper,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            isMath ? 'CÁLCULO' : 'CULTURA GENERAL',
+            style: EditorialTheme.label(10.5, color: EditorialTheme.grayText),
+          ),
+          const SizedBox(height: 18),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              _challenge.question,
+              textAlign: TextAlign.center,
+              style: isMath
+                  ? EditorialTheme.caps(46,
+                      color: EditorialTheme.ink, letterSpacing: -1.5, height: 1.1)
+                  : EditorialTheme.text(23,
+                      weight: FontWeight.w600,
+                      color: EditorialTheme.ink,
+                      height: 1.3),
+            ),
+          ),
+          if (isMath) ...[
+            const SizedBox(height: 20),
+            // Lo tecleado se dibuja sobre un bloque gris para que se lea como
+            // un campo y no como parte del enunciado.
+            Container(
+              constraints: const BoxConstraints(minWidth: 130),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: EditorialTheme.gray,
+                borderRadius: BorderRadius.circular(EditorialTheme.radiusChip),
+              ),
+              child: Text(
+                _typed.isEmpty ? '—' : _typed,
+                textAlign: TextAlign.center,
+                style: EditorialTheme.caps(
+                  38,
+                  color: _typed.isEmpty
+                      ? EditorialTheme.grayText
+                      : EditorialTheme.ink,
+                  letterSpacing: 1,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ],
+          if (_wrong) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Incorrecto. Vuelta a empezar (fallos: $_mistakes).',
+              textAlign: TextAlign.center,
+              style: EditorialTheme.text(13,
+                  weight: FontWeight.w600, color: _edDanger),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Teclado propio y no el del sistema: sobre la pantalla de bloqueo y en modo
+  /// pantalla fijada el del sistema puede no aparecer, y además así las teclas
+  /// son grandes para dedos recién despiertos.
+  Widget _edKeypad() {
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '<', '0', '='];
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 3,
+      mainAxisSpacing: 9,
+      crossAxisSpacing: 9,
+      childAspectRatio: 1.9,
+      children: [
+        for (final key in keys)
+          EditorialPressable(
+            onTap: () => key == '=' ? _answer(_typed) : _tapKey(key),
+            scale: 0.93,
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                // El "=" es papel y el resto superficie: confirmar es la única
+                // tecla que cambia de estado, y tiene que encontrarse sola.
+                color: key == '='
+                    ? EditorialTheme.paper
+                    : EditorialTheme.surfaceHigh,
+                borderRadius: BorderRadius.circular(EditorialTheme.radiusChip),
+              ),
+              child: key == '<'
+                  ? Icon(Icons.backspace_outlined,
+                      size: 21, color: EditorialTheme.paperAlpha(0.8))
+                  : Text(
+                      key,
+                      style: EditorialTheme.caps(
+                        24,
+                        color: key == '='
+                            ? EditorialTheme.ink
+                            : EditorialTheme.paper,
+                        letterSpacing: 0,
+                      ),
+                    ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _edOptions() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final option in _challenge.options)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 9),
+            child: EditorialPressable(
+              onTap: () => _answer(option),
+              scale: 0.98,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 17, horizontal: 16),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: EditorialTheme.surfaceHigh,
+                  borderRadius: BorderRadius.circular(EditorialTheme.radiusCard),
+                ),
+                child: Text(
+                  option,
+                  textAlign: TextAlign.center,
+                  style: EditorialTheme.text(16,
+                      weight: FontWeight.w600, color: EditorialTheme.paper),
                 ),
               ),
             ),

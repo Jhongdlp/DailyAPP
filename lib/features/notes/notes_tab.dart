@@ -20,6 +20,9 @@ import 'voice_recorder_sheet.dart';
 import '../vault/screens/vault_lock_screen.dart';
 import '../vault/screens/vault_home_screen.dart';
 import '../habits/widgets/habit_blob_header.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'vault_image_widgets.dart';
 
 
 export '../../core/models/note_model.dart';
@@ -1428,50 +1431,79 @@ class _NotesTabState extends ConsumerState<NotesTab>
       distance: 4.0,
       blur: 8.0,
       color: color.withValues(alpha: 0.05),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              NeuPressed(
-                borderRadius: 12,
-                padding: const EdgeInsets.all(8),
-                child: _vaultIconGlyph(vault, size: 20),
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            // Background Image
+            if (vault.imagePath != null && vault.imagePath!.isNotEmpty)
+              Positioned.fill(
+                child: VaultImageWidget(vault: vault, fit: BoxFit.contain),
               ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            vault.name,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 15,
-              color: BentoTheme.cream,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (vault.description != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              vault.description!,
-              style: TextStyle(
-                  fontSize: 11, color: BentoTheme.creamAlpha(0.5)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+
+            // Content Overlay
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (vault.showIcon) ...[
+                        _vaultIconGlyph(vault, size: 16, color: color),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          vault.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            color: BentoTheme.cream,
+                            shadows: vault.imagePath != null && vault.imagePath!.isNotEmpty
+                                ? [const Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(1, 1))]
+                                : null,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (vault.description != null && vault.description!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      vault.description!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: BentoTheme.creamAlpha(0.65),
+                        shadows: vault.imagePath != null && vault.imagePath!.isNotEmpty
+                            ? [const Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(1, 1))]
+                            : null,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    '$count ${count == 1 ? 'nota' : 'notas'}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: BentoTheme.creamSecondary,
+                      fontWeight: FontWeight.w600,
+                      shadows: vault.imagePath != null && vault.imagePath!.isNotEmpty
+                          ? [const Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(1, 1))]
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
-          const SizedBox(height: 6),
-          Text(
-            '$count ${count == 1 ? 'nota' : 'notas'}',
-            style: TextStyle(
-                fontSize: 11,
-                color: BentoTheme.creamSecondary,
-                fontWeight: FontWeight.w600),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2724,6 +2756,14 @@ class _NotesTabState extends ConsumerState<NotesTab>
     String selectedIconKey = vault?.icon ?? 'folder';
     String selectedColor = vault?.color ?? '#758BFD';
 
+    bool showIcon = vault?.showIcon ?? true;
+    String? currentImagePath = vault?.imagePath;
+    double imageOffsetX = vault?.imageOffsetX ?? 0.0;
+    double imageOffsetY = vault?.imageOffsetY ?? 0.0;
+    double imageScale = vault?.imageScale ?? 1.0;
+    File? newImageFile;
+    bool clearImage = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2902,6 +2942,87 @@ class _NotesTabState extends ConsumerState<NotesTab>
                       );
                     }).toList(),
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Mostrar Ícono en Tarjeta',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: BentoTheme.creamSecondary),
+                      ),
+                      Switch(
+                        value: showIcon,
+                        activeColor: BentoTheme.accentBrain,
+                        onChanged: (val) {
+                          setModal(() {
+                            showIcon = val;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (currentImagePath != null && !clearImage) ...[
+                    Text(
+                      'Imagen Integrada',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: BentoTheme.creamSecondary),
+                    ),
+                    const SizedBox(height: 6),
+                    VaultImageAdjuster(
+                      imagePath: currentImagePath!,
+                      initialOffsetX: imageOffsetX,
+                      initialOffsetY: imageOffsetY,
+                      initialScale: imageScale,
+                      onChanged: (offsetX, offsetY, scale) {
+                        imageOffsetX = offsetX;
+                        imageOffsetY = offsetY;
+                        imageScale = scale;
+                      },
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          setModal(() {
+                            clearImage = true;
+                            newImageFile = null;
+                            currentImagePath = null;
+                          });
+                        },
+                        icon: const Icon(Icons.delete_outline, color: BentoTheme.errorRed, size: 16),
+                        label: const Text('Quitar imagen', style: TextStyle(color: BentoTheme.errorRed, fontSize: 12)),
+                      ),
+                    ),
+                  ] else ...[
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                        if (picked != null) {
+                          setModal(() {
+                            newImageFile = File(picked.path);
+                            currentImagePath = picked.path;
+                            clearImage = false;
+                            imageOffsetX = 0.0;
+                            imageOffsetY = 0.0;
+                            imageScale = 1.0;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.image_outlined, size: 16),
+                      label: const Text('Subir foto de portada'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BentoTheme.cream,
+                        side: BorderSide(color: BentoTheme.creamAlpha(0.2)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -2925,6 +3046,12 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                 description: descCtrl.text.trim().isEmpty
                                     ? null
                                     : descCtrl.text.trim(),
+                                showIcon: showIcon,
+                                imagePath: currentImagePath,
+                                imageOffsetX: imageOffsetX,
+                                imageOffsetY: imageOffsetY,
+                                imageScale: imageScale,
+                                uploadFile: newImageFile,
                               );
                         } else {
                           await ref
@@ -2937,6 +3064,13 @@ class _NotesTabState extends ConsumerState<NotesTab>
                                 description: descCtrl.text.trim().isEmpty
                                     ? null
                                     : descCtrl.text.trim(),
+                                showIcon: showIcon,
+                                imagePath: currentImagePath,
+                                imageOffsetX: imageOffsetX,
+                                imageOffsetY: imageOffsetY,
+                                imageScale: imageScale,
+                                uploadFile: newImageFile,
+                                clearImage: clearImage,
                               );
                         }
                         setState(() {});

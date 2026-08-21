@@ -7,7 +7,6 @@ import '../habits/widgets/habit_blob_header.dart';
 import '../pomodoro/widgets/tomato_button.dart';
 import 'alarm_card.dart';
 import 'alarm_form.dart';
-import 'notification_diagnostics_sheet.dart';
 import 'sleep/sleep_action_button.dart';
 import 'sleep/sleep_alarm_form.dart';
 import 'sleep/sleep_summary_card.dart';
@@ -66,14 +65,6 @@ class AlarmTab extends ConsumerWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              GestureDetector(
-                onTap: () => NotificationDiagnosticsSheet.show(context),
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Icon(Icons.health_and_safety_outlined,
-                      size: 20, color: BentoTheme.creamAlpha(0.55)),
-                ),
-              ),
               const Padding(
                 padding: EdgeInsets.only(right: 14),
                 child: TomatoButton(size: 26),

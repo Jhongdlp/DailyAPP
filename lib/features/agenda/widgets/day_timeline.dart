@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/task_model.dart';
+import '../../../core/providers/appearance_provider.dart';
 import '../../../core/theme/bento_theme.dart';
+import '../../../core/theme/editorial_theme.dart';
 import '../timeline_scale.dart';
 import 'timeline_task_card.dart';
 
@@ -33,6 +36,7 @@ class _BlockDrag {
   final int originalEnd;
   int start;
   int end;
+  double currentOffset = 0.0;
 
   _BlockDrag({
     required this.task,
@@ -54,7 +58,15 @@ class _BlockDrag {
 ///
 /// La duración también se puede cambiar con un toque desde el propio panel del
 /// borrador, así que nunca hace falta arrastrar nada.
-class DayTimeline extends StatefulWidget {
+/// La piel no se duplica: se parametriza.
+///
+/// El timeline es geometría —escala de minutos a píxeles, colisiones entre
+/// bloques, arrastre con imán al cuarto de hora— y esa geometría es idéntica en
+/// los dos lenguajes. Lo único que cambia son colores y tipografía. Duplicar el
+/// archivo habría dejado dos copias de la parte delicada para no repetir la
+/// fácil, así que los tokens viven en [_TimelineSkin] y los métodos de pintura
+/// son uno solo.
+class DayTimeline extends ConsumerStatefulWidget {
   final DateTime day;
   final List<Task> tasks;
 
@@ -79,10 +91,13 @@ class DayTimeline extends StatefulWidget {
   });
 
   @override
-  State<DayTimeline> createState() => _DayTimelineState();
+  ConsumerState<DayTimeline> createState() => _DayTimelineState();
 }
 
-class _DayTimelineState extends State<DayTimeline> {
+class _DayTimelineState extends ConsumerState<DayTimeline> {
+  /// Se resuelve una vez por build y lo leen todos los métodos de pintura.
+  late _TimelineSkin _skin;
+
   final _scrollController = ScrollController();
   final _draftController = TextEditingController();
   final _draftFocus = FocusNode();
@@ -307,6 +322,10 @@ class _DayTimelineState extends State<DayTimeline> {
     final drag = _blockDrag;
     if (drag == null) return;
 
+    setState(() {
+      drag.currentOffset = deltaY;
+    });
+
     // El delta se convierte a minutos pasando por la escala, no con una regla
     // de tres: dentro de la banda plegada un píxel vale muchos más minutos.
     //
@@ -351,6 +370,10 @@ class _DayTimelineState extends State<DayTimeline> {
 
   @override
   Widget build(BuildContext context) {
+    _skin = ref.watch(designLanguageProvider).isEditorial
+        ? _TimelineSkin.editorial()
+        : _TimelineSkin.neu();
+
     final scale = _scale;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToRelevantHour(scale));
 
@@ -403,7 +426,6 @@ class _DayTimelineState extends State<DayTimeline> {
   List<Widget> _buildPeakBand(TimelineScale scale, double laneAreaWidth) {
     final top = scale.yForMinutes(_peakStartHour * 60);
     final bottom = scale.yForMinutes(_peakEndHour * 60);
-    final accent = BentoTheme.accentLime;
     return [
       Positioned(
         top: top,
@@ -413,21 +435,13 @@ class _DayTimelineState extends State<DayTimeline> {
         child: IgnorePointer(
           child: Container(
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.05),
+              color: _skin.peakFill,
               borderRadius: BorderRadius.circular(14),
-              border: Border(left: BorderSide(color: accent.withValues(alpha: 0.28), width: 2)),
+              border: Border(left: BorderSide(color: _skin.peakEdge, width: 2)),
             ),
             alignment: Alignment.topRight,
             padding: const EdgeInsets.only(top: 5, right: 9),
-            child: Text(
-              'FRANJA DE FOCO',
-              style: GoogleFonts.montserrat(
-                fontSize: 8.5,
-                letterSpacing: 1.3,
-                fontWeight: FontWeight.w700,
-                color: accent.withValues(alpha: 0.4),
-              ),
-            ),
+            child: Text('FRANJA DE FOCO', style: _skin.peakLabel),
           ),
         ),
       ),
@@ -453,28 +467,20 @@ class _DayTimelineState extends State<DayTimeline> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: BentoTheme.creamAlpha(0.05),
+                  color: _skin.pillFill,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.expand_more_rounded, size: 13, color: BentoTheme.creamAlpha(0.4)),
+                    Icon(Icons.expand_more_rounded, size: 13, color: _skin.pillInk),
                     const SizedBox(width: 4),
-                    Text(
-                      '00:00 – 06:00',
-                      style: GoogleFonts.montserrat(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                        color: BentoTheme.creamAlpha(0.4),
-                      ),
-                    ),
+                    Text('00:00 – 06:00', style: _skin.pillLabel),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Container(height: 1, color: BentoTheme.creamAlpha(0.05))),
+              Expanded(child: Container(height: 1, color: _skin.hourLine(true))),
               const SizedBox(width: 12),
             ],
           ),
@@ -488,8 +494,6 @@ class _DayTimelineState extends State<DayTimeline> {
       // por delante, no en lo que ya no se puede cambiar.
       final isPast = _isToday && hour < nowHour;
       final isCurrent = _isToday && hour == nowHour;
-      final labelAlpha = isCurrent ? 0.85 : (isPast ? 0.18 : 0.42);
-      final lineAlpha = isPast ? 0.04 : 0.08;
 
       widgets.add(Positioned(
         top: scale.yForMinutes(hour * 60) - 7,
@@ -504,18 +508,11 @@ class _DayTimelineState extends State<DayTimeline> {
                 child: Text(
                   '${hour.toString().padLeft(2, '0')}:00',
                   textAlign: TextAlign.right,
-                  style: GoogleFonts.montserrat(
-                    fontSize: 10,
-                    fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
-                    letterSpacing: 0.1,
-                    color: isCurrent
-                        ? BentoTheme.accentLime
-                        : BentoTheme.creamAlpha(labelAlpha),
-                  ),
+                  style: _skin.hourLabel(isCurrent: isCurrent, isPast: isPast),
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Container(height: 1, color: BentoTheme.creamAlpha(lineAlpha))),
+              Expanded(child: Container(height: 1, color: _skin.hourLine(isPast))),
             ],
           ),
         ),
@@ -529,7 +526,7 @@ class _DayTimelineState extends State<DayTimeline> {
           left: _gutterWidth,
           right: 12,
           child: IgnorePointer(
-            child: Container(height: 1, color: BentoTheme.creamAlpha(isPast ? 0.015 : 0.03)),
+            child: Container(height: 1, color: _skin.halfHourLine(isPast)),
           ),
         ));
       }
@@ -544,22 +541,15 @@ class _DayTimelineState extends State<DayTimeline> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: BentoTheme.creamAlpha(0.06),
+              color: _skin.pillFill,
               borderRadius: BorderRadius.circular(100),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.unfold_less_rounded, size: 13, color: BentoTheme.creamAlpha(0.45)),
+                Icon(Icons.unfold_less_rounded, size: 13, color: _skin.pillInk),
                 const SizedBox(width: 4),
-                Text(
-                  'plegar madrugada',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BentoTheme.creamAlpha(0.45),
-                  ),
-                ),
+                Text('plegar madrugada', style: _skin.pillLabel),
               ],
             ),
           ),
@@ -589,31 +579,23 @@ class _DayTimelineState extends State<DayTimeline> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: BentoTheme.errorRed,
+                    color: _skin.nowMark,
                     borderRadius: BorderRadius.circular(5),
                   ),
-                  child: Text(
-                    _fmt(minutesOfDay(now)),
-                    style: GoogleFonts.montserrat(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: Text(_fmt(minutesOfDay(now)), style: _skin.nowLabel),
                 ),
               ),
               const SizedBox(width: 6),
               Container(
                 width: 5,
                 height: 5,
-                decoration: BoxDecoration(color: BentoTheme.errorRed, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: _skin.nowMark, shape: BoxShape.circle),
               ),
               Expanded(
                 child: Container(
                   height: 1.5,
                   decoration: BoxDecoration(
-                    color: BentoTheme.errorRed.withValues(alpha: 0.75),
+                    color: _skin.nowRule,
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
@@ -630,7 +612,6 @@ class _DayTimelineState extends State<DayTimeline> {
   Widget _buildDraft(TimelineScale scale, double laneAreaWidth) {
     final start = _draftStart!;
     final end = _draftEnd!;
-    final accent = BentoTheme.accentLime;
     final rawTop = scale.yForMinutes(start);
     final rawHeight = scale.heightForRange(start, end);
 
@@ -644,19 +625,15 @@ class _DayTimelineState extends State<DayTimeline> {
         child: IgnorePointer(
           child: Container(
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.16),
+              color: _skin.draftGhostFill,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: accent.withValues(alpha: 0.8), width: 1.5),
+              border: Border.all(color: _skin.draftEdge, width: 1.5),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             alignment: Alignment.topLeft,
             child: Text(
               '${_fmt(start)} – ${_fmt(end)}  ·  ${_durationLabel(end - start)}',
-              style: GoogleFonts.montserrat(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: accent,
-              ),
+              style: _skin.draftRange,
             ),
           ),
         ),
@@ -674,10 +651,10 @@ class _DayTimelineState extends State<DayTimeline> {
       height: _draftEditorHeight,
       child: Container(
         decoration: BoxDecoration(
-          color: Color.alphaBlend(accent.withValues(alpha: 0.10), BentoTheme.neuSurface),
+          color: _skin.draftFill,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: accent.withValues(alpha: 0.75), width: 1.5),
-          boxShadow: BentoTheme.neuFloating(elevation: 14),
+          border: _skin.draftBorder,
+          boxShadow: _skin.draftShadow,
         ),
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
         child: Column(
@@ -686,19 +663,11 @@ class _DayTimelineState extends State<DayTimeline> {
           children: [
             Row(
               children: [
-                Text(
-                  '${_fmt(start)} – ${_fmt(end)}',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                    color: accent,
-                  ),
-                ),
+                Text('${_fmt(start)} – ${_fmt(end)}', style: _skin.draftRange),
                 const Spacer(),
-                _draftIconButton(Icons.close_rounded, BentoTheme.creamAlpha(0.45), _cancelDraft),
+                _draftIconButton(Icons.close_rounded, _skin.draftDismiss, _cancelDraft),
                 const SizedBox(width: 2),
-                _draftIconButton(Icons.check_rounded, accent, _submitDraft),
+                _draftIconButton(Icons.check_rounded, _skin.draftConfirm, _submitDraft),
               ],
             ),
             Expanded(
@@ -709,21 +678,14 @@ class _DayTimelineState extends State<DayTimeline> {
                   textInputAction: TextInputAction.done,
                   textCapitalization: TextCapitalization.sentences,
                   onSubmitted: (_) => _submitDraft(),
-                  style: GoogleFonts.montserrat(
-                    color: BentoTheme.cream,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
+                  cursorColor: _skin.draftInk,
+                  style: _skin.draftField,
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
                     border: InputBorder.none,
                     hintText: '¿Qué vas a hacer?',
-                    hintStyle: GoogleFonts.montserrat(
-                      color: BentoTheme.creamAlpha(0.35),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
+                    hintStyle: _skin.draftHint,
                   ),
                 ),
               ),
@@ -745,16 +707,12 @@ class _DayTimelineState extends State<DayTimeline> {
                       alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(horizontal: 9),
                       decoration: BoxDecoration(
-                        color: selected ? accent : BentoTheme.creamAlpha(0.07),
+                        color: selected ? _skin.chipOnFill : _skin.chipOffFill,
                         borderRadius: BorderRadius.circular(100),
                       ),
                       child: Text(
                         _durationLabel(minutes),
-                        style: GoogleFonts.montserrat(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? const Color(0xFF0C0C0D) : BentoTheme.creamAlpha(0.6),
-                        ),
+                        style: selected ? _skin.chipOnLabel : _skin.chipOffLabel,
                       ),
                     ),
                   );
@@ -785,7 +743,7 @@ class _DayTimelineState extends State<DayTimeline> {
 
     return [
       for (final block in laid)
-        () {
+        ...() {
           final isDragging = drag?.task.id == block.task.id;
           final start = isDragging ? drag!.start : block.startMinutes;
           final end = isDragging ? drag!.end : block.endMinutes;
@@ -795,31 +753,73 @@ class _DayTimelineState extends State<DayTimeline> {
           final height = scale.heightForRange(start, end);
           final completed = _isCompleted(block.task);
 
-          return Positioned(
-            top: scale.yForMinutes(start),
-            left: left,
-            width: laneWidth,
-            height: height,
-            child: _DraggableBlock(
-              key: ValueKey(block.task.id),
-              task: block.task,
-              height: height,
-              completed: completed,
-              isDragging: isDragging,
-              // Un bloque ya pasado y sin marcar se muestra apagado: no es un
-              // error, pero tampoco merece el mismo peso visual que lo que
-              // queda por hacer.
-              isPast: nowMinutes >= 0 && end <= nowMinutes && !completed,
-              isNow: nowMinutes >= start && nowMinutes < end,
-              timeLabel: '${_fmt(start)} – ${_fmt(end)}',
-              onTap: () => widget.onTapBlock(block.task),
-              onToggle: () => widget.onToggleBlock(block.task),
-              onMoveStart: () => _onBlockDragStart(block.task, _DragMode.move),
-              onResizeStart: () => _onBlockDragStart(block.task, _DragMode.resize),
-              onDragUpdate: (dy) => _onBlockDragUpdate(dy, scale),
-              onDragEnd: _onBlockDragEnd,
+          final widgets = <Widget>[];
+
+          // Vista previa del bloque ajustado en la cuadrícula (dónde va a caer)
+          if (isDragging && drag!.mode == _DragMode.move) {
+            widgets.add(
+              Positioned(
+                top: scale.yForMinutes(drag.start),
+                left: left,
+                width: laneWidth,
+                height: height,
+                child: Opacity(
+                  opacity: 0.35,
+                  child: TimelineTaskCard(
+                    task: block.task,
+                    height: height,
+                    completed: completed,
+                    isPast: nowMinutes >= 0 && drag.end <= nowMinutes && !completed,
+                    isNow: nowMinutes >= drag.start && nowMinutes < drag.end,
+                    timeLabel: '${_fmt(drag.start)} – ${_fmt(drag.end)}',
+                    onTap: () {},
+                    onToggleComplete: () {},
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // El bloque que el usuario está arrastrando físicamente (sigue el dedo con suavidad)
+          final dragTop = isDragging && drag!.mode == _DragMode.move
+              ? scale.yForMinutes(drag.originalStart) + drag.currentOffset
+              : scale.yForMinutes(start);
+          final dragHeight = isDragging && drag!.mode == _DragMode.move
+              ? scale.heightForRange(drag.originalStart, drag.originalEnd)
+              : height;
+
+          widgets.add(
+            Positioned(
+              top: dragTop,
+              left: left,
+              width: laneWidth,
+              height: dragHeight,
+              child: _DraggableBlock(
+                skin: _skin,
+                key: ValueKey(block.task.id),
+                task: block.task,
+                height: dragHeight,
+                completed: completed,
+                isDragging: isDragging,
+                // Un bloque ya pasado y sin marcar se muestra apagado: no es un
+                // error, pero tampoco merece el mismo peso visual que lo que
+                // queda por hacer.
+                isPast: nowMinutes >= 0 && end <= nowMinutes && !completed,
+                isNow: nowMinutes >= start && nowMinutes < end,
+                timeLabel: isDragging
+                    ? '${_fmt(drag!.start)} – ${_fmt(drag.end)}'
+                    : '${_fmt(start)} – ${_fmt(end)}',
+                onTap: () => widget.onTapBlock(block.task),
+                onToggle: () => widget.onToggleBlock(block.task),
+                onMoveStart: () => _onBlockDragStart(block.task, _DragMode.move),
+                onResizeStart: () => _onBlockDragStart(block.task, _DragMode.resize),
+                onDragUpdate: (dy) => _onBlockDragUpdate(dy, scale),
+                onDragEnd: _onBlockDragEnd,
+              ),
             ),
           );
+
+          return widgets;
         }(),
     ];
   }
@@ -844,6 +844,7 @@ String _durationLabel(int minutes) {
 /// al scrollear); estirar usa el tirador de abajo, que es un objetivo
 /// explícito y no necesita pulsación previa.
 class _DraggableBlock extends StatelessWidget {
+  final _TimelineSkin skin;
   final Task task;
   final double height;
   final bool completed;
@@ -860,6 +861,7 @@ class _DraggableBlock extends StatelessWidget {
 
   const _DraggableBlock({
     super.key,
+    required this.skin,
     required this.task,
     required this.height,
     required this.completed,
@@ -896,7 +898,7 @@ class _DraggableBlock extends StatelessWidget {
         duration: const Duration(milliseconds: 140),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          boxShadow: isDragging ? BentoTheme.neuFloating(elevation: 18) : const [],
+          boxShadow: isDragging ? skin.dragShadow : const [],
         ),
         child: Stack(
           children: [
@@ -929,7 +931,7 @@ class _DraggableBlock extends StatelessWidget {
                       width: isDragging ? 34 : 24,
                       height: 3,
                       decoration: BoxDecoration(
-                        color: BentoTheme.creamAlpha(isDragging ? 0.55 : 0.16),
+                        color: skin.grip(isDragging),
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
@@ -939,6 +941,219 @@ class _DraggableBlock extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// Los tokens que separan una piel de la otra.
+///
+/// El timeline pinta seis cosas: la franja de foco, la rejilla de horas, la
+/// línea del ahora, el borrador (en sus dos fases), los chips de duración y el
+/// bloque mientras se arrastra. La geometría de las seis es común; esto es lo
+/// único que cambia.
+///
+/// Que sea una clase y no un puñado de `if` repartidos tiene una consecuencia
+/// práctica: al añadir un elemento al timeline hay que darle su token aquí, y
+/// entonces es imposible olvidarse de la otra piel.
+class _TimelineSkin {
+  const _TimelineSkin({
+    required this.peakFill,
+    required this.peakEdge,
+    required this.peakLabel,
+    required this.pillFill,
+    required this.pillInk,
+    required this.pillLabel,
+    required this.nowMark,
+    required this.nowRule,
+    required this.nowLabel,
+    required this.draftGhostFill,
+    required this.draftEdge,
+    required this.draftFill,
+    required this.draftBorder,
+    required this.draftShadow,
+    required this.draftRange,
+    required this.draftField,
+    required this.draftHint,
+    required this.draftInk,
+    required this.draftConfirm,
+    required this.draftDismiss,
+    required this.chipOnFill,
+    required this.chipOffFill,
+    required this.chipOnLabel,
+    required this.chipOffLabel,
+    required this.dragShadow,
+    required this.hourLine,
+    required this.halfHourLine,
+    required this.hourLabel,
+    required this.grip,
+  });
+
+  final Color peakFill;
+  final Color peakEdge;
+  final TextStyle peakLabel;
+
+  final Color pillFill;
+  final Color pillInk;
+  final TextStyle pillLabel;
+
+  final Color nowMark;
+  final Color nowRule;
+  final TextStyle nowLabel;
+
+  final Color draftGhostFill;
+  final Color draftEdge;
+  final Color draftFill;
+  final BoxBorder? draftBorder;
+  final List<BoxShadow> draftShadow;
+  final TextStyle draftRange;
+  final TextStyle draftField;
+  final TextStyle draftHint;
+  final Color draftInk;
+  final Color draftConfirm;
+  final Color draftDismiss;
+
+  final Color chipOnFill;
+  final Color chipOffFill;
+  final TextStyle chipOnLabel;
+  final TextStyle chipOffLabel;
+
+  final List<BoxShadow> dragShadow;
+
+  /// Los cuatro tokens que dependen del estado de la fila que se pinta.
+  final Color Function(bool isPast) hourLine;
+  final Color Function(bool isPast) halfHourLine;
+  final TextStyle Function({required bool isCurrent, required bool isPast}) hourLabel;
+  final Color Function(bool isDragging) grip;
+
+  /// Relieve: el acento lima manda y el ahora es rojo.
+  factory _TimelineSkin.neu() {
+    final accent = BentoTheme.accentLime;
+    return _TimelineSkin(
+      peakFill: accent.withValues(alpha: 0.05),
+      peakEdge: accent.withValues(alpha: 0.28),
+      peakLabel: GoogleFonts.montserrat(
+        fontSize: 8.5,
+        letterSpacing: 1.3,
+        fontWeight: FontWeight.w700,
+        color: accent.withValues(alpha: 0.4),
+      ),
+      pillFill: BentoTheme.creamAlpha(0.06),
+      pillInk: BentoTheme.creamAlpha(0.45),
+      pillLabel: GoogleFonts.montserrat(
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        color: BentoTheme.creamAlpha(0.45),
+      ),
+      nowMark: BentoTheme.errorRed,
+      nowRule: BentoTheme.errorRed.withValues(alpha: 0.75),
+      nowLabel: GoogleFonts.montserrat(
+        fontSize: 9,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.2,
+        color: Colors.white,
+      ),
+      draftGhostFill: accent.withValues(alpha: 0.16),
+      draftEdge: accent.withValues(alpha: 0.8),
+      draftFill: Color.alphaBlend(accent.withValues(alpha: 0.10), BentoTheme.neuSurface),
+      draftBorder: Border.all(color: accent.withValues(alpha: 0.75), width: 1.5),
+      draftShadow: BentoTheme.neuFloating(elevation: 14),
+      draftRange: GoogleFonts.montserrat(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.2,
+        color: accent,
+      ),
+      draftField: GoogleFonts.montserrat(
+        color: BentoTheme.cream,
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+      ),
+      draftHint: GoogleFonts.montserrat(
+        color: BentoTheme.creamAlpha(0.35),
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+      ),
+      draftInk: BentoTheme.cream,
+      draftConfirm: accent,
+      draftDismiss: BentoTheme.creamAlpha(0.45),
+      chipOnFill: accent,
+      chipOffFill: BentoTheme.creamAlpha(0.07),
+      chipOnLabel: GoogleFonts.montserrat(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF0C0C0D),
+      ),
+      chipOffLabel: GoogleFonts.montserrat(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        color: BentoTheme.creamAlpha(0.6),
+      ),
+      dragShadow: BentoTheme.neuFloating(elevation: 18),
+      hourLine: (isPast) => BentoTheme.creamAlpha(isPast ? 0.04 : 0.08),
+      halfHourLine: (isPast) => BentoTheme.creamAlpha(isPast ? 0.015 : 0.03),
+      hourLabel: ({required isCurrent, required isPast}) => GoogleFonts.montserrat(
+        fontSize: 10,
+        fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+        letterSpacing: 0.1,
+        color: isCurrent
+            ? BentoTheme.accentLime
+            : BentoTheme.creamAlpha(isCurrent ? 0.85 : (isPast ? 0.18 : 0.42)),
+      ),
+      grip: (isDragging) => BentoTheme.creamAlpha(isDragging ? 0.55 : 0.16),
+    );
+  }
+
+  /// Editorial: cero acento de marca, y **la línea del ahora es papel**.
+  ///
+  /// El rojo se descartó aquí a propósito. En este sistema el rojo significa
+  /// "esto destruye" —borrar una nota, eliminar una alarma— y gastarlo en algo
+  /// que ocurre continuamente y no es un error lo devaluaría. Además la línea
+  /// del ahora no necesita color: es la ÚNICA línea blanca sobre un lienzo
+  /// donde las horas son filetes al 8%, así que no se puede confundir con nada.
+  ///
+  /// La franja de foco pierde el relleno y se queda en un filete izquierdo. Un
+  /// bloque teñido de seis horas de alto compite con las tarjetas que viven
+  /// dentro de él, que es justo lo que hay que leer.
+  factory _TimelineSkin.editorial() {
+    return _TimelineSkin(
+      peakFill: Colors.transparent,
+      peakEdge: EditorialTheme.paperAlpha(0.18),
+      peakLabel: EditorialTheme.label(8.5, color: EditorialTheme.paperAlpha(0.3)),
+      pillFill: EditorialTheme.surfaceHigh,
+      pillInk: EditorialTheme.muted,
+      pillLabel: EditorialTheme.text(10.5, weight: FontWeight.w500, color: EditorialTheme.muted),
+      nowMark: EditorialTheme.paper,
+      nowRule: EditorialTheme.paperAlpha(0.85),
+      nowLabel: EditorialTheme.text(9.5, weight: FontWeight.w700, color: EditorialTheme.ink),
+      draftGhostFill: EditorialTheme.paperAlpha(0.14),
+      draftEdge: EditorialTheme.paperAlpha(0.7),
+      draftFill: EditorialTheme.paper,
+      // Sin borde ni sombra: sobre el lienzo oscuro, una lámina blanca ya se
+      // separa sola. Añadirle elevación sería pintar dos veces lo mismo.
+      draftBorder: null,
+      draftShadow: const [],
+      draftRange: EditorialTheme.text(11, weight: FontWeight.w700, color: EditorialTheme.grayText),
+      draftField: EditorialTheme.text(14.5, weight: FontWeight.w600, color: EditorialTheme.ink),
+      draftHint: EditorialTheme.text(14.5, color: EditorialTheme.grayText),
+      draftInk: EditorialTheme.ink,
+      draftConfirm: EditorialTheme.ink,
+      draftDismiss: EditorialTheme.grayText,
+      chipOnFill: EditorialTheme.ink,
+      chipOffFill: EditorialTheme.gray,
+      chipOnLabel: EditorialTheme.text(10.5, weight: FontWeight.w600, color: EditorialTheme.paper),
+      chipOffLabel: EditorialTheme.text(10.5, weight: FontWeight.w600, color: EditorialTheme.grayText),
+      dragShadow: const [],
+      hourLine: (isPast) => EditorialTheme.paperAlpha(isPast ? 0.05 : 0.10),
+      halfHourLine: (isPast) => EditorialTheme.paperAlpha(isPast ? 0.02 : 0.04),
+      hourLabel: ({required isCurrent, required isPast}) => EditorialTheme.text(
+        10.5,
+        weight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+        color: isCurrent
+            ? EditorialTheme.paper
+            : EditorialTheme.paperAlpha(isPast ? 0.22 : 0.45),
+      ),
+      grip: (isDragging) => EditorialTheme.paperAlpha(isDragging ? 0.7 : 0.22),
     );
   }
 }

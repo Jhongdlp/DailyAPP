@@ -15,7 +15,10 @@ import '../../core/widgets/rpg_celebration.dart';
 import '../../core/services/alarm_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/lock_task_service.dart';
+import '../../core/providers/appearance_provider.dart';
 import '../../core/theme/bento_theme.dart';
+import '../../core/theme/editorial_theme.dart';
+import '../../core/widgets/editorial_kit.dart';
 import 'challenge/challenge_screen.dart';
 import 'sleep/sleep_check_in_screen.dart';
 import 'widgets/camera_capture_screen.dart';
@@ -386,9 +389,23 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
+  //
+  // Esta pantalla es la ÚNICA de la app con dos pieles dentro del mismo
+  // archivo, y es deliberado. Encima hay ~380 líneas de lógica crítica —pausa
+  // del timbre con su temporizador de vuelta, token de verificación, modo
+  // pantalla fijada, cierre de la noche— donde un fallo significa que la
+  // alarma no suena o no se puede apagar. Duplicar ese archivo para cambiar
+  // tipografías garantizaba que las dos copias divergieran en la primera
+  // corrección; aquí sólo se bifurca el `build`.
+  //
+  // Nota de diseño: el editorial de esta pantalla NO usa papel de fondo. A las
+  // seis de la mañana, una lámina blanca a pantalla completa es un fogonazo.
+  // Se queda el lienzo oscuro y el papel se reserva para el botón de la
+  // cámara, que es lo único que hay que encontrar medio dormido.
 
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(designLanguageProvider).isEditorial) return _buildEditorial();
     if (_loading) {
       return Scaffold(
         backgroundColor: BentoTheme.darkBg,
@@ -747,6 +764,438 @@ class _AlarmDismissScreenState extends ConsumerState<AlarmDismissScreen> {
             text,
             style: TextStyle(
                 color: color, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────── piel editorial ───────────────────────
+
+  static final Color _edDanger =
+      EditorialTheme.accentAt(const Color(0xFFE5484D), 0.62);
+
+  Widget _buildEditorial() {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: EditorialTheme.canvas,
+        body: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: EditorialTheme.paper),
+          ),
+        ),
+      );
+    }
+
+    final alarm = _alarm;
+    if (alarm == null) return _edNotFound();
+
+    final success = _verdict == PhotoVerdict.yes;
+
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        // Al acertar, el lienzo se invierte a papel: es el único momento en que
+        // esta pantalla puede permitirse el fogonazo, porque ya estás de pie y
+        // dura dos segundos.
+        backgroundColor: success ? EditorialTheme.paper : EditorialTheme.canvas,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.sizeOf(context).height - 44,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: success
+                    ? [_edSuccess()]
+                    : [
+                        _edClock(alarm),
+                        const SizedBox(height: 26),
+                        if (_silenced) ...[
+                          _edNotice(
+                            Icons.pause_circle_outline,
+                            'Timbre en pausa mientras verificas. Vuelve solo '
+                            'en ${_maxSilence.inMinutes} min.',
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_photo != null) ...[
+                          ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(EditorialTheme.radiusCard),
+                            child: SizedBox(
+                              height: 150,
+                              width: double.infinity,
+                              child: Image.file(_photo!, fit: BoxFit.cover),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _edTarget(alarm),
+                        if (_cameraDenied) ...[
+                          const SizedBox(height: 12),
+                          _edAlert(
+                            'Sin permiso de cámara no puedo validar la foto. '
+                            'Puedes apagarla con un reto mental.',
+                            action: (
+                              'Abrir ajustes',
+                              LockTaskService.openAppSettings,
+                            ),
+                          ),
+                        ],
+                        if (!_verifying) ...[
+                          if (_verdict == PhotoVerdict.no) ...[
+                            const SizedBox(height: 12),
+                            _edAlert(
+                              'No vi "${alarm.targetObject}". '
+                              'Intento $_attempts — prueba otra vez.',
+                            ),
+                          ],
+                          if (_verdict == PhotoVerdict.unclear) ...[
+                            const SizedBox(height: 12),
+                            _edAlert(
+                              'La IA no dio un veredicto claro. Repite la foto '
+                              'o resuelve un reto mental.',
+                            ),
+                          ],
+                          if (_aiError != null) ...[
+                            const SizedBox(height: 12),
+                            _edAlert('$_aiError Puedes apagarla con un reto mental.'),
+                          ],
+                        ],
+                        const SizedBox(height: 22),
+                        if (_verifying) _edVerifying() else _edActions(),
+                        const SizedBox(height: 16),
+                        _edAiStatus(),
+                      ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _edNotFound() {
+    return Scaffold(
+      backgroundColor: EditorialTheme.canvas,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(EditorialTheme.margin),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Alarma no encontrada',
+                style: EditorialTheme.text(18,
+                    weight: FontWeight.w600, color: EditorialTheme.paper),
+              ),
+              const SizedBox(height: 18),
+              EditorialPressable(
+                onTap: () => Navigator.of(context).pop(),
+                scale: 0.95,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: EditorialTheme.paper,
+                    borderRadius:
+                        BorderRadius.circular(EditorialTheme.radiusChip),
+                  ),
+                  child: Text(
+                    'Cerrar',
+                    style: EditorialTheme.text(14,
+                        weight: FontWeight.w600, color: EditorialTheme.ink),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// La hora, enorme. Es lo primero que se lee al abrir los ojos y lo único
+  /// que justifica ese tamaño en toda la app.
+  Widget _edClock(AlarmModel alarm) {
+    return Column(
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            alarm.formattedTime,
+            style: EditorialTheme.caps(
+              84,
+              color: EditorialTheme.paper,
+              letterSpacing: -4,
+              height: 0.9,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          alarm.label.toUpperCase(),
+          textAlign: TextAlign.center,
+          style: EditorialTheme.label(12, color: EditorialTheme.muted),
+        ),
+      ],
+    );
+  }
+
+  Widget _edSuccess() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.check, size: 72, color: EditorialTheme.ink),
+        const SizedBox(height: 18),
+        Text(
+          'ARRIBA',
+          textAlign: TextAlign.center,
+          style: EditorialTheme.caps(
+            46,
+            color: EditorialTheme.ink,
+            letterSpacing: -2,
+            height: 1.0,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Alarma apagada.',
+          textAlign: TextAlign.center,
+          style: EditorialTheme.text(16, color: EditorialTheme.grayText),
+        ),
+      ],
+    );
+  }
+
+  /// Qué hay que fotografiar. Va en papel porque es la instrucción: si sólo se
+  /// lee una cosa de la pantalla, tiene que ser esta.
+  Widget _edTarget(AlarmModel alarm) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: EditorialTheme.paper,
+        borderRadius: BorderRadius.circular(EditorialTheme.radiusCard),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.camera_alt_outlined, size: 26, color: EditorialTheme.ink),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'PARA APAGARLA, FOTOGRAFÍA',
+                  style: EditorialTheme.label(9.5, color: EditorialTheme.grayText),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  alarm.targetObject,
+                  style: EditorialTheme.text(19,
+                      weight: FontWeight.w600, color: EditorialTheme.ink),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Aviso neutro: algo está pasando, pero no has hecho nada mal.
+  Widget _edNotice(IconData icon, String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: EditorialTheme.surface,
+        borderRadius: BorderRadius.circular(EditorialTheme.radiusChip),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: EditorialTheme.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: EditorialTheme.text(12.5,
+                  color: EditorialTheme.paperAlpha(0.75), height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Algo salió mal. El rojo se queda en el filete lateral y no inunda el
+  /// bloque: un rectángulo rojo entero a las seis de la mañana se lee como una
+  /// bronca, y el usuario no ha hecho nada malo — la foto no salió, nada más.
+  Widget _edAlert(String message, {(String, VoidCallback)? action}) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: EditorialTheme.surface,
+        borderRadius: BorderRadius.circular(EditorialTheme.radiusChip),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 4, child: ColoredBox(color: _edDanger)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message,
+                      style: EditorialTheme.text(12.5,
+                          color: EditorialTheme.paperAlpha(0.85), height: 1.4),
+                    ),
+                    if (action != null) ...[
+                      const SizedBox(height: 8),
+                      EditorialPressable(
+                        onTap: action.$2,
+                        scale: 0.94,
+                        child: Text(
+                          action.$1,
+                          style: EditorialTheme.text(12.5,
+                              weight: FontWeight.w700, color: EditorialTheme.paper)
+                              .copyWith(decoration: TextDecoration.underline),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Mientras la IA mira la foto. El contador visible evita que parezca colgado
+  /// y el reto garantiza que nunca dependas de que el servidor conteste.
+  Widget _edVerifying() {
+    return Column(
+      children: [
+        const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: EditorialTheme.paper),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'MIRANDO LA FOTO · ${_elapsed}s DE ${_visionTimeout.inSeconds}s',
+          style: EditorialTheme.label(10.5, color: EditorialTheme.muted),
+        ),
+        const SizedBox(height: 16),
+        EditorialPressable(
+          onTap: _openChallenge,
+          scale: 0.95,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text(
+              'No esperar: resolver un reto',
+              style: EditorialTheme.text(14,
+                  weight: FontWeight.w600,
+                  color: EditorialTheme.paperAlpha(0.75)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _edActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Papel pleno: la inversión máxima disponible sobre el lienzo. Es lo
+        // único que hay que encontrar a tientas.
+        EditorialPressable(
+          onTap: _takePhoto,
+          scale: 0.97,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: EditorialTheme.paper,
+              borderRadius: BorderRadius.circular(EditorialTheme.radiusCard),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.camera_alt, size: 24, color: EditorialTheme.ink),
+                const SizedBox(width: 11),
+                Text(
+                  _photo == null ? 'Tomar foto' : 'Intentar otra vez',
+                  style: EditorialTheme.text(17,
+                      weight: FontWeight.w600, color: EditorialTheme.ink),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        EditorialPressable(
+          onTap: _openChallenge,
+          scale: 0.97,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: EditorialTheme.surfaceHigh,
+              borderRadius: BorderRadius.circular(EditorialTheme.radiusCard),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.psychology_alt_outlined,
+                    size: 20, color: EditorialTheme.paperAlpha(0.8)),
+                const SizedBox(width: 10),
+                Text(
+                  'Resolver un reto mental',
+                  style: EditorialTheme.text(15,
+                      weight: FontWeight.w600,
+                      color: EditorialTheme.paperAlpha(0.85)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Estado del servidor de IA, para saber a qué atenerte ANTES de gastar el
+  /// esfuerzo de ir hasta el objeto.
+  Widget _edAiStatus() {
+    final (icon, text) = switch (_aiReachable) {
+      null => (Icons.hourglass_empty, 'PREPARANDO EL MODELO DE VISIÓN'),
+      true => (Icons.bolt, 'IA LISTA — LA FOTO SE VALIDA RÁPIDO'),
+      false => (Icons.cloud_off, 'IA SIN CONEXIÓN — USA EL RETO MENTAL'),
+    };
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 13, color: EditorialTheme.muted),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(
+            text,
+            style: EditorialTheme.label(9.5, color: EditorialTheme.muted),
           ),
         ),
       ],

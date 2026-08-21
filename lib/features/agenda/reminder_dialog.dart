@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../core/providers/appearance_provider.dart';
 import '../../core/providers/tasks_provider.dart';
 import '../../core/theme/bento_theme.dart';
+import '../../core/theme/editorial_theme.dart';
+import '../../core/widgets/editorial_kit.dart';
 import '../alarm/widgets/bento_time_picker.dart';
+import '../alarm/widgets/editorial_time_picker.dart';
 
 /// Duración del bloque que respalda un recordatorio.
 ///
@@ -129,8 +133,14 @@ class _ReminderSheetState extends ConsumerState<_ReminderSheet> {
     return DateFormat("EEEE d 'de' MMMM", 'es').format(day);
   }
 
+  // Dos pieles, un solo State: `_defaultTime` (la siguiente hora en punto si
+  // el día es hoy), `_submit` y el aviso de hora pasada son la razón de ser de
+  // esta hoja y no pueden existir por duplicado.
+
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(designLanguageProvider).isEditorial) return _buildEditorial();
+
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return AnimatedPadding(
@@ -332,6 +342,161 @@ class _ReminderSheetState extends ConsumerState<_ReminderSheet> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: BentoTheme.accentOrange, width: 1.5),
+      ),
+    );
+  }
+
+  // ─────────────────────── piel editorial ───────────────────────
+
+  static final Color _edWarn =
+      EditorialTheme.accentAt(const Color(0xFFF4A261), 0.60);
+
+  Widget _buildEditorial() {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: EditorialTheme.paper,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(EditorialTheme.radiusPanel),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: EditorialTheme.grayStrong,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 14, 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'RECORDATORIO',
+                            style: EditorialTheme.caps(
+                              22,
+                              color: EditorialTheme.ink,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Para $_dayLabel',
+                            style: EditorialTheme.text(13, color: EditorialTheme.grayText),
+                          ),
+                        ],
+                      ),
+                    ),
+                    EditorialPressable(
+                      onTap: () => Navigator.of(context).pop(),
+                      scale: 0.88,
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(Icons.close, size: 20, color: EditorialTheme.grayText),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    EditorialField(
+                      controller: _titleController,
+                      hint: 'Llamar al dentista',
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      onChanged: (_) {
+                        if (_titleError != null) setState(() => _titleError = null);
+                      },
+                    ),
+                    if (_titleError != null) ...[
+                      const SizedBox(height: 7),
+                      Text(
+                        _titleError!,
+                        style: EditorialTheme.text(
+                          12.5,
+                          weight: FontWeight.w600,
+                          color: EditorialTheme.accentAt(const Color(0xFFE5484D), 0.52),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    // Los cuatro momentos del día cubren casi todo de un toque;
+                    // la rueda queda para el resto.
+                    Row(
+                      children: [
+                        for (final preset in _presets) ...[
+                          if (preset != _presets.first) const SizedBox(width: 7),
+                          Expanded(
+                            child: EditorialChoice(
+                              label: preset.label,
+                              compact: true,
+                              selected: _time.hour == preset.hour && _time.minute == 0,
+                              onTap: () => setState(() {
+                                _time = TimeOfDay(hour: preset.hour, minute: 0);
+                                // La rueda guarda su propia posición, así que
+                                // sólo se recrea cuando la hora se mueve por
+                                // fuera de ella.
+                                _pickerEpoch++;
+                              }),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    EditorialTimePicker(
+                      key: ValueKey(_pickerEpoch),
+                      initialTime: _time,
+                      onChanged: (t) => setState(() => _time = t),
+                    ),
+                    if (_isPast) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 15, color: _edWarn),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Esa hora ya pasó: quedará apuntado, pero no sonará.',
+                              style: EditorialTheme.text(
+                                12.5,
+                                weight: FontWeight.w600,
+                                color: _edWarn,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    EditorialButton(label: 'Recordármelo', onTap: _submit),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

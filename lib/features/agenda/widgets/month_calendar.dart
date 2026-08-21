@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../../../core/providers/appearance_provider.dart';
+import '../../../core/theme/editorial_theme.dart';
 import '../../../core/theme/bento_theme.dart';
 
 const _kDayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -35,7 +39,11 @@ class DayStats {
 /// deslizamientos. Aquí el mes entero cabe de un vistazo, con la densidad de
 /// cada día marcada en puntos para poder decidir *dónde* meter algo, no solo
 /// cuándo.
-class MonthCalendar extends StatefulWidget {
+/// Igual que el timeline, la piel se parametriza en vez de duplicarse: la
+/// cuadrícula de 7×6, el alto de celda y la lectura de densidad son idénticas
+/// en los dos lenguajes, y sólo cambian colores y tipografía. Ver
+/// [_CalendarSkin].
+class MonthCalendar extends ConsumerStatefulWidget {
   final DateTime selectedDay;
   final ValueChanged<DateTime> onSelect;
   final Color accentColor;
@@ -62,10 +70,12 @@ class MonthCalendar extends StatefulWidget {
   });
 
   @override
-  State<MonthCalendar> createState() => _MonthCalendarState();
+  ConsumerState<MonthCalendar> createState() => _MonthCalendarState();
 }
 
-class _MonthCalendarState extends State<MonthCalendar> {
+class _MonthCalendarState extends ConsumerState<MonthCalendar> {
+  late _CalendarSkin _skin;
+
   late final DateTime _today = _dateOnly(DateTime.now());
   late DateTime _visibleMonth = _monthOf(widget.selectedDay);
 
@@ -101,6 +111,10 @@ class _MonthCalendarState extends State<MonthCalendar> {
 
   @override
   Widget build(BuildContext context) {
+    _skin = ref.watch(designLanguageProvider).isEditorial
+        ? _CalendarSkin.editorial()
+        : _CalendarSkin.neu(widget.accentColor);
+
     final start = _gridStart;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
@@ -114,15 +128,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
               for (final label in _kDayLabels)
                 Expanded(
                   child: Center(
-                    child: Text(
-                      label,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 10,
-                        letterSpacing: 0.8,
-                        fontWeight: FontWeight.w700,
-                        color: BentoTheme.creamAlpha(0.35),
-                      ),
-                    ),
+                    child: Text(label, style: _skin.weekdayLabel),
                   ),
                 ),
             ],
@@ -164,12 +170,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
           child: Center(
             child: Text(
               '${_kMonthNames[_visibleMonth.month - 1]} ${_visibleMonth.year}',
-              style: GoogleFonts.montserrat(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-                color: BentoTheme.cream,
-              ),
+              style: _skin.monthTitle,
             ),
           ),
         ),
@@ -179,14 +180,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
             onTap: () => setState(() => _visibleMonth = _monthOf(_today)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Text(
-                'Hoy',
-                style: GoogleFonts.montserrat(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: widget.accentColor,
-                ),
-              ),
+              child: Text('Hoy', style: _skin.todayLink),
             ),
           ),
         _monthArrow(Icons.chevron_right_rounded, () => _shiftMonth(1)),
@@ -200,7 +194,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Icon(icon, size: 22, color: BentoTheme.creamAlpha(0.55)),
+        child: Icon(icon, size: 22, color: _skin.arrowInk),
       ),
     );
   }
@@ -215,13 +209,6 @@ class _MonthCalendarState extends State<MonthCalendar> {
     final stats = inMonth ? widget.statsFor(day) : const DayStats();
     final count = stats.blocks;
 
-    final Color fg = isSelected
-        ? const Color(0xFF0C0C0D)
-        : !inMonth
-            // Los días de relleno se dejan visibles pero apagados: sirven para
-            // orientarse en la semana, no para tocarlos por error.
-            ? BentoTheme.creamAlpha(0.16)
-            : (isPast ? BentoTheme.creamAlpha(0.38) : BentoTheme.cream);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -233,25 +220,22 @@ class _MonthCalendarState extends State<MonthCalendar> {
           curve: Curves.easeOut,
           height: 42,
           decoration: BoxDecoration(
-            color: isSelected
-                ? widget.accentColor
-                : (count > 0 ? BentoTheme.creamAlpha(0.05) : Colors.transparent),
+            color: _skin.cellFill(selected: isSelected, hasBlocks: count > 0),
             borderRadius: BorderRadius.circular(13),
-            border: isToday && !isSelected
-                ? Border.all(color: widget.accentColor.withValues(alpha: 0.55), width: 1.5)
-                : null,
+            border: _skin.cellBorder(isToday: isToday, selected: isSelected),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 '${day.day}',
-                style: GoogleFonts.montserrat(
-                  fontSize: 14.5,
-                  height: 1.0,
-                  fontWeight: isToday || isSelected ? FontWeight.w800 : FontWeight.w600,
-                  letterSpacing: -0.3,
-                  color: fg,
+                // Los días de relleno se dejan visibles pero apagados: sirven
+                // para orientarse en la semana, no para tocarlos por error.
+                style: _skin.dayNumber(
+                  selected: isSelected,
+                  inMonth: inMonth,
+                  isPast: isPast,
+                  isToday: isToday,
                 ),
               ),
               const SizedBox(height: 4),
@@ -280,12 +264,9 @@ class _MonthCalendarState extends State<MonthCalendar> {
         ? shown
         : (stats.reminders * shown / stats.blocks).round();
 
-    final base = isSelected
-        ? const Color(0xFF0C0C0D).withValues(alpha: 0.5)
-        : BentoTheme.creamAlpha(isPast ? 0.2 : 0.38);
-    final reminderColor = isSelected
-        ? const Color(0xFF0C0C0D).withValues(alpha: 0.65)
-        : BentoTheme.accentOrange.withValues(alpha: isPast ? 0.35 : 0.75);
+    final base = _skin.dot(selected: isSelected, isPast: isPast, reminder: false);
+    final reminderColor =
+        _skin.dot(selected: isSelected, isPast: isPast, reminder: true);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -316,26 +297,19 @@ class _MonthCalendarState extends State<MonthCalendar> {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            _dayLabel(stats),
-            style: GoogleFonts.montserrat(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: BentoTheme.creamAlpha(stats.isEmpty ? 0.35 : 0.55),
-            ),
-          ),
+          child: Text(_dayLabel(stats), style: _skin.footLabel(stats.isEmpty)),
         ),
         _actionPill(
           icon: Icons.notifications_none_rounded,
           label: 'Recordatorio',
-          color: BentoTheme.accentOrange,
+          primary: false,
           onTap: widget.onAddReminder,
         ),
         const SizedBox(width: 8),
         _actionPill(
           icon: Icons.add_rounded,
           label: 'Bloque',
-          color: widget.accentColor,
+          primary: true,
           onTap: widget.onAddBlock,
         ),
       ],
@@ -351,32 +325,216 @@ class _MonthCalendarState extends State<MonthCalendar> {
     return '$blocks · ${stats.reminders} con aviso';
   }
 
+  /// Las dos formas de añadir. [primary] distingue la principal —crear un
+  /// bloque con horario— del atajo del aviso suelto.
   Widget _actionPill({
     required IconData icon,
     required String label,
-    required Color color,
+    required bool primary,
     required VoidCallback onTap,
   }) {
+    final ink = _skin.pillInk(primary);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.13),
+          color: _skin.pillFill(primary),
           borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
+          border: _skin.pillBorder(primary),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: color),
+            Icon(icon, size: 15, color: ink),
             const SizedBox(width: 5),
-            Text(
-              label,
-              style: GoogleFonts.montserrat(fontSize: 11.5, fontWeight: FontWeight.w700, color: color),
-            ),
+            Text(label, style: _skin.pillLabel(primary)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Los tokens que separan una piel de la otra en el calendario.
+///
+/// Mismo criterio que `_TimelineSkin`: la cuadrícula es geometría común y esto
+/// es lo único que cambia. Añadir un elemento obliga a darle su token aquí, y
+/// entonces no se puede olvidar la otra piel.
+class _CalendarSkin {
+  const _CalendarSkin({
+    required this.weekdayLabel,
+    required this.monthTitle,
+    required this.todayLink,
+    required this.arrowInk,
+    required this.cellFill,
+    required this.cellBorder,
+    required this.dayNumber,
+    required this.dot,
+    required this.footLabel,
+    required this.pillFill,
+    required this.pillBorder,
+    required this.pillInk,
+    required this.pillLabel,
+  });
+
+  final TextStyle weekdayLabel;
+  final TextStyle monthTitle;
+  final TextStyle todayLink;
+  final Color arrowInk;
+
+  final Color Function({required bool selected, required bool hasBlocks}) cellFill;
+  final BoxBorder? Function({required bool isToday, required bool selected}) cellBorder;
+  final TextStyle Function({
+    required bool selected,
+    required bool inMonth,
+    required bool isPast,
+    required bool isToday,
+  }) dayNumber;
+
+  /// Los puntos de densidad. [reminder] distingue "ese día tengo cosas" de
+  /// "ese día algo va a sonar", que es la única diferencia que el calendario
+  /// necesita comunicar a este tamaño.
+  final Color Function({
+    required bool selected,
+    required bool isPast,
+    required bool reminder,
+  }) dot;
+
+  final TextStyle Function(bool isEmpty) footLabel;
+
+  final Color Function(bool primary) pillFill;
+  final BoxBorder? Function(bool primary) pillBorder;
+  final Color Function(bool primary) pillInk;
+  final TextStyle Function(bool primary) pillLabel;
+
+  factory _CalendarSkin.neu(Color accent) {
+    const onAccent = Color(0xFF0C0C0D);
+    return _CalendarSkin(
+      weekdayLabel: GoogleFonts.montserrat(
+        fontSize: 10,
+        letterSpacing: 0.8,
+        fontWeight: FontWeight.w700,
+        color: BentoTheme.creamAlpha(0.35),
+      ),
+      monthTitle: GoogleFonts.montserrat(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.2,
+        color: BentoTheme.cream,
+      ),
+      todayLink: GoogleFonts.montserrat(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: accent,
+      ),
+      arrowInk: BentoTheme.creamAlpha(0.55),
+      cellFill: ({required selected, required hasBlocks}) => selected
+          ? accent
+          : (hasBlocks ? BentoTheme.creamAlpha(0.05) : Colors.transparent),
+      cellBorder: ({required isToday, required selected}) => isToday && !selected
+          ? Border.all(color: accent.withValues(alpha: 0.55), width: 1.5)
+          : null,
+      dayNumber: ({required selected, required inMonth, required isPast, required isToday}) =>
+          GoogleFonts.montserrat(
+        fontSize: 14.5,
+        height: 1.0,
+        fontWeight: isToday || selected ? FontWeight.w800 : FontWeight.w600,
+        letterSpacing: -0.3,
+        color: selected
+            ? onAccent
+            : !inMonth
+                ? BentoTheme.creamAlpha(0.16)
+                : (isPast ? BentoTheme.creamAlpha(0.38) : BentoTheme.cream),
+      ),
+      dot: ({required selected, required isPast, required reminder}) {
+        if (selected) {
+          return onAccent.withValues(alpha: reminder ? 0.65 : 0.5);
+        }
+        return reminder
+            ? BentoTheme.accentOrange.withValues(alpha: isPast ? 0.35 : 0.75)
+            : BentoTheme.creamAlpha(isPast ? 0.2 : 0.38);
+      },
+      footLabel: (isEmpty) => GoogleFonts.montserrat(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w600,
+        color: BentoTheme.creamAlpha(isEmpty ? 0.35 : 0.55),
+      ),
+      pillFill: (primary) => (primary ? accent : BentoTheme.accentOrange)
+          .withValues(alpha: 0.13),
+      pillBorder: (primary) => Border.all(
+        color: (primary ? accent : BentoTheme.accentOrange).withValues(alpha: 0.4),
+      ),
+      pillInk: (primary) => primary ? accent : BentoTheme.accentOrange,
+      pillLabel: (primary) => GoogleFonts.montserrat(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: primary ? accent : BentoTheme.accentOrange,
+      ),
+    );
+  }
+
+  /// Editorial: el día elegido se invierte a papel y el resto es superficie.
+  ///
+  /// El día de hoy ya no lleva filete de acento sino **negrita**. En una
+  /// cuadrícula de 42 celdas, un borde de color es una silueta más compitiendo
+  /// con la del día elegido; el peso tipográfico distingue igual de bien y no
+  /// añade geometría.
+  ///
+  /// Los puntos de recordatorio conservan el ámbar. Es el único color de la
+  /// pieza y ahí sí es dato: separa "ese día tengo cosas" de "ese día algo va a
+  /// sonar", que es lo que se viene a mirar en un calendario de mes.
+  factory _CalendarSkin.editorial() {
+    final amber = EditorialTheme.accentAt(const Color(0xFFF4A261), 0.72);
+
+    return _CalendarSkin(
+      weekdayLabel: EditorialTheme.label(9.5, color: EditorialTheme.muted),
+      monthTitle: EditorialTheme.text(
+        14.5,
+        weight: FontWeight.w600,
+        color: EditorialTheme.paper,
+      ),
+      todayLink: EditorialTheme.text(
+        12,
+        weight: FontWeight.w600,
+        color: EditorialTheme.paperAlpha(0.75),
+      ),
+      arrowInk: EditorialTheme.paperAlpha(0.55),
+      cellFill: ({required selected, required hasBlocks}) => selected
+          ? EditorialTheme.paper
+          : (hasBlocks ? EditorialTheme.surface : Colors.transparent),
+      // Ver la nota de la clase: hoy se marca con peso, no con borde.
+      cellBorder: ({required isToday, required selected}) => null,
+      dayNumber: ({required selected, required inMonth, required isPast, required isToday}) =>
+          EditorialTheme.text(
+        15,
+        weight: isToday || selected ? FontWeight.w700 : FontWeight.w500,
+        color: selected
+            ? EditorialTheme.ink
+            : !inMonth
+                ? EditorialTheme.paperAlpha(0.18)
+                : EditorialTheme.paperAlpha(isPast ? 0.4 : 0.9),
+      ),
+      dot: ({required selected, required isPast, required reminder}) {
+        if (selected) {
+          return reminder ? amber : EditorialTheme.inkAlpha(0.45);
+        }
+        return reminder
+            ? amber.withValues(alpha: isPast ? 0.45 : 0.9)
+            : EditorialTheme.paperAlpha(isPast ? 0.22 : 0.4);
+      },
+      footLabel: (isEmpty) => EditorialTheme.text(
+        12,
+        weight: FontWeight.w500,
+        color: isEmpty ? EditorialTheme.muted : EditorialTheme.paperAlpha(0.65),
+      ),
+      pillFill: (primary) => primary ? EditorialTheme.paper : EditorialTheme.surfaceHigh,
+      pillBorder: (primary) => null,
+      pillInk: (primary) => primary ? EditorialTheme.ink : EditorialTheme.paperAlpha(0.8),
+      pillLabel: (primary) => EditorialTheme.text(
+        12,
+        weight: FontWeight.w600,
+        color: primary ? EditorialTheme.ink : EditorialTheme.paperAlpha(0.85),
       ),
     );
   }

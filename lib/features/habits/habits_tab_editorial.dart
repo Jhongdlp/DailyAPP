@@ -17,10 +17,10 @@ import '../../core/theme/editorial_theme.dart';
 import '../../core/utils/error_snackbar.dart';
 import '../../core/widgets/rpg_celebration.dart';
 import '../exercise/exercise_capture_flow.dart';
-import 'habit_detail_screen.dart';
+import 'habit_detail_editorial.dart';
 import 'widgets/notched_card.dart';
-import 'habit_form_dialog.dart';
-import 'habit_template_picker.dart';
+import 'habit_form_editorial.dart';
+import 'habit_template_picker_editorial.dart';
 import 'widgets/habit_glyph.dart';
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -511,7 +511,7 @@ class _HabitsTabEditorialState extends ConsumerState<HabitsTabEditorial> {
           _circleButton(
             icon: Icons.auto_awesome_outlined,
             tooltip: 'Elegir hábito prearmado',
-            onTap: () => showHabitTemplatePicker(context, ref),
+            onTap: () => showHabitTemplatePickerEditorial(context, ref),
           ),
           const SizedBox(width: 8),
           _circleButton(
@@ -524,7 +524,7 @@ class _HabitsTabEditorialState extends ConsumerState<HabitsTabEditorial> {
           _circleButton(
             icon: Icons.add,
             tooltip: 'Nuevo hábito',
-            onTap: () => showHabitFormDialog(context, ref),
+            onTap: () => showHabitFormEditorial(context, ref),
           ),
         ],
       ),
@@ -865,16 +865,17 @@ class _HabitsTabEditorialState extends ConsumerState<HabitsTabEditorial> {
   ///
   /// Tres decisiones sostienen la pieza:
   ///
-  ///  1. **Todo el color vive en el bloque del icono.** El resto de la tarjeta
-  ///     es papel y tinta, sin excepción. Con siete hábitos en pantalla, siete
-  ///     bloques de color en la misma columna izquierda se leen como un índice;
-  ///     los mismos siete colores repartidos por texto, aros y cuadraditos se
-  ///     leen como ruido.
-  ///  2. **El bloque es el medidor.** Pendiente es un lavado del acento; hecho
-  ///     es el acento pleno con el glifo en blanco. Completar no cambia la
-  ///     temperatura de la pantalla: llena un bloque. Los hábitos con meta
-  ///     suben ese relleno desde abajo, así que el color mismo dice cuánto
-  ///     falta sin un número al lado.
+  ///  1. **La tarjeta es papel y tinta, sin excepción.** Un solo material y una
+  ///     sola tinta cálida en distintas intensidades. El color del hábito
+  ///     sobrevive en un único sitio —los cuadraditos de la semana— porque ahí
+  ///     es dato: qué días sí y qué días no. En cuanto aparece en una segunda
+  ///     pieza deja de ser acento y pasa a ser tema, y la lista de hábitos se
+  ///     convierte en una lista de colores.
+  ///  2. **El glifo no tiene caja.** Se apoya directo en el papel y alineado al
+  ///     eje del título, así que icono y nombre se leen como un bloque. Ver
+  ///     [_IconBlock]: el rectángulo gris que lo envolvía tenía 1.05 de
+  ///     contraste contra la tarjeta, o sea que no aportaba superficie — sólo
+  ///     un filo que partía la fila en dos materiales.
   ///  3. **El botón está fuera de la silueta.** No flota encima de la tarjeta:
   ///     la tarjeta está mordida y él ocupa el hueco, separado por un canal de
   ///     aire constante. Ver [NotchedCardBorder] para por qué el radio de abajo
@@ -906,7 +907,7 @@ class _HabitsTabEditorialState extends ConsumerState<HabitsTabEditorial> {
 
     return _Pressable(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => HabitDetailScreen(habitId: habit.id)),
+        MaterialPageRoute(builder: (_) => HabitDetailEditorial(habitId: habit.id)),
       ),
       scale: 0.985,
       // La inversión se interpola en vez de saltar: `t` va de 0 (pendiente) a
@@ -1000,10 +1001,7 @@ class _HabitsTabEditorialState extends ConsumerState<HabitsTabEditorial> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _IconBlock(
-                      icon: HabitGlyph.of(habit),
-                      ratio: goal == null ? 0.0 : ratio,
-                    ),
+                    _IconBlock(icon: HabitGlyph.of(habit), t: t),
                     // Área de contenido derecha
                     Expanded(
                       child: Padding(
@@ -1489,75 +1487,96 @@ class _HabitTransitionWrapperState extends State<_HabitTransitionWrapper>
   }
 }
 
-/// El bloque del icono: identidad del hábito y medidor a la vez.
+/// La columna del glifo: el icono del hábito, sin caja.
 ///
-/// Carga con dos trabajos:
+/// **No hay bloque.** El glifo se apoya directo en el papel de la tarjeta, y
+/// esa es toda la pieza. Vivió dentro de un rectángulo gris y el rectángulo
+/// era el problema: `gray` sobre `paper` son catorce niveles de luminosidad
+/// —1.05 de contraste— así que nunca llegó a leerse como una superficie. Lo
+/// que sí se leía era su filo, un canto vertical a 64px del borde que partía
+/// la tarjeta en dos materiales sin que el de la izquierda dijera nada. El
+/// icono no estaba *en* la tarjeta: estaba en una caja apoyada sobre ella.
 ///
-///  - **Identidad.** El glifo a 26px sobre una superficie propia se reconoce de
-///    un vistazo en una lista larga, cosa que un icono de 20px suelto sobre el
-///    papel no consigue.
-///  - **Medida.** Para los hábitos con meta, el gris sube desde abajo con la
-///    fracción del día que llevás. El bloque dice cuánto falta sin escribirlo.
+/// Quitada la caja quedan dos cosas, y las dos van a favor:
 ///
-/// **El bloque es gris siempre, en todas las tarjetas.** No se tiñe del color
-/// del hábito ni al completarlo. Antes el bloque, el chip, los cuadraditos y la
-/// llama llevaban todos el acento, y cuatro sitios con el mismo color no son un
-/// acento: son un tema. En esta pantalla el color sobrevive en un solo sitio,
-/// los cuadraditos de la semana, porque ahí es dato —qué días sí y qué días
-/// no— y no decoración. Todo lo demás es la escala neutra.
+///  - **El glifo gana protagonismo sin crecer tanto.** Pasa de 26 a 32px, pero
+///    el salto real es que deja de competir con el borde de su propia caja.
+///    Antes el ojo veía un rectángulo con algo dentro; ahora ve el icono.
+///  - **Una sola tinta, un solo material.** La tarjeta entera es papel y todo
+///    lo que hay encima es la misma tinta cálida en distintas intensidades. Es
+///    el sistema editorial funcionando sin excepciones, que es de donde sale la
+///    lectura en blanco y negro.
 ///
-/// El bloque no lleva estado, y eso es a propósito: dice **qué** hábito es, no
-/// cómo va. El estado vive en el chip de la esquina, en el tachado del título y
-/// en los cuadraditos. Repetirlo aquí era lo que obligaba a meterle color.
-///
-/// El gris es claro y no oscuro por una razón concreta: el bloque toca el filo
-/// izquierdo de la tarjeta, que a su vez toca el lienzo casi negro. Un bloque
-/// oscuro se funde con el fondo y la tarjeta parece empezar 64px más a la
-/// derecha, con el glifo flotando fuera de ella.
+/// El medidor de avance que subía dentro del bloque no se perdió: se fue al aro
+/// del chip de la esquina, que ya se llenaba desde abajo con la misma fracción
+/// (ver `_NotchToggleState._pendingMark`). Eran dos medidores diciendo lo
+/// mismo, y el que sobrevive es el que está dentro del control que se toca.
 class _IconBlock extends StatelessWidget {
   const _IconBlock({
     required this.icon,
-    required this.ratio,
+    required this.t,
   });
 
   final IconData icon;
 
-  /// Avance del día para hábitos con meta, 0–1. Sin meta va en 0.
-  final double ratio;
+  /// Estado de completado interpolado, 0 (pendiente) → 1 (hecho).
+  ///
+  /// El glifo se apaga con exactamente la misma curva que el título —ver el
+  /// alfa del nombre del hábito en `_habitCard`— y no con una propia. Es lo que
+  /// hace que un hábito marcado se retire como una fila entera en vez de
+  /// desvanecerse por partes.
+  final double t;
 
-  /// Ancho del bloque. Suficiente para que el glifo respire a 26px; más ancho
-  /// y empieza a comerse el título en pantallas chicas.
-  static const double width = 64;
+  /// Ancho de la columna: margen izquierdo + glifo, sin aire a la derecha.
+  ///
+  /// La columna se estrechó de 64 a 48 al quitarle la caja, y no es un detalle
+  /// de milímetros. Mientras hubo bloque, el filo gris a 64px hacía de
+  /// separador y el glifo podía ir centrado dentro; sin filo, lo único que
+  /// separa el icono del título es aire, y ahí había 31px. A esa distancia
+  /// dejan de leerse como una unidad: parecen dos columnas de una tabla.
+  ///
+  /// Con la columna a 48 el glifo ocupa de 16 a 48 y el título arranca en 64,
+  /// que es el ancho de la columna más los 16 del padding del contenido. Todo
+  /// el borde izquierdo de la tarjeta cae entonces en el mismo ritmo de 16 que
+  /// ya usaba el padding vertical: margen 16, glifo, canal 16, texto.
+  static const double width = 48;
+
+  /// Margen izquierdo del glifo. El mismo 16 del padding de la tarjeta, para
+  /// que el icono y el texto arranquen del mismo borde imaginario.
+  static const double _leftMargin = 16;
+
+  static const double glyphSize = 32;
+
+  /// Cuánto baja el glifo desde el borde superior de la tarjeta.
+  ///
+  /// **No está centrado verticalmente, y es la decisión que más se nota.** Un
+  /// glifo centrado en una columna de ~100px cae a la altura de los cuadraditos
+  /// de la semana, a dos renglones del título, y ahí no acompaña a nada: flota.
+  /// Alineado al eje del título los dos se leen como un bloque —icono y nombre
+  /// del hábito— y la fila recupera un punto de entrada claro.
+  ///
+  /// El número sale de la métrica del título: 16 de padding superior más la
+  /// mitad de su caja de línea (18px de cuerpo por ~1.26 de interlineado de
+  /// Outfit) sitúan su eje en ~27; restarle medio glifo da 11.
+  static const double _titleAxisTop = 11;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: Stack(
-        children: [
-          const Positioned.fill(child: ColoredBox(color: EditorialTheme.gray)),
-          // El avance sube en el escalón siguiente de la misma escala. Dos
-          // grises vecinos bastan para leer un nivel; un salto mayor convertiría
-          // el bloque en un gráfico y le robaría el sitio al glifo.
-          if (ratio > 0)
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: ratio),
-                  duration: const Duration(milliseconds: 340),
-                  curve: EditorialTheme.curve,
-                  builder: (context, v, _) => FractionallySizedBox(
-                    heightFactor: v,
-                    child: const ColoredBox(color: EditorialTheme.grayStrong),
-                  ),
-                ),
-              ),
-            ),
-          Center(
-            child: Icon(icon, size: 26, color: EditorialTheme.ink),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(
+            left: _leftMargin,
+            top: _titleAxisTop,
           ),
-        ],
+          child: Icon(
+            icon,
+            size: glyphSize,
+            color: EditorialTheme.ink.withValues(alpha: 1.0 - 0.55 * t),
+          ),
+        ),
       ),
     );
   }
@@ -1571,17 +1590,17 @@ class _IconBlock extends StatelessWidget {
 /// blancos brillantes en el borde derecho de la lista, y esos cuadrados pesan
 /// más que los hábitos. El mordisco ya cuenta esa historia solo.
 ///
-/// Lo que sí lleva color desde el principio es la **marca**. Con el aro en
-/// blanco al 28% sobre un chip casi negro no había contraste para verla de
-/// reojo, que es como se mira esta pantalla; y subir ese blanco lo único que
-/// hacía era devolverle al botón el peso que se le acababa de quitar. Con el
-/// acento del hábito el aro salta sin necesidad de ser más grande ni más claro,
-/// y de paso adelanta de qué color se va a poner el chip al marcarlo: la
-/// transición deja de ser un cambio de color y pasa a ser el mismo color
-/// llenándose.
+/// La **marca** de apagado es un aro en gris de texto, opaco. El problema que
+/// tenía antes no era su color sino su alfa: en blanco al 28% sobre un chip
+/// claro no había nada que ver de reojo, que es como se mira esta pantalla. Un
+/// gris sólido de la escala se lee sin necesitar color ni más grosor.
 ///
-/// Es la única concesión a la regla de que el color vive sólo en el bloque del
-/// icono. Se la gana porque el aro es la pieza que dice "esto se puede tocar".
+/// Ese aro es además **el único medidor de avance de la tarjeta**. Se llena
+/// desde abajo con la fracción del día, y desde que la columna del glifo perdió
+/// su caja (ver [_IconBlock]) es el que queda: antes el bloque de la izquierda
+/// contaba lo mismo desde el otro extremo de la fila. De los dos sobrevive el
+/// que está dentro del control que se toca — el sitio donde el usuario ya está
+/// mirando cuando suma un paso.
 class _NotchToggle extends StatefulWidget {
   const _NotchToggle({
     required this.done,
@@ -1630,11 +1649,11 @@ class _NotchToggleState extends State<_NotchToggle>
       width: NotchMetrics.buttonWidth,
       height: NotchMetrics.buttonHeight,
       decoration: BoxDecoration(
-        // Con el bloque del icono ya neutro, el chip es lo único que queda para
-        // decir "hecho", y lo dice sin color: invierte. Apagado es el mismo gris
-        // que el bloque; marcado es tinta plena con el check en blanco, que es
-        // el contraste más alto que hay en la escala. Un chip de color decía lo
-        // mismo pero volvía a meter el acento en una segunda pieza.
+        // El chip es lo único que dice "hecho", y lo dice sin color: invierte.
+        // Apagado es el gris neutro de la escala; marcado es tinta plena con el
+        // check en blanco, que es el contraste más alto que existe en el
+        // sistema. Un chip de color decía lo mismo y a cambio metía el único
+        // acento de la pantalla en la esquina más chica de la tarjeta.
         color: widget.done ? EditorialTheme.ink : EditorialTheme.gray,
         borderRadius: BorderRadius.circular(NotchMetrics.buttonRadius),
         // El filete sólo existe apagado: es lo que separa el chip del papel de

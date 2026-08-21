@@ -3,14 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_palette.dart';
+import '../theme/design_language.dart';
 
-/// Toda la apariencia elegida por el usuario: modo, paleta y material.
+/// Toda la apariencia elegida por el usuario: lenguaje, modo, paleta y material.
 ///
 /// Los colores resueltos viven aquí y no se recalculan en cada build: derivar
 /// una paleta son ~11k comprobaciones de gamut, barato una vez y caro sesenta
 /// veces por segundo.
 @immutable
 class AppearanceState {
+  /// Qué implementación de pantalla se monta donde hay dos. Ver
+  /// [DesignLanguage]: no es un color, es una elección de composición, y por
+  /// eso no entra en [resolved] ni sobrevive a [resetAll] junto a la paleta.
+  final DesignLanguage design;
+
   final ThemeMode mode;
   final PaletteSpec palette;
 
@@ -21,6 +27,7 @@ class AppearanceState {
   final ResolvedPalette resolved;
 
   const AppearanceState._({
+    required this.design,
     required this.mode,
     required this.palette,
     required this.material,
@@ -28,11 +35,13 @@ class AppearanceState {
   });
 
   factory AppearanceState({
+    required DesignLanguage design,
     required ThemeMode mode,
     required PaletteSpec palette,
     required MaterialSpec? material,
   }) =>
       AppearanceState._(
+        design: design,
         mode: mode,
         palette: palette,
         material: material,
@@ -40,18 +49,21 @@ class AppearanceState {
       );
 
   static AppearanceState get defaults => AppearanceState(
+        design: DesignLanguage.defaults,
         mode: ThemeMode.dark,
         palette: PaletteSpec.defaults,
         material: MaterialSpec.defaults,
       );
 
   AppearanceState copyWith({
+    DesignLanguage? design,
     ThemeMode? mode,
     PaletteSpec? palette,
     MaterialSpec? material,
     bool clearMaterial = false,
   }) =>
       AppearanceState(
+        design: design ?? this.design,
         mode: mode ?? this.mode,
         palette: palette ?? this.palette,
         material: clearMaterial ? null : (material ?? this.material),
@@ -68,6 +80,7 @@ class AppearanceState {
   /// remontar el árbol: media app son widgets const que leen los getters
   /// estáticos de BentoTheme y no se reconstruirían solos al cambiar la paleta.
   Object get signature => Object.hash(
+        design,
         mode,
         palette.presetId,
         palette.seedHue,
@@ -77,12 +90,14 @@ class AppearanceState {
       );
 
   Map<String, dynamic> toJson() => {
+        'design': design.name,
         'mode': mode.name,
         'palette': palette.toJson(),
         'material': material?.toJson(),
       };
 
   factory AppearanceState.fromJson(Map<String, dynamic> json) => AppearanceState(
+        design: DesignLanguage.byName(json['design'] as String?),
         mode: ThemeMode.values.firstWhere(
           (m) => m.name == json['mode'],
           orElse: () => ThemeMode.dark,
@@ -135,6 +150,11 @@ class AppearanceNotifier extends Notifier<AppearanceState> {
     await prefs.setString(_prefsKey, jsonEncode(state.toJson()));
   }
 
+  void setDesign(DesignLanguage design) {
+    state = state.copyWith(design: design);
+    _persist();
+  }
+
   void setMode(ThemeMode mode) {
     state = state.copyWith(mode: mode);
     _persist();
@@ -175,7 +195,7 @@ class AppearanceNotifier extends Notifier<AppearanceState> {
   void commit() => _persist();
 
   void resetAll() {
-    state = AppearanceState.defaults.copyWith(mode: state.mode);
+    state = AppearanceState.defaults.copyWith(mode: state.mode, design: state.design);
     _persist();
   }
 }
@@ -185,3 +205,11 @@ final appearanceProvider =
 
 /// Atajo de solo lectura para quien únicamente necesita el modo.
 final themeModeProvider = Provider<ThemeMode>((ref) => ref.watch(appearanceProvider).mode);
+
+/// Atajo de solo lectura para quien elige entre dos implementaciones de pantalla.
+///
+/// Va aparte de [appearanceProvider] para que una pestaña que sólo mira el
+/// lenguaje no se reconstruya cada vez que el usuario arrastra el slider de hue
+/// en la pantalla de personalización.
+final designLanguageProvider =
+    Provider<DesignLanguage>((ref) => ref.watch(appearanceProvider).design);

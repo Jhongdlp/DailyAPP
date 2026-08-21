@@ -7,7 +7,12 @@ import '../../core/models/task_model.dart';
 import '../../core/providers/day_plan_provider.dart';
 import '../../core/providers/habits_provider.dart';
 import '../../core/providers/tasks_provider.dart';
+import '../../core/providers/appearance_provider.dart';
 import '../../core/theme/bento_theme.dart';
+import '../../core/theme/editorial_theme.dart';
+import '../../core/widgets/editorial_kit.dart';
+import 'task_form_editorial.dart';
+import 'widgets/agenda_bars_editorial.dart';
 import 'quick_parse.dart';
 import 'reminder_dialog.dart';
 import 'timeline_scale.dart';
@@ -266,7 +271,15 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
   }
 
   @override
+  // Dos pieles, un solo State. Encima cuelgan ~230 líneas que crean bloques,
+  // los reprograman, colocan hábitos y copian días enteros — lógica de negocio
+  // que no puede existir por duplicado. Sólo se bifurca la presentación; ver la
+  // misma decisión, y por el mismo motivo, en `alarm_dismiss_screen.dart`.
+
+  @override
   Widget build(BuildContext context) {
+    if (ref.watch(designLanguageProvider).isEditorial) return _buildEditorial();
+
     final allTasks = ref.watch(tasksProvider);
     // Se observa también para que marcar un hábito desde su propia pestaña
     // repinte aquí el bloque correspondiente.
@@ -704,6 +717,465 @@ class _AgendaTabState extends ConsumerState<AgendaTab> {
             child: const Icon(Icons.add, size: 18, color: Color(0xFF0C0C0D)),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─────────────────────── piel editorial ───────────────────────
+
+  static final Color _edWarn =
+      EditorialTheme.accentAt(const Color(0xFFF4A261), 0.80);
+
+  Widget _buildEditorial() {
+    final allTasks = ref.watch(tasksProvider);
+    // Se observa también para que marcar un hábito desde su propia pestaña
+    // repinte aquí el bloque correspondiente.
+    ref.watch(habitsProvider);
+
+    final dayTasks = ref.read(tasksProvider.notifier).tasksForDay(_selectedDay);
+    final pendingHabits = _pendingHabits(dayTasks);
+    final stats = _statsByDay(allTasks);
+
+    return ColoredBox(
+      color: EditorialTheme.canvas,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _edHeader(),
+          // Cambiar entre tira y mes conserva el día seleccionado, así que el
+          // timeline de abajo no se mueve al abrir el calendario.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: EditorialTheme.curve,
+            alignment: Alignment.topCenter,
+            child: _calendarOpen
+                ? MonthCalendar(
+                    selectedDay: _selectedDay,
+                    accentColor: BentoTheme.accentLime,
+                    statsFor: (day) => stats[day] ?? const DayStats(),
+                    onSelect: (day) => setState(() => _selectedDay = day),
+                    onAddReminder: () =>
+                        showReminderDialog(context, ref, day: _selectedDay),
+                    onAddBlock: () =>
+                        showTaskFormEditorial(context, ref, day: _selectedDay),
+                  )
+                : DayStripEditorial(
+                    selectedDay: _selectedDay,
+                    countFor: (day) => (stats[day] ?? const DayStats()).blocks,
+                    onSelect: (day) => setState(() => _selectedDay = day),
+                  ),
+          ),
+          ?_edPlanTomorrowBanner(),
+          _edLoadBar(dayTasks),
+          // Con el mes desplegado, la bandeja y la barra rápida dejarían al
+          // timeline sin altura útil. El pie del calendario ya ofrece las dos
+          // formas de añadir, así que no se pierde nada.
+          if (!_calendarOpen) ...[
+            HabitTrayEditorial(
+              pending: pendingHabits,
+              withUsualTime:
+                  pendingHabits.where((h) => _usualMinutesOf(h) != null).length,
+              onPlace: (habit) => _placeHabit(habit),
+              onPlaceAll: _placeAllHabitsWithUsualTime,
+            ),
+            QuickAddBarEditorial(
+              // Sin hora explícita, el bloque cae en el siguiente cuarto de
+              // hora libre y no a medianoche.
+              fallbackStartMinutes: _suggestedStartMinutes(dayTasks),
+              onSubmit: _createFromQuickAdd,
+            ),
+          ],
+          Expanded(
+            child: Stack(
+              children: [
+                DayTimeline(
+                  // La key fuerza un timeline nuevo por día: así cada día
+                  // arranca en su hora relevante y no hereda el scroll ni un
+                  // borrador a medias del anterior.
+                  key: ValueKey(_selectedDay),
+                  day: _selectedDay,
+                  tasks: dayTasks,
+                  onCreate: _createBlock,
+                  onReschedule: _reschedule,
+                  isCompleted: _isBlockCompleted,
+                  onTapBlock: (task) => showTaskFormEditorial(
+                    context,
+                    ref,
+                    day: _selectedDay,
+                    existing: task,
+                  ),
+                  onToggleBlock: _toggleBlock,
+                ),
+                if (dayTasks.isEmpty) _edEmptyHint(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Cabecera: qué día estás viendo, escrito como se dice en voz alta.
+  ///
+  /// El titular es también el mando del calendario. Es donde se mira para saber
+  /// qué día es, así que es donde se busca cambiarlo.
+  Widget _edHeader() {
+    final isToday = _selectedDay == _dateOnly(DateTime.now());
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(EditorialTheme.margin, 10, 14, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: EditorialPressable(
+              onTap: () => setState(() => _calendarOpen = !_calendarOpen),
+              scale: 0.98,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _dayHeadline().toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: EditorialTheme.caps(
+                            34,
+                            color: EditorialTheme.paper,
+                            letterSpacing: -1.2,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      AnimatedRotation(
+                        turns: _calendarOpen ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        curve: EditorialTheme.curve,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 24,
+                          color: EditorialTheme.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    _daySubtitle().toUpperCase(),
+                    style: EditorialTheme.label(10.5, color: EditorialTheme.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Volver a hoy sólo existe cuando hace falta. Un botón permanente que
+          // la mitad del tiempo no hace nada es peor que no tenerlo.
+          if (!isToday)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: EditorialPressable(
+                onTap: () =>
+                    setState(() => _selectedDay = _dateOnly(DateTime.now())),
+                scale: 0.92,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: EditorialTheme.surfaceHigh,
+                    borderRadius: BorderRadius.circular(EditorialTheme.radiusChip),
+                  ),
+                  child: Text(
+                    'Hoy',
+                    style: EditorialTheme.text(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: EditorialTheme.paper,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Un aviso suelto ("llamar al dentista a las 5") es la mitad de lo
+          // que se apunta en una agenda y no merece el formulario entero.
+          EditorialPressable(
+            onTap: () => showReminderDialog(context, ref, day: _selectedDay),
+            scale: 0.88,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(Icons.notifications_none_rounded,
+                  size: 20, color: EditorialTheme.paperAlpha(0.6)),
+            ),
+          ),
+          EditorialPressable(
+            onTap: _edShowCopyMenu,
+            scale: 0.88,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
+              child: Icon(Icons.copy_all_outlined,
+                  size: 19, color: EditorialTheme.paperAlpha(0.6)),
+            ),
+          ),
+          EditorialCircleButton(
+            icon: Icons.add,
+            tooltip: 'Nuevo bloque',
+            size: 40,
+            onTap: () => showTaskFormEditorial(context, ref, day: _selectedDay),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Copiar un día ya planeado. Va en hoja y no en un `PopupMenuButton` porque
+  /// el menú de Material llega con su propio material, su propia tipografía y
+  /// su propia sombra — tres cosas que este sistema no tiene.
+  void _edShowCopyMenu() {
+    showEditorialSheet<void>(
+      context: context,
+      title: 'Copiar un día',
+      maxHeightFactor: 0.45,
+      builder: (sheetContext, _) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            EditorialRow(
+              icon: Icons.history,
+              label: 'El día anterior',
+              active: true,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _copyDay(daysBack: 1);
+              },
+            ),
+            const SizedBox(height: 8),
+            EditorialRow(
+              icon: Icons.calendar_view_week_outlined,
+              label: 'El mismo día de la semana pasada',
+              active: true,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _copyDay(daysBack: 7);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Invitación a planear mañana, a partir de la tarde y sólo si mañana no está
+  /// planeado. El disparador es la hora y no un "siempre visible" porque un
+  /// aviso permanente se vuelve invisible en una semana.
+  Widget? _edPlanTomorrowBanner() {
+    final now = DateTime.now();
+    if (now.hour < _planPromptHour) return null;
+
+    final tomorrow = _dateOnly(now.add(const Duration(days: 1)));
+    ref.watch(dayPlansProvider);
+    if (ref.read(dayPlansProvider.notifier).hasPlanFor(tomorrow)) return null;
+
+    final streak = ref.read(dayPlansProvider.notifier).planningStreak;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        EditorialTheme.margin,
+        4,
+        EditorialTheme.margin,
+        10,
+      ),
+      child: EditorialPressable(
+        onTap: _openNightPlanning,
+        scale: 0.98,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          decoration: BoxDecoration(
+            // Papel: es la única invitación de la pantalla, y compite con un
+            // timeline lleno de bloques. En superficie desaparecería.
+            color: EditorialTheme.paper,
+            borderRadius: BorderRadius.circular(EditorialTheme.radiusCard),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.nights_stay_outlined, size: 20, color: EditorialTheme.ink),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Planea mañana',
+                      style: EditorialTheme.text(
+                        15,
+                        weight: FontWeight.w600,
+                        color: EditorialTheme.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      streak > 1
+                          ? '$streak noches seguidas. No la rompas.'
+                          : 'Dos minutos ahora, mañana sin improvisar.',
+                      style: EditorialTheme.text(12.5, color: EditorialTheme.grayText),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward, size: 17, color: EditorialTheme.inkAlpha(0.35)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Cuánto del día está comprometido.
+  ///
+  /// Sobreplanificar es lo que rompe el hábito de planear, así que esta barra
+  /// está para frenar, no para animar a llenar más. Por eso el aviso de "día
+  /// muy lleno" es la única pieza de color de la pestaña: es el único momento
+  /// en que la Agenda te lleva la contraria.
+  Widget _edLoadBar(List<Task> dayTasks) {
+    if (dayTasks.isEmpty) return const SizedBox(height: 8);
+
+    final plannedMinutes =
+        dayTasks.fold<int>(0, (sum, t) => sum + (t.durationMinutes ?? 40));
+    final availableMinutes = (_wakingEndHour - _wakingStartHour) * 60;
+    final ratio = (plannedMinutes / availableMinutes).clamp(0.0, 1.0);
+    final overbooked = ratio > _overbookedRatio;
+    final freeMinutes =
+        (availableMinutes - plannedMinutes).clamp(0, availableMinutes);
+
+    String fmtHours(int minutes) {
+      final h = minutes / 60;
+      return h % 1 == 0 ? '${h.toInt()} h' : '${h.toStringAsFixed(1)} h';
+    }
+
+    final done = dayTasks.where(_isBlockCompleted).length;
+    final doneRatio = done / dayTasks.length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        EditorialTheme.margin,
+        8,
+        EditorialTheme.margin,
+        12,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                '${fmtHours(plannedMinutes)} PLANEADAS',
+                style: EditorialTheme.label(10, color: EditorialTheme.paperAlpha(0.7)),
+              ),
+              Text(
+                '  ·  ${fmtHours(freeMinutes)} LIBRES',
+                style: EditorialTheme.label(10, color: EditorialTheme.muted),
+              ),
+              const Spacer(),
+              if (overbooked)
+                Padding(
+                  padding: const EdgeInsets.only(right: 9),
+                  child: Text(
+                    'DÍA MUY LLENO',
+                    style: EditorialTheme.label(10, color: _edWarn),
+                  ),
+                ),
+              Text(
+                '$done/${dayTasks.length}',
+                style: EditorialTheme.text(
+                  12,
+                  weight: FontWeight.w600,
+                  color: done == dayTasks.length
+                      ? EditorialTheme.paper
+                      : EditorialTheme.muted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Dos capas sobre el mismo riel: la apagada es lo comprometido y la
+          // llena es lo ya hecho. Una sola lectura vertical, sin leyenda.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: SizedBox(
+              height: 5,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ColoredBox(color: EditorialTheme.paperAlpha(0.10)),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: ratio,
+                    child: ColoredBox(
+                      color: overbooked ? _edWarn.withValues(alpha: 0.45)
+                          : EditorialTheme.paperAlpha(0.32),
+                    ),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: ratio * doneRatio,
+                    child: ColoredBox(
+                      color: overbooked ? _edWarn : EditorialTheme.paper,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pista del día vacío. No estorba (deja pasar los toques) y enseña primero
+  /// el gesto barato: un toque. El arrastre se menciona como atajo, no como
+  /// requisito.
+  Widget _edEmptyHint() {
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(36, 52, 36, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: const BoxDecoration(
+                  color: EditorialTheme.surfaceHigh,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.touch_app_outlined,
+                    size: 25, color: EditorialTheme.paperAlpha(0.45)),
+              ),
+              const SizedBox(height: 15),
+              Text(
+                'Toca una hora para crear un bloque',
+                textAlign: TextAlign.center,
+                style: EditorialTheme.text(
+                  14.5,
+                  weight: FontWeight.w600,
+                  color: EditorialTheme.paperAlpha(0.7),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Manténla pulsada y arrastra si quieres\nmarcar la duración de una vez',
+                textAlign: TextAlign.center,
+                style: EditorialTheme.text(12.5,
+                    color: EditorialTheme.muted, height: 1.5),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

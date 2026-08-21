@@ -45,7 +45,7 @@ class BookCover extends StatelessWidget {
           future: _coverFuture(book.coverImageFilename),
           builder: (context, snapshot) {
             final file = snapshot.data;
-            if (file == null) return _fallback();
+            if (file == null || file.path.toLowerCase().endsWith('.svg')) return _fallback();
             return Image.file(
               file,
               width: width,

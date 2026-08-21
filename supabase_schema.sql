@@ -134,6 +134,11 @@ create table if not exists public.note_vaults (
   icon text not null default '📁',
   color text not null default '#758BFD',
   description text,
+  show_icon boolean not null default true,
+  image_path text,
+  image_offset_x numeric not null default 0.0,
+  image_offset_y numeric not null default 0.0,
+  image_scale numeric not null default 1.0,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

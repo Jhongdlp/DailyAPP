@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/note_vault_model.dart';
+import '../services/signed_url_cache.dart';
 import 'settings_provider.dart';
 
 final _uuidRegex = RegExp(
@@ -48,14 +52,47 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
     String icon = '📁',
     String color = '#758BFD',
     String? description,
+    bool showIcon = true,
+    String? imagePath,
+    double imageOffsetX = 0.0,
+    double imageOffsetY = 0.0,
+    double imageScale = 1.0,
+    File? uploadFile,
   }) async {
+    String? finalImagePath = imagePath;
+    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    if (uploadFile != null) {
+      if (_hasSupabase) {
+        try {
+          final client = Supabase.instance.client;
+          final user = client.auth.currentUser!;
+          final storagePath = '${user.id}/vaults/$tempId-${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await client.storage.from('exercise-photos').upload(storagePath, uploadFile);
+          finalImagePath = storagePath;
+        } catch (_) {}
+      } else {
+        try {
+          final docs = await getApplicationDocumentsDirectory();
+          final localFile = File('${docs.path}/vault_$tempId.jpg');
+          await uploadFile.copy(localFile.path);
+          finalImagePath = localFile.path;
+        } catch (_) {}
+      }
+    }
+
     final draft = NoteVault(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: tempId,
       name: name,
       icon: icon,
       color: color,
       description: description,
       createdAt: DateTime.now(),
+      showIcon: showIcon,
+      imagePath: finalImagePath,
+      imageOffsetX: imageOffsetX,
+      imageOffsetY: imageOffsetY,
+      imageScale: imageScale,
     );
 
     NoteVault saved = draft;
@@ -83,11 +120,61 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
     required String icon,
     required String color,
     String? description,
+    bool? showIcon,
+    String? imagePath,
+    double? imageOffsetX,
+    double? imageOffsetY,
+    double? imageScale,
+    File? uploadFile,
+    bool clearImage = false,
   }) async {
+    String? finalImagePath = clearImage ? null : imagePath;
+
+    if (uploadFile != null && !clearImage) {
+      if (_hasSupabase) {
+        try {
+          final client = Supabase.instance.client;
+          final user = client.auth.currentUser!;
+          final storagePath = '${user.id}/vaults/$id-${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await client.storage.from('exercise-photos').upload(storagePath, uploadFile);
+          finalImagePath = storagePath;
+
+          if (imagePath != null && imagePath.contains('vaults/')) {
+            SignedUrlCache.invalidate('exercise-photos', imagePath);
+            unawaited(client.storage.from('exercise-photos').remove([imagePath]));
+          }
+        } catch (_) {}
+      } else {
+        try {
+          final docs = await getApplicationDocumentsDirectory();
+          final localFile = File('${docs.path}/vault_$id.jpg');
+          await uploadFile.copy(localFile.path);
+          finalImagePath = localFile.path;
+        } catch (_) {}
+      }
+    } else if (clearImage) {
+      if (_hasSupabase && imagePath != null && imagePath.contains('vaults/')) {
+        try {
+          final client = Supabase.instance.client;
+          SignedUrlCache.invalidate('exercise-photos', imagePath);
+          unawaited(client.storage.from('exercise-photos').remove([imagePath]));
+        } catch (_) {}
+      }
+    }
+
     state = state.map((v) {
       if (v.id == id) {
         return v.copyWith(
-            name: name, icon: icon, color: color, description: description);
+          name: name,
+          icon: icon,
+          color: color,
+          description: description,
+          showIcon: showIcon ?? v.showIcon,
+          imagePath: clearImage ? null : (finalImagePath ?? v.imagePath),
+          imageOffsetX: imageOffsetX ?? v.imageOffsetX,
+          imageOffsetY: imageOffsetY ?? v.imageOffsetY,
+          imageScale: imageScale ?? v.imageScale,
+        );
       }
       return v;
     }).toList();
@@ -99,6 +186,11 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
           'icon': icon,
           'color': color,
           'description': description,
+          if (showIcon != null) 'show_icon': showIcon,
+          'image_path': clearImage ? null : (finalImagePath ?? imagePath),
+          if (imageOffsetX != null) 'image_offset_x': imageOffsetX,
+          if (imageOffsetY != null) 'image_offset_y': imageOffsetY,
+          if (imageScale != null) 'image_scale': imageScale,
         }).eq('id', id);
       }
     } catch (_) {}

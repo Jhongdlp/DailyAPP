@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/bento_theme.dart';
 import '../alarm/alarm_tab.dart';
-// Exploración de diseño (rama design/minimal-habits). Para volver al diseño de
-// tarjetas neumórficas: cambiar por '../habits/habits_tab.dart' y
-// `HabitsTabEditorial` por `HabitsTab` en _tabs. Los otros pilotos siguen
-// intactos en la misma carpeta.
+import '../alarm/alarm_tab_editorial.dart';
+// Las pestañas con dos versiones importan las dos: cuál se monta lo decide
+// [designLanguageProvider] en `_tabsFor`, no el import. El piloto de
+// `habits_tab_minimal.dart` sigue en la carpeta, sin enchufar.
+import '../habits/habits_tab.dart';
 import '../habits/habits_tab_editorial.dart';
 import '../notes/notes_tab.dart';
+import '../notes/notes_tab_editorial.dart';
 import '../chat/chat_tab.dart';
 import '../finance/finance_tab.dart';
+import '../finance/finance_tab_editorial.dart';
 import '../reading/reading_tab.dart';
+import '../reading/reading_tab_editorial.dart';
 import '../reading/shared_books_handler.dart';
 import '../agenda/agenda_tab.dart';
 import '../news/news_tab.dart';
@@ -22,6 +25,7 @@ import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../settings/personalize_screen.dart';
 import '../../core/models/app_destination.dart';
+import '../../core/providers/appearance_provider.dart';
 import '../../core/providers/dock_provider.dart';
 import '../../core/providers/vault_provider.dart';
 import '../../core/providers/habits_provider.dart';
@@ -30,7 +34,11 @@ import '../../core/providers/books_provider.dart';
 import '../../core/providers/book_bookmarks_provider.dart';
 import '../../core/providers/exercise_provider.dart';
 import '../../core/services/cache_service.dart';
+import '../../core/theme/design_language.dart';
+import '../../core/theme/editorial_theme.dart';
+import '../../core/widgets/glass_surface.dart';
 import '../../core/widgets/lazy_indexed_stack.dart';
+import '../../core/widgets/liquid_glass_dock.dart';
 import '../../core/widgets/sync_indicator.dart';
 import '../update/update_checker.dart';
 
@@ -46,14 +54,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   /// En el mismo orden que [AppDestination]: el índice del enum ES el índice
   /// del stack.
-  final List<Widget> _tabs = [
-    const HabitsTabEditorial(),
-    const NotesTab(),
-    const AlarmTab(),
-    const FinanceTab(),
+  ///
+  /// Se arma en cada build y no una vez en el estado porque las pestañas con
+  /// dos implementaciones dependen del lenguaje activo. Es una lista de
+  /// widgets `const`: rearmarla no cuesta nada y [LazyIndexedStack] conserva
+  /// los subárboles ya montados mientras el tipo del hijo no cambie.
+  List<Widget> _tabsFor(DesignLanguage design) => [
+    design.isEditorial ? const HabitsTabEditorial() : const HabitsTab(),
+    design.isEditorial ? const NotesTabEditorial() : const NotesTab(),
+    design.isEditorial ? const AlarmTabEditorial() : const AlarmTab(),
+    design.isEditorial ? const FinanceTabEditorial() : const FinanceTab(),
     const ChatTab(),
     const AgendaTab(),
-    const ReadingTab(),
+    design.isEditorial ? const ReadingTabEditorial() : const ReadingTab(),
     const NewsTab(),
     const AnalyticsTab(),
     const ExerciseTab(),
@@ -89,9 +102,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final dock = ref.watch(dockProvider);
+    final design = ref.watch(designLanguageProvider);
 
-    // BentoBackground ya no reserva el inset inferior: lo consume el dock para
-    // poder nacer del borde físico de la pantalla.
+    // BentoBackground no reserva el inset inferior: lo administra el dock, que
+    // flota por encima de la barra de gestos y se separa de ella por su cuenta.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return BentoBackground(
@@ -108,7 +122,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 color: Colors.transparent,
                 child: LazyIndexedStack(
                   index: _currentIndex,
-                  children: _tabs,
+                  children: _tabsFor(design),
                 ),
               ),
             ),
@@ -129,197 +143,186 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
 
-          // Dock de navegación — neumórfico / skeuomorph moderno: no flota,
-          // nace del borde inferior como una pieza extruida del chasis, con
-          // solo las esquinas superiores redondeadas. El tab activo se hunde
-          // en su superficie.
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: RepaintBoundary(
-              child: NeuCard(
-                radius: const BorderRadius.vertical(top: Radius.circular(28)),
-                distance: 7,
-                blur: 14,
-                padding: EdgeInsets.only(
-                  top: 12,
-                  left: 10,
-                  right: 10,
-                  // El dock se extiende bajo la barra de gestos; los iconos se
-                  // quedan por encima de ella.
-                  bottom: 12 + bottomInset,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    for (final destination in dock.slots)
-                      Expanded(child: _buildTabItem(destination)),
-                    Expanded(child: _buildConfigItem()),
-                  ],
-                ),
+            // Dock de navegación — flotante y de vidrio. Ver
+            // [LiquidGlassDock]: despegado del borde para que se lea como una
+            // capa que viaja sobre el contenido y no como una hoja modal
+            // abierta al pie de la pantalla.
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: LiquidGlassDock(
+                slots: dock.slots,
+                currentIndex: _currentIndex,
+                overflowActive: dock.slots.any((d) => d.tabIndex == _currentIndex)
+                    ? null
+                    : AppDestination.values[_currentIndex],
+                onSelect: (destination) =>
+                    setState(() => _currentIndex = destination.tabIndex),
+                onMenu: () => _showConfigSheet(context),
               ),
             ),
-          ),
         ],
       ),
      ),
     );
   }
 
-  Widget _buildConfigItem() {
-    return _AnimatedConfigItem(
-      onTap: () => _showConfigSheet(context),
-    );
-  }
-
+  /// Menú de la app: lo que no es navegación de todos los días.
+  ///
+  /// Sigue siendo una hoja que sube desde abajo —es el gesto correcto para algo
+  /// que se invoca y se descarta— pero ahora es un panel flotante del mismo
+  /// vidrio que el dock, con márgenes a los cuatro lados. Así el dock deja de
+  /// ser la única pieza despegada de la pantalla y las dos se leen como el
+  /// mismo material.
   void _showConfigSheet(BuildContext context) {
     final overflow = ref.read(dockProvider).overflow;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       isScrollControlled: true,
       builder: (sheetContext) {
-        return ConstrainedBox(
-          // Con el dock en 3 huecos la lista crece hasta 4 destinos extra: en
-          // pantallas cortas tiene que poder desplazarse en vez de desbordar.
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            12,
+            0,
+            12,
+            MediaQuery.viewPaddingOf(sheetContext).bottom + 12,
           ),
-          child: NeuCard(
-          radius: const BorderRadius.vertical(top: Radius.circular(28)),
-          elevation: 22,
-          convex: false,
-          padding: EdgeInsets.only(
-            top: 10,
-            bottom: 10 + MediaQuery.viewPaddingOf(sheetContext).bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const NeuPressed(
-                borderRadius: 3,
-                distance: 2,
-                blur: 3,
-                child: SizedBox(width: 40, height: 5),
-              ),
-              const SizedBox(height: 12),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-
-              // 1. Ir a — solo lo que no cabe en el dock: repetir aquí una
-              // pestaña que ya está a un toque de distancia solo alarga la lista.
-              if (overflow.isNotEmpty) ...[
-                _SheetSection('Ir a'),
-                for (final destination in overflow)
-                  _SheetTile(
-                    icon: destination.icon,
-                    color: destination.accent,
-                    label: destination.label,
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      setState(() => _currentIndex = destination.tabIndex);
-                    },
+          child: ConstrainedBox(
+            // Con el dock en 3 huecos la lista crece hasta 7 destinos extra: en
+            // pantallas cortas tiene que poder desplazarse en vez de desbordar.
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8,
+            ),
+            child: GlassSurface(
+              borderRadius: BorderRadius.circular(30),
+              blur: 26,
+              // Más opaco que el dock: acá hay texto largo que leer, y el
+              // contenido de la pantalla filtrándose por detrás lo ensucia.
+              tint: EditorialTheme.canvas.withValues(alpha: 0.78),
+              // Ya está apoyado sobre el velo del modal; la sombra no separaría
+              // nada y sólo emborronaría el canto.
+              lift: false,
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: EditorialTheme.paperAlpha(0.22),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                const SizedBox(height: 4),
-              ],
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 1. Ir a — sólo lo que no cabe en el dock: repetir
+                          // aquí una pestaña que ya está a un toque de
+                          // distancia sólo alarga la lista.
+                          if (overflow.isNotEmpty) ...[
+                            const _SheetSection('Ir a'),
+                            for (final destination in overflow)
+                              _SheetTile(
+                                icon: destination.icon,
+                                color: destination.accent,
+                                label: destination.label,
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  setState(() => _currentIndex = destination.tabIndex);
+                                },
+                              ),
+                            const SizedBox(height: 6),
+                          ],
 
-              // 2. Tuyo
-              _SheetSection('Tu cuenta'),
-              _SheetTile(
-                icon: Icons.person_outline,
-                color: BentoTheme.accentLime,
-                label: 'Mi Personaje',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const CharacterScreen()),
-                  );
-                },
-              ),
-              _SheetTile(
-                icon: Icons.palette_outlined,
-                color: BentoTheme.accentPurple,
-                label: 'Personalizar',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PersonalizeScreen()),
-                  );
-                },
-              ),
+                          // 2. Tuyo
+                          const _SheetSection('Tu cuenta'),
+                          _SheetTile(
+                            icon: Icons.person_outline,
+                            color: BentoTheme.accentLime,
+                            label: 'Mi Personaje',
+                            onTap: () {
+                              Navigator.of(sheetContext).pop();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const CharacterScreen()),
+                              );
+                            },
+                          ),
+                          _SheetTile(
+                            icon: Icons.palette_outlined,
+                            color: BentoTheme.accentPurple,
+                            label: 'Personalizar',
+                            onTap: () {
+                              Navigator.of(sheetContext).pop();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const PersonalizeScreen()),
+                              );
+                            },
+                          ),
 
-              const SizedBox(height: 4),
+                          const SizedBox(height: 6),
 
-              // 3. App
-              _SheetSection('Aplicación'),
-              _SheetTile(
-                icon: Icons.system_update_outlined,
-                color: BentoTheme.accentFinance,
-                label: 'Buscar actualizaciones',
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  UpdateChecker.check(context, silent: false);
-                },
-              ),
+                          // 3. App
+                          const _SheetSection('Aplicación'),
+                          _SheetTile(
+                            icon: Icons.system_update_outlined,
+                            color: BentoTheme.accentFinance,
+                            label: 'Buscar actualizaciones',
+                            onTap: () {
+                              Navigator.of(sheetContext).pop();
+                              UpdateChecker.check(context, silent: false);
+                            },
+                          ),
+                          _SheetTile(
+                            icon: Icons.logout_outlined,
+                            color: BentoTheme.errorRed,
+                            label: 'Cerrar sesión',
+                            danger: true,
+                            onTap: () async {
+                              Navigator.of(sheetContext).pop();
 
-              // Cerrar sesión
-              ListTile(
-                leading: const Icon(Icons.logout_outlined, color: BentoTheme.errorRed),
-                title: Text(
-                  'Cerrar sesión',
-                  style: GoogleFonts.montserrat(color: BentoTheme.errorRed, fontWeight: FontWeight.w600),
-                ),
-                onTap: () async {
-                  Navigator.of(sheetContext).pop();
-                  
-                  await CacheService.delete('habits');
-                  await CacheService.delete('notes');
-                  await CacheService.delete('tasks');
-                  await CacheService.delete('books');
-                  await CacheService.delete('book_bookmarks');
-                  await CacheService.delete('exercise');
+                              await CacheService.delete('habits');
+                              await CacheService.delete('notes');
+                              await CacheService.delete('tasks');
+                              await CacheService.delete('books');
+                              await CacheService.delete('book_bookmarks');
+                              await CacheService.delete('exercise');
 
-                  await Supabase.instance.client.auth.signOut();
+                              await Supabase.instance.client.auth.signOut();
 
-                  ref.invalidate(vaultProvider);
-                  ref.invalidate(vaultsProvider);
-                  ref.invalidate(habitsProvider);
-                  ref.invalidate(notesProvider);
-                  ref.invalidate(tasksProvider);
-                  ref.invalidate(booksProvider);
-                  ref.invalidate(bookBookmarksProvider);
-                  ref.invalidate(exerciseProvider);
-                  
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const AuthScreen()),
-                    );
-                  }
-                },
-              ),
-                    ],
+                              ref.invalidate(vaultProvider);
+                              ref.invalidate(vaultsProvider);
+                              ref.invalidate(habitsProvider);
+                              ref.invalidate(notesProvider);
+                              ref.invalidate(tasksProvider);
+                              ref.invalidate(booksProvider);
+                              ref.invalidate(bookBookmarksProvider);
+                              ref.invalidate(exerciseProvider);
+
+                              if (context.mounted) {
+                                Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildTabItem(AppDestination destination) {
-    return _AnimatedTabItem(
-      icon: destination.icon,
-      isSelected: _currentIndex == destination.tabIndex,
-      activeColor: destination.accent,
-      onTap: () => setState(() => _currentIndex = destination.tabIndex),
     );
   }
 }
@@ -333,17 +336,12 @@ class _SheetSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 6),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
           label.toUpperCase(),
-          style: GoogleFonts.montserrat(
-            color: BentoTheme.creamTertiary,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
+          style: EditorialTheme.label(11, color: EditorialTheme.paperAlpha(0.38)),
         ),
       ),
     );
@@ -356,197 +354,52 @@ class _SheetTile extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
+  /// Acción destructiva: el color pasa del icono al texto. Es el único lugar
+  /// del sistema donde una etiqueta va coloreada, y por eso se ve.
+  final bool danger;
+
   const _SheetTile({
     required this.icon,
     required this.color,
     required this.label,
     required this.onTap,
+    this.danger = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(
-        label,
-        style: GoogleFonts.montserrat(color: BentoTheme.cream, fontWeight: FontWeight.w600),
-      ),
-      onTap: onTap,
-    );
-  }
-}
+    // Sobre el vidrio oscuro manda la variante clara del acento: la misma
+    // receta que usa el resto del sistema editorial para pintar sobre lienzo.
+    final tone = EditorialTheme.accent(color, onDark: true);
 
-class _AnimatedTabItem extends StatefulWidget {
-  final IconData icon;
-  final bool isSelected;
-  final Color activeColor;
-  final VoidCallback onTap;
-
-  const _AnimatedTabItem({
-    required this.icon,
-    required this.isSelected,
-    required this.activeColor,
-    required this.onTap,
-  });
-
-  @override
-  State<_AnimatedTabItem> createState() => _AnimatedTabItemState();
-}
-
-class _AnimatedTabItemState extends State<_AnimatedTabItem> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _scaleAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.80)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 35,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.80, end: 1.15)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 35,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.15, end: 1.0)
-            .chain(CurveTween(curve: Curves.elasticOut)),
-        weight: 30,
-      ),
-    ]).animate(_controller);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AnimatedTabItem oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isSelected && !oldWidget.isSelected) {
-      _controller.forward(from: 0.0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = widget.activeColor;
-    
-    final iconWidget = AnimatedBuilder(
-      animation: _scaleAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: widget.isSelected ? _scaleAnimation.value : 1.0,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(EditorialTheme.radiusChip),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: EditorialTheme.paperAlpha(0.06),
+          highlightColor: EditorialTheme.paperAlpha(0.04),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Icon(
-              widget.icon,
-              color: widget.isSelected ? activeColor : BentoTheme.creamAlpha(0.42),
-              size: 22,
-            ),
-          ),
-        );
-      },
-    );
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (!widget.isSelected) {
-          widget.onTap();
-        }
-      },
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.92, end: 1.0).animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-              ),
-              child: child,
-            ),
-          );
-        },
-        child: widget.isSelected
-            ? NeuPressed(
-                key: const ValueKey('selected'),
-                borderRadius: 16,
-                distance: 3,
-                blur: 6,
-                color: Color.alphaBlend(
-                  activeColor.withValues(alpha: 0.10),
-                  BentoTheme.neuSurfaceSunken,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            child: Row(
+              children: [
+                Icon(icon, color: tone, size: 21),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: EditorialTheme.text(
+                      15,
+                      weight: FontWeight.w600,
+                      color: danger ? tone : EditorialTheme.paper,
+                    ),
+                  ),
                 ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: iconWidget,
-                ),
-              )
-            : SizedBox(
-                key: const ValueKey('unselected'),
-                width: double.infinity,
-                child: iconWidget,
-              ),
-      ),
-    );
-  }
-}
-
-class _AnimatedConfigItem extends StatefulWidget {
-  final VoidCallback onTap;
-  const _AnimatedConfigItem({required this.onTap});
-
-  @override
-  State<_AnimatedConfigItem> createState() => _AnimatedConfigItemState();
-}
-
-class _AnimatedConfigItemState extends State<_AnimatedConfigItem> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        _controller.forward(from: 0.0);
-        widget.onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: RotationTransition(
-          turns: Tween<double>(begin: 0.0, end: 0.25).animate(
-            CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-          ),
-          child: Icon(
-            Icons.menu_rounded,
-            color: BentoTheme.creamAlpha(0.42),
-            size: 22,
+              ],
+            ),
           ),
         ),
       ),

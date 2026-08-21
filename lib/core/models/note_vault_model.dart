@@ -10,6 +10,11 @@ class NoteVault {
   final String? description;
   final int noteCount;    // Calculado en el cliente
   final DateTime? createdAt;
+  final bool showIcon;
+  final String? imagePath;
+  final double imageOffsetX;
+  final double imageOffsetY;
+  final double imageScale;
 
   const NoteVault({
     required this.id,
@@ -19,6 +24,11 @@ class NoteVault {
     this.description,
     this.noteCount = 0,
     this.createdAt,
+    this.showIcon = true,
+    this.imagePath,
+    this.imageOffsetX = 0.0,
+    this.imageOffsetY = 0.0,
+    this.imageScale = 1.0,
   });
 
   Color get flutterColor {
@@ -42,6 +52,11 @@ class NoteVault {
     String? description,
     int? noteCount,
     DateTime? createdAt,
+    bool? showIcon,
+    String? imagePath,
+    double? imageOffsetX,
+    double? imageOffsetY,
+    double? imageScale,
   }) {
     return NoteVault(
       id: id ?? this.id,
@@ -51,6 +66,11 @@ class NoteVault {
       description: description ?? this.description,
       noteCount: noteCount ?? this.noteCount,
       createdAt: createdAt ?? this.createdAt,
+      showIcon: showIcon ?? this.showIcon,
+      imagePath: imagePath ?? this.imagePath,
+      imageOffsetX: imageOffsetX ?? this.imageOffsetX,
+      imageOffsetY: imageOffsetY ?? this.imageOffsetY,
+      imageScale: imageScale ?? this.imageScale,
     );
   }
 
@@ -64,6 +84,11 @@ class NoteVault {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String).toLocal()
           : null,
+      showIcon: json['show_icon'] as bool? ?? true,
+      imagePath: json['image_path'] as String?,
+      imageOffsetX: (json['image_offset_x'] as num?)?.toDouble() ?? 0.0,
+      imageOffsetY: (json['image_offset_y'] as num?)?.toDouble() ?? 0.0,
+      imageScale: (json['image_scale'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -73,6 +98,11 @@ class NoteVault {
         'icon': icon,
         'color': color,
         'description': description,
+        'show_icon': showIcon,
+        'image_path': imagePath,
+        'image_offset_x': imageOffsetX,
+        'image_offset_y': imageOffsetY,
+        'image_scale': imageScale,
       };
 }
 
