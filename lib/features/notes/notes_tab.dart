@@ -21,7 +21,6 @@ import '../vault/screens/vault_lock_screen.dart';
 import '../vault/screens/vault_home_screen.dart';
 import '../habits/widgets/habit_blob_header.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 import 'vault_image_widgets.dart';
 
 
@@ -112,18 +111,6 @@ class _NotesTabState extends ConsumerState<NotesTab>
   }
 
   // ─── Navigation ───────────────────────────────────
-
-  void _openSecureVaultFromGesture() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const VaultLockScreen()),
-    ).then((_) {
-      setState(() {
-        _triggeringBiometrics = false;
-        _pullController.value = 0.0;
-        _isLockedLoading = false;
-      });
-    });
-  }
 
   Future<void> _triggerSecureVaultUnlock() async {
     if (_triggeringBiometrics || _isLockedLoading) return;

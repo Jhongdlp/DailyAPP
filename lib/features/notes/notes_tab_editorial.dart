@@ -22,7 +22,6 @@ import 'knowledge_graph_view.dart';
 import 'notion_editor.dart';
 import 'voice_recorder_sheet.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 import 'vault_image_widgets.dart';
 
 /// Pestaña de Notas en el sistema editorial.
