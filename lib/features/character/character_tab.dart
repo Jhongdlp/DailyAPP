@@ -100,8 +100,21 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                       labelText: '¿Cuál es la recompensa?',
                       hintText: 'ej: Jugar 1 hora, ver serie...',
                       labelStyle: TextStyle(color: BentoTheme.creamSecondary),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: BentoTheme.creamAlpha(0.2))),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: BentoTheme.accentLime)),
+                      filled: true,
+                      fillColor: BentoTheme.creamAlpha(0.06),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: BentoTheme.accentLime, width: 1.5),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -113,8 +126,21 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                       labelText: 'Costo (Oro 💰)',
                       hintText: 'ej: 50, 100...',
                       labelStyle: TextStyle(color: BentoTheme.creamSecondary),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: BentoTheme.creamAlpha(0.2))),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: BentoTheme.accentLime)),
+                      filled: true,
+                      fillColor: BentoTheme.creamAlpha(0.06),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: BentoTheme.accentLime, width: 1.5),
+                      ),
                     ),
                   ),
                 ],
@@ -687,6 +713,7 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 onTap: () async {
                   // Confirmar
+                  final nav = Navigator.of(context);
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
@@ -721,7 +748,7 @@ class _CharacterTabState extends ConsumerState<CharacterTab> {
                     ref.invalidate(notesProvider);
 
                     if (mounted) {
-                      Navigator.of(context).pushReplacement(
+                      nav.pushReplacement(
                         MaterialPageRoute(builder: (_) => const AuthScreen()),
                       );
                     }

@@ -77,8 +77,9 @@ ExerciseStats computeExerciseStats(List<ExerciseLog> logs) {
   // (o desde ayer si hoy todavía no se registró nada).
   final loggedDays = logged.map((l) => _dateOnly(l.loggedDate)).toSet();
   var cursor = _dateOnly(now);
-  if (!loggedDays.contains(cursor))
+  if (!loggedDays.contains(cursor)) {
     cursor = cursor.subtract(const Duration(days: 1));
+  }
   var streak = 0;
   while (loggedDays.contains(cursor)) {
     streak++;

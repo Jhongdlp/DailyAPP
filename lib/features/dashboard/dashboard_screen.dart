@@ -20,7 +20,11 @@ import '../reading/shared_books_handler.dart';
 import '../agenda/agenda_tab.dart';
 import '../news/news_tab.dart';
 import '../analytics/analytics_tab.dart';
+import '../analytics/analytics_tab_editorial.dart';
 import '../exercise/exercise_tab.dart';
+import '../exercise/exercise_tab_editorial.dart';
+import '../character/character_tab.dart';
+import '../character/character_tab_editorial.dart';
 import '../character/character_screen.dart';
 import '../auth/auth_screen.dart';
 import '../settings/personalize_screen.dart';
@@ -68,8 +72,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     const AgendaTab(),
     design.isEditorial ? const ReadingTabEditorial() : const ReadingTab(),
     const NewsTab(),
-    const AnalyticsTab(),
-    const ExerciseTab(),
+    design.isEditorial ? const AnalyticsTabEditorial() : const AnalyticsTab(),
+    design.isEditorial ? const ExerciseTabEditorial() : const ExerciseTab(),
+    design.isEditorial ? const CharacterTabEditorial() : const CharacterTab(),
   ];
 
   SharedBooksHandler? _sharedBooks;

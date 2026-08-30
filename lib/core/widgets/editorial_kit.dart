@@ -405,6 +405,8 @@ class EditorialField extends StatelessWidget {
               style: EditorialTheme.text(15, color: EditorialTheme.ink),
               decoration: InputDecoration(
                 isDense: true,
+                filled: false,
+                fillColor: Colors.transparent,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,

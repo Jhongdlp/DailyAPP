@@ -14,8 +14,8 @@ import 'package:flutter/widgets.dart';
 /// pestaña con dos versiones tiene dos archivos, y este enum decide cuál.
 ///
 /// Por eso no todas las pestañas responden: sólo las que tienen la pareja
-/// hecha (hoy: Hábitos, Notas y Alarma). El resto se pinta siempre en
-/// neumorfismo, que es el sistema base.
+/// hecha (Hábitos, Notas, Alarma, Finanzas, Biblioteca, Analíticas, Ejercicio y Personaje).
+/// El resto se pinta en el sistema base o con adaptabilidad directa.
 ///
 /// Un par de pantallas críticas —la de apagar la alarma y la del reto mental—
 /// no tienen archivo aparte: llevan las dos pieles dentro del mismo `build`,

@@ -477,6 +477,8 @@ class _QuickAddBarEditorialState extends State<QuickAddBarEditorial> {
                     ),
                     decoration: InputDecoration(
                       isDense: true,
+                      filled: false,
+                      fillColor: Colors.transparent,
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,

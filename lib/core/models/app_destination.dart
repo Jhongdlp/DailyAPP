@@ -16,7 +16,8 @@ enum AppDestination {
   reading('Biblioteca', Icons.auto_stories_outlined),
   news('Noticias', Icons.newspaper_outlined),
   analytics('Analíticas', Icons.insights_outlined),
-  exercise('Ejercicio', Icons.directions_run);
+  exercise('Ejercicio', Icons.directions_run),
+  character('Personaje', Icons.shield_outlined);
 
   const AppDestination(this.label, this.icon);
 
@@ -39,6 +40,7 @@ enum AppDestination {
         AppDestination.news => BentoTheme.accentBrain,
         AppDestination.analytics => BentoTheme.accentBlue,
         AppDestination.exercise => BentoTheme.accentOrange,
+        AppDestination.character => BentoTheme.accentLime,
       };
 
   static AppDestination? byName(String name) {

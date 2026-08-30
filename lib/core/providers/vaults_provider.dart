@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -74,11 +75,13 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
       } else {
         try {
           final docs = await getApplicationDocumentsDirectory();
-          final localFile = File('${docs.path}/vault_$tempId.jpg');
+          final localFile = File('${docs.path}/vault_${tempId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
           await uploadFile.copy(localFile.path);
           finalImagePath = localFile.path;
         } catch (_) {}
       }
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
     }
 
     final draft = NoteVault(
@@ -114,7 +117,7 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
     return saved;
   }
 
-  Future<void> updateVault(
+  Future<NoteVault?> updateVault(
     String id, {
     required String name,
     required String icon,
@@ -147,11 +150,13 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
       } else {
         try {
           final docs = await getApplicationDocumentsDirectory();
-          final localFile = File('${docs.path}/vault_$id.jpg');
+          final localFile = File('${docs.path}/vault_${id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
           await uploadFile.copy(localFile.path);
           finalImagePath = localFile.path;
         } catch (_) {}
       }
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
     } else if (clearImage) {
       if (_hasSupabase && imagePath != null && imagePath.contains('vaults/')) {
         try {
@@ -160,11 +165,14 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
           unawaited(client.storage.from('exercise-photos').remove([imagePath]));
         } catch (_) {}
       }
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
     }
 
+    NoteVault? updatedVault;
     state = state.map((v) {
       if (v.id == id) {
-        return v.copyWith(
+        updatedVault = v.copyWith(
           name: name,
           icon: icon,
           color: color,
@@ -175,6 +183,7 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
           imageOffsetY: imageOffsetY ?? v.imageOffsetY,
           imageScale: imageScale ?? v.imageScale,
         );
+        return updatedVault!;
       }
       return v;
     }).toList();
@@ -194,6 +203,8 @@ class VaultsNotifier extends Notifier<List<NoteVault>> {
         }).eq('id', id);
       }
     } catch (_) {}
+
+    return updatedVault;
   }
 
   Future<void> deleteVault(String id) async {

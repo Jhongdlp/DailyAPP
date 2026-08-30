@@ -525,6 +525,7 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
 
   Widget _vaultCard(NoteVault vault, List<Note> notes) {
     final count = notes.where((n) => n.vaultId == vault.id).length;
+    final hasImage = vault.imagePath != null && vault.imagePath!.isNotEmpty;
 
     return EditorialPressable(
       onTap: () => _openVault(vault),
@@ -540,9 +541,28 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
           child: Stack(
             children: [
               // Background Image
-              if (vault.imagePath != null && vault.imagePath!.isNotEmpty)
+              if (hasImage)
                 Positioned.fill(
                   child: VaultImageWidget(vault: vault, fit: BoxFit.contain),
+                ),
+
+              // Top Protection Gradient for maximum text readability & contrast
+              if (hasImage)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.72),
+                          Colors.black.withValues(alpha: 0.35),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.48, 0.95],
+                      ),
+                    ),
+                  ),
                 ),
 
               // Content Overlay
@@ -555,7 +575,16 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (vault.showIcon) ...[
-                          _vaultGlyph(vault, size: 16),
+                          Container(
+                            padding: hasImage ? const EdgeInsets.all(3) : EdgeInsets.zero,
+                            decoration: hasImage
+                                ? BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.40),
+                                    borderRadius: BorderRadius.circular(6),
+                                  )
+                                : null,
+                            child: _vaultGlyph(vault, size: 16),
+                          ),
                           const SizedBox(width: 6),
                         ],
                         Expanded(
@@ -566,10 +595,13 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
                             style: EditorialTheme.text(
                               16,
                               weight: FontWeight.w600,
-                              color: EditorialTheme.ink,
+                              color: hasImage ? Colors.white : EditorialTheme.ink,
                             ).copyWith(
-                              shadows: vault.imagePath != null && vault.imagePath!.isNotEmpty
-                                  ? [Shadow(color: EditorialTheme.paper, blurRadius: 4, offset: const Offset(1, 1))]
+                              shadows: hasImage
+                                  ? const [
+                                      Shadow(color: Colors.black, blurRadius: 6, offset: Offset(0, 1.5)),
+                                      Shadow(color: Colors.black87, blurRadius: 12, offset: Offset(0, 2)),
+                                    ]
                                   : null,
                             ),
                           ),
@@ -582,9 +614,17 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
                         vault.description!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: EditorialTheme.text(12.5, color: EditorialTheme.grayText).copyWith(
-                          shadows: vault.imagePath != null && vault.imagePath!.isNotEmpty
-                              ? [Shadow(color: EditorialTheme.paper, blurRadius: 4, offset: const Offset(1, 1))]
+                        style: EditorialTheme.text(
+                          12.5,
+                          color: hasImage
+                              ? Colors.white.withValues(alpha: 0.88)
+                              : EditorialTheme.grayText,
+                        ).copyWith(
+                          shadows: hasImage
+                              ? const [
+                                  Shadow(color: Colors.black, blurRadius: 6, offset: Offset(0, 1.5)),
+                                  Shadow(color: Colors.black87, blurRadius: 12, offset: Offset(0, 2)),
+                                ]
                               : null,
                         ),
                       ),
@@ -592,9 +632,17 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
                     const SizedBox(height: 4),
                     Text(
                       _noteCount(count).toUpperCase(),
-                      style: EditorialTheme.label(10, color: EditorialTheme.grayText).copyWith(
-                        shadows: vault.imagePath != null && vault.imagePath!.isNotEmpty
-                            ? [Shadow(color: EditorialTheme.paper, blurRadius: 4, offset: const Offset(1, 1))]
+                      style: EditorialTheme.label(
+                        10,
+                        color: hasImage
+                            ? Colors.white.withValues(alpha: 0.80)
+                            : EditorialTheme.grayText,
+                      ).copyWith(
+                        shadows: hasImage
+                            ? const [
+                                Shadow(color: Colors.black, blurRadius: 6, offset: Offset(0, 1.5)),
+                                Shadow(color: Colors.black87, blurRadius: 12, offset: Offset(0, 2)),
+                              ]
                             : null,
                       ),
                     ),
@@ -1710,45 +1758,135 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
               ),
               const SizedBox(height: 22),
               if (currentImagePath != null && !clearImage) ...[
-                const EditorialSectionLabel('Imagen Integrada'),
+                const EditorialSectionLabel('Foto de Portada'),
                 const SizedBox(height: 10),
-                VaultImageAdjuster(
-                  imagePath: currentImagePath!,
-                  initialOffsetX: imageOffsetX,
-                  initialOffsetY: imageOffsetY,
-                  initialScale: imageScale,
-                  onChanged: (offsetX, offsetY, scale) {
-                    imageOffsetX = offsetX;
-                    imageOffsetY = offsetY;
-                    imageScale = scale;
-                  },
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      setSheet(() {
-                        clearImage = true;
-                        newImageFile = null;
-                        currentImagePath = null;
-                      });
-                    },
-                    icon: const Icon(Icons.delete_outline, color: BentoTheme.errorRed, size: 16),
-                    label: const Text('Quitar imagen', style: TextStyle(color: BentoTheme.errorRed, fontSize: 12)),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: EditorialTheme.gray,
+                    borderRadius: BorderRadius.circular(EditorialTheme.radiusCard),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: EditorialTheme.inkAlpha(0.12)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: VaultRawImage(path: currentImagePath!, fit: BoxFit.cover),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Portada activa',
+                              style: EditorialTheme.text(13, weight: FontWeight.w600, color: EditorialTheme.ink),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Zoom: ${imageScale.toStringAsFixed(1)}x',
+                              style: EditorialTheme.text(11, color: EditorialTheme.grayText),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final res = await showVaultCoverPickerDialog(
+                            context: sheetContext,
+                            currentImagePath: currentImagePath,
+                            initialOffsetX: imageOffsetX,
+                            initialOffsetY: imageOffsetY,
+                            initialScale: imageScale,
+                            initialFile: newImageFile,
+                            vaultName: nameCtrl.text,
+                            vaultDescription: descCtrl.text,
+                            vaultIcon: iconKey,
+                            vaultColor: colorHex,
+                            showIcon: showIcon,
+                            noteCount: vault?.noteCount ?? 0,
+                            isEditorial: true,
+                          );
+                          if (res != null) {
+                            setSheet(() {
+                              if (res.clearImage) {
+                                clearImage = true;
+                                newImageFile = null;
+                                currentImagePath = null;
+                              } else {
+                                clearImage = false;
+                                currentImagePath = res.imagePath;
+                                newImageFile = res.newFile;
+                                imageOffsetX = res.offsetX;
+                                imageOffsetY = res.offsetY;
+                                imageScale = res.scale;
+                              }
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.tune_rounded, size: 14),
+                        label: const Text('Ajustar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: tone,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: BentoTheme.errorRed, size: 20),
+                        tooltip: 'Quitar imagen',
+                        onPressed: () {
+                          setSheet(() {
+                            clearImage = true;
+                            newImageFile = null;
+                            currentImagePath = null;
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ] else ...[
                 OutlinedButton.icon(
                   onPressed: () async {
-                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-                    if (picked != null) {
+                    final res = await showVaultCoverPickerDialog(
+                      context: sheetContext,
+                      currentImagePath: currentImagePath,
+                      initialOffsetX: imageOffsetX,
+                      initialOffsetY: imageOffsetY,
+                      initialScale: imageScale,
+                      initialFile: newImageFile,
+                      vaultName: nameCtrl.text,
+                      vaultDescription: descCtrl.text,
+                      vaultIcon: iconKey,
+                      vaultColor: colorHex,
+                      showIcon: showIcon,
+                      noteCount: vault?.noteCount ?? 0,
+                      isEditorial: true,
+                    );
+                    if (res != null) {
                       setSheet(() {
-                        newImageFile = File(picked.path);
-                        currentImagePath = picked.path;
-                        clearImage = false;
-                        imageOffsetX = 0.0;
-                        imageOffsetY = 0.0;
-                        imageScale = 1.0;
+                        if (res.clearImage) {
+                          clearImage = true;
+                          newImageFile = null;
+                          currentImagePath = null;
+                        } else {
+                          clearImage = false;
+                          currentImagePath = res.imagePath;
+                          newImageFile = res.newFile;
+                          imageOffsetX = res.offsetX;
+                          imageOffsetY = res.offsetY;
+                          imageScale = res.scale;
+                        }
                       });
                     }
                   },
@@ -1825,7 +1963,7 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
                       uploadFile: newImageFile,
                     );
                   } else {
-                    await notifier.updateVault(
+                    final updated = await notifier.updateVault(
                       vault.id,
                       name: name,
                       icon: iconKey,
@@ -1839,14 +1977,12 @@ class _NotesTabEditorialState extends ConsumerState<NotesTabEditorial>
                       uploadFile: newImageFile,
                       clearImage: clearImage,
                     );
-                    // La bóveda abierta es una copia: sin refrescarla, la
-                    // cabecera de la lista seguiría mostrando el nombre viejo.
-                    if (mounted && _vault?.id == vault.id) {
-                      setState(() => _vault = ref
-                          .read(vaultsProvider)
-                          .where((v) => v.id == vault.id)
-                          .firstOrNull);
+                    if (mounted && _vault?.id == vault.id && updated != null) {
+                      _vault = updated;
                     }
+                  }
+                  if (mounted) {
+                    setState(() {});
                   }
                 },
               ),

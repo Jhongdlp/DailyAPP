@@ -96,12 +96,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // La celda del día elegido: es la única con relleno propio.
-      final selected = find.ancestor(
-        of: find.text('${day.day}').first,
-        matching: find.byType(AnimatedContainer),
+      final containers = tester.widgetList<AnimatedContainer>(
+        find.byType(AnimatedContainer),
       );
-      final box = tester.widget<AnimatedContainer>(selected.first);
-      return (box.decoration as BoxDecoration?)?.color;
+      for (final c in containers) {
+        final color = (c.decoration as BoxDecoration?)?.color;
+        if (color != null && color != Colors.transparent) return color;
+      }
+      return null;
     }
 
     final neu = await cellColorFor(DesignLanguage.neu);
